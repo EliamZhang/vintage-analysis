@@ -27,18 +27,15 @@ def now():
 SEGMENT_NAMES = {
     "1": "01_desc_asset_cmn_listing_资产表结构",
     "2": "02_desc_asset_debt_dtl_snp_债务快照结构",
-    "3": "03_desc_credit_application_授信申请表结构",
-    "4": "04_desc_credit_decision_授信决策表结构",
-    "5": "05_desc_loan_decision_提款决策表结构",
-    "6": "06_desc_user_fst_conv_新老客表结构",
-    "7": "07_sample_asset_cmn_listing_资产表样例",
-    "8": "08_sample_asset_debt_dtl_snp_债务快照样例",
-    "9": "09_grain_asset_cmn_listing_资产表粒度",
-    "10": "10_grain_asset_debt_dtl_snp_债务快照粒度",
-    "11": "11_partitions_asset_debt_dtl_snp_债务快照分区",
-    "12": "12_duplicates_asset_cmn_listing_资产表重复检查",
-    "13": "13_duplicates_asset_debt_dtl_snp_债务快照重复检查",
-    "14": "14_sample_user_fst_conv_新老客表样例",
+    "3": "03_desc_user_fst_conv_新老客表结构",
+    "4": "04_sample_asset_cmn_listing_资产表样例",
+    "5": "05_sample_asset_debt_dtl_snp_债务快照样例",
+    "6": "06_grain_asset_cmn_listing_资产表粒度",
+    "7": "07_grain_asset_debt_dtl_snp_债务快照粒度",
+    "8": "08_partitions_asset_debt_dtl_snp_债务快照分区",
+    "9": "09_duplicates_asset_cmn_listing_资产表重复检查",
+    "10": "10_duplicates_asset_debt_dtl_snp_债务快照重复检查",
+    "11": "11_sample_user_fst_conv_新老客表样例",
 }
 
 
