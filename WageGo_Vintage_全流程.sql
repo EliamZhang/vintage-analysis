@@ -2,7 +2,7 @@
 -- WageGo Vintage 全流程（一键运行）
 -- 说明文档：WageGo_Vintage_全流程.md
 -- 观察日自动取快照表最新分区，无需修改日期
--- 运行顺序：第零步 → 第一~三步 → 第四步 → 第五步 → 第六步
+-- 运行顺序：第零步 → 第一~二步 → 第三步 → 第四步 → 第五步
 -- ============================================================================
 
 SET spark.sql.session.timeZone = Australia/Sydney;
@@ -139,50 +139,45 @@ LEFT JOIN (
 ;
 
 -- ============================================================================
--- 第三步：补放款金额、期限（行数不变）
--- ============================================================================
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_loan_listing;
-CREATE TABLE model.tmp_eliam_wagego_loan_listing AS
-SELECT
-     a.loan_no
-    ,a.user_id
-    ,a.application_id
-    ,a.app_id
-    ,a.listing_id
-    ,a.apply_status
-    ,a.apply_status_desc
-    ,a.is_disburse_success
-    ,a.is_reject
-    ,a.is_expired
-    ,a.is_disburse_failed
-    ,a.apply_time
-    ,a.apply_date
-    ,a.apply_month
-    ,a.disburse_time
-    ,a.apply_seq
-    ,a.is_first_apply_in_window
-    ,a.strategy_time
-    ,a.retry_count
-    ,CAST(l.real_amount AS DOUBLE)      AS real_amount
-    ,CAST(l.apply_amount AS DOUBLE)     AS apply_amount
-    ,CAST(l.interest AS DOUBLE)         AS interest
-    ,CAST(l.service_fee AS DOUBLE)      AS service_fee
-    ,CAST(l.term_quantity AS INT)       AS term_quantity
-    ,l.term_unit
-    ,l.total_period
-    ,CAST(l.is_deal AS INT)             AS is_deal
-    ,CAST(l.withdraw_time AS TIMESTAMP) AS withdraw_time
-    ,CAST(l.list_due_date AS DATE)      AS list_due_date
-FROM model.tmp_eliam_wagego_loan_apply a
-LEFT JOIN edw_ewa.dwb_asset_cmn_listing l
-  ON a.listing_id = l.listing_id
-;
-
--- ============================================================================
--- 第四步：补应还、实还、逾期（行数不变）
+-- 第三步：补放款金额、期限、应还、实还、逾期（行数不变）
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_loan_debt;
 CREATE TABLE model.tmp_eliam_wagego_loan_debt AS
+WITH listing AS (
+    SELECT
+         a.loan_no
+        ,a.user_id
+        ,a.application_id
+        ,a.app_id
+        ,a.listing_id
+        ,a.apply_status
+        ,a.apply_status_desc
+        ,a.is_disburse_success
+        ,a.is_reject
+        ,a.is_expired
+        ,a.is_disburse_failed
+        ,a.apply_time
+        ,a.apply_date
+        ,a.apply_month
+        ,a.disburse_time
+        ,a.apply_seq
+        ,a.is_first_apply_in_window
+        ,a.strategy_time
+        ,a.retry_count
+        ,CAST(l.real_amount AS DOUBLE)      AS real_amount
+        ,CAST(l.apply_amount AS DOUBLE)     AS apply_amount
+        ,CAST(l.interest AS DOUBLE)         AS interest
+        ,CAST(l.service_fee AS DOUBLE)      AS service_fee
+        ,CAST(l.term_quantity AS INT)       AS term_quantity
+        ,l.term_unit
+        ,l.total_period
+        ,CAST(l.is_deal AS INT)             AS is_deal
+        ,CAST(l.withdraw_time AS TIMESTAMP) AS withdraw_time
+        ,CAST(l.list_due_date AS DATE)      AS list_due_date
+    FROM model.tmp_eliam_wagego_loan_apply a
+    LEFT JOIN edw_ewa.dwb_asset_cmn_listing l
+      ON a.listing_id = l.listing_id
+)
 SELECT
      a.*
     ,d.init_due_date
@@ -212,7 +207,47 @@ SELECT
     ,CASE WHEN d.current_overdue_days IS NOT NULL
           THEN CASE WHEN CAST(d.current_overdue_days AS INT) > 0 THEN 1 ELSE 0 END END
                                          AS is_current_overdue
-FROM model.tmp_eliam_wagego_loan_listing a
+    ,CASE WHEN a.is_deal = 1 AND d.current_overdue_days IS NOT NULL
+          THEN CASE WHEN CAST(d.current_overdue_days AS INT) > 0
+                    THEN CAST(a.real_amount AS DOUBLE) ELSE 0 END END
+                                         AS current_ovd_amt
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN LEAST(TO_DATE(d.user_actual_repay_time), DATE_ADD(d.init_due_date, 3)) < c.obs_dt
+                    THEN 1 ELSE 0 END END
+                                         AS is_fpd3_obs
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN d.user_actual_repay_time IS NOT NULL
+                    THEN CASE WHEN TO_DATE(d.user_actual_repay_time) > DATE_ADD(d.init_due_date, 3) THEN 1 ELSE 0 END
+                    ELSE CASE WHEN c.obs_dt > DATE_ADD(d.init_due_date, 3) THEN 1 ELSE 0 END END
+               END                       AS is_fpd3_ovd
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN LEAST(TO_DATE(d.user_actual_repay_time), DATE_ADD(d.init_due_date, 7)) < c.obs_dt
+                    THEN 1 ELSE 0 END END
+                                         AS is_fpd7_obs
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN d.user_actual_repay_time IS NOT NULL
+                    THEN CASE WHEN TO_DATE(d.user_actual_repay_time) > DATE_ADD(d.init_due_date, 7) THEN 1 ELSE 0 END
+                    ELSE CASE WHEN c.obs_dt > DATE_ADD(d.init_due_date, 7) THEN 1 ELSE 0 END END
+               END                       AS is_fpd7_ovd
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN LEAST(TO_DATE(d.user_actual_repay_time), DATE_ADD(d.init_due_date, 15)) < c.obs_dt
+                    THEN 1 ELSE 0 END END
+                                         AS is_fpd15_obs
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN d.user_actual_repay_time IS NOT NULL
+                    THEN CASE WHEN TO_DATE(d.user_actual_repay_time) > DATE_ADD(d.init_due_date, 15) THEN 1 ELSE 0 END
+                    ELSE CASE WHEN c.obs_dt > DATE_ADD(d.init_due_date, 15) THEN 1 ELSE 0 END END
+               END                       AS is_fpd15_ovd
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN LEAST(TO_DATE(d.user_actual_repay_time), DATE_ADD(d.init_due_date, 30)) < c.obs_dt
+                    THEN 1 ELSE 0 END END
+                                         AS is_fpd30_obs
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN d.user_actual_repay_time IS NOT NULL
+                    THEN CASE WHEN TO_DATE(d.user_actual_repay_time) > DATE_ADD(d.init_due_date, 30) THEN 1 ELSE 0 END
+                    ELSE CASE WHEN c.obs_dt > DATE_ADD(d.init_due_date, 30) THEN 1 ELSE 0 END END
+               END                       AS is_fpd30_ovd
+FROM listing a
 LEFT JOIN (
     SELECT
          listing_id
@@ -229,11 +264,12 @@ LEFT JOIN (
       AND CAST(period_no AS INT) = 1
 ) d
   ON a.listing_id = d.listing_id
+CROSS JOIN model.tmp_eliam_wagego_obs_date c
 ;
 
 -- ============================================================================
--- 第五步：按放款月做 Vintage
--- 5.1 loan 级明细
+-- 第四步：按放款月做 Vintage
+-- 4.1 loan 级明细（含新老客标记）
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_loan;
 CREATE TABLE model.tmp_eliam_wagego_vintage_loan AS
@@ -250,6 +286,19 @@ WITH loan AS (
         ,DATE_FORMAT(LAST_DAY(ADD_MONTHS(TO_DATE(a.disburse_time), 1)), 'yyyy-MM-dd') AS mob1_dt
         ,DATE_FORMAT(LAST_DAY(ADD_MONTHS(TO_DATE(a.disburse_time), 2)), 'yyyy-MM-dd') AS mob2_dt
         ,c.obs_dt
+        ,a.current_ovd_amt
+        ,a.is_fpd3_obs
+        ,a.is_fpd3_ovd
+        ,a.is_fpd7_obs
+        ,a.is_fpd7_ovd
+        ,a.is_fpd15_obs
+        ,a.is_fpd15_ovd
+        ,a.is_fpd30_obs
+        ,a.is_fpd30_ovd
+        ,ROW_NUMBER() OVER (
+             PARTITION BY a.user_id
+             ORDER BY a.disburse_time, a.loan_no
+         )                                                   AS application_rank
     FROM model.tmp_eliam_wagego_loan_debt a
     CROSS JOIN model.tmp_eliam_wagego_obs_date c
     WHERE a.is_disburse_success = 1
@@ -280,11 +329,22 @@ SELECT
     ,cur.current_overdue_days                              AS dpd_latest
     ,cur.hist_overdue_days                                 AS hist_dpd_latest
     ,CASE WHEN m1.current_overdue_days IS NOT NULL
-          THEN CASE WHEN m1.current_overdue_days >= 30 THEN 1 ELSE 0 END END AS is_mob1_30plus
+          THEN CASE WHEN m1.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_mob1_30plus
     ,CASE WHEN m2.current_overdue_days IS NOT NULL
-          THEN CASE WHEN m2.current_overdue_days >= 30 THEN 1 ELSE 0 END END AS is_mob2_30plus
+          THEN CASE WHEN m2.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_mob2_30plus
     ,CASE WHEN cur.hist_overdue_days IS NOT NULL
-          THEN CASE WHEN cur.hist_overdue_days >= 30 THEN 1 ELSE 0 END END   AS is_ever_30plus_to_date
+          THEN CASE WHEN cur.hist_overdue_days > 30 THEN 1 ELSE 0 END END   AS is_ever_30plus_to_date
+    ,l.current_ovd_amt
+    ,l.is_fpd3_obs
+    ,l.is_fpd3_ovd
+    ,l.is_fpd7_obs
+    ,l.is_fpd7_ovd
+    ,l.is_fpd15_obs
+    ,l.is_fpd15_ovd
+    ,l.is_fpd30_obs
+    ,l.is_fpd30_ovd
+    ,l.application_rank
+    ,CASE WHEN l.application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
 FROM loan l
 LEFT JOIN debt m1  ON l.listing_id = m1.listing_id  AND m1.dt  = l.mob1_dt
 LEFT JOIN debt m2  ON l.listing_id = m2.listing_id  AND m2.dt  = l.mob2_dt
@@ -292,7 +352,7 @@ LEFT JOIN debt cur ON l.listing_id = cur.listing_id AND TO_DATE(cur.dt) = l.obs_
 ;
 
 -- ============================================================================
--- 第五步：5.2 放款月汇总（笔数 + 金额双口径）
+-- 第四步：4.2 放款月汇总（笔数 + 金额双口径）
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_month;
 CREATE TABLE model.tmp_eliam_wagego_vintage_month AS
@@ -303,8 +363,14 @@ SELECT
     ,ROUND(SUM(real_amount), 2)                                                  AS loan_amt
     ,SUM(CASE WHEN dpd_latest IS NOT NULL THEN 1 ELSE 0 END)                     AS obs_cnt
     ,ROUND(SUM(CASE WHEN dpd_latest IS NOT NULL THEN real_amount ELSE 0 END), 2) AS obs_amt
-    ,SUM(CASE WHEN dpd_latest >= 30 THEN 1 ELSE 0 END)                           AS cur_30plus_cnt
-    ,ROUND(SUM(CASE WHEN dpd_latest >= 30 THEN real_amount ELSE 0 END), 2)       AS cur_30plus_amt
+    ,SUM(CASE WHEN dpd_latest > 30 THEN 1 ELSE 0 END)                            AS cur_30plus_cnt
+    ,ROUND(SUM(CASE WHEN dpd_latest > 30 THEN real_amount ELSE 0 END), 2)        AS cur_30plus_amt
+    ,SUM(CASE WHEN dpd_latest > 0 THEN 1 ELSE 0 END)                             AS cur_ovd_cnt
+    ,ROUND(SUM(current_ovd_amt), 2)                                              AS cur_ovd_amt
+    ,ROUND(100.0 * SUM(CASE WHEN dpd_latest > 0 THEN 1 ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN dpd_latest IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS cur_ovd_rate
+    ,ROUND(100.0 * SUM(current_ovd_amt)
+           / NULLIF(SUM(CASE WHEN dpd_latest IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS cur_ovd_amt_rate
     ,SUM(is_ever_30plus_to_date)                                                 AS ever_30plus_cnt
     ,ROUND(SUM(CASE WHEN is_ever_30plus_to_date = 1 THEN real_amount ELSE 0 END), 2) AS ever_30plus_amt
     ,ROUND(100.0 * SUM(is_ever_30plus_to_date)
@@ -327,33 +393,41 @@ SELECT
            / NULLIF(SUM(CASE WHEN dpd_mob2 IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS mob2_30plus_rate
     ,ROUND(100.0 * SUM(CASE WHEN is_mob2_30plus = 1 THEN real_amount ELSE 0 END)
            / NULLIF(SUM(CASE WHEN dpd_mob2 IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS mob2_30plus_amt_rate
+    ,SUM(is_fpd3_obs)                                                            AS fpd3_obs_cnt
+    ,SUM(is_fpd3_ovd)                                                            AS fpd3_ovd_cnt
+    ,ROUND(SUM(CASE WHEN is_fpd3_obs = 1 THEN real_amount ELSE 0 END), 2)        AS fpd3_obs_amt
+    ,ROUND(SUM(CASE WHEN is_fpd3_ovd = 1 THEN real_amount ELSE 0 END), 2)        AS fpd3_ovd_amt
+    ,ROUND(100.0 * SUM(is_fpd3_ovd) / NULLIF(SUM(is_fpd3_obs), 0), 2)            AS fpd3_ovd_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_fpd3_ovd = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN is_fpd3_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd3_ovd_amt_rate
+    ,SUM(is_fpd7_obs)                                                            AS fpd7_obs_cnt
+    ,SUM(is_fpd7_ovd)                                                            AS fpd7_ovd_cnt
+    ,ROUND(SUM(CASE WHEN is_fpd7_obs = 1 THEN real_amount ELSE 0 END), 2)        AS fpd7_obs_amt
+    ,ROUND(SUM(CASE WHEN is_fpd7_ovd = 1 THEN real_amount ELSE 0 END), 2)        AS fpd7_ovd_amt
+    ,ROUND(100.0 * SUM(is_fpd7_ovd) / NULLIF(SUM(is_fpd7_obs), 0), 2)            AS fpd7_ovd_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_fpd7_ovd = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN is_fpd7_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd7_ovd_amt_rate
+    ,SUM(is_fpd15_obs)                                                           AS fpd15_obs_cnt
+    ,SUM(is_fpd15_ovd)                                                           AS fpd15_ovd_cnt
+    ,ROUND(SUM(CASE WHEN is_fpd15_obs = 1 THEN real_amount ELSE 0 END), 2)       AS fpd15_obs_amt
+    ,ROUND(SUM(CASE WHEN is_fpd15_ovd = 1 THEN real_amount ELSE 0 END), 2)       AS fpd15_ovd_amt
+    ,ROUND(100.0 * SUM(is_fpd15_ovd) / NULLIF(SUM(is_fpd15_obs), 0), 2)          AS fpd15_ovd_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_fpd15_ovd = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN is_fpd15_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd15_ovd_amt_rate
+    ,SUM(is_fpd30_obs)                                                           AS fpd30_obs_cnt
+    ,SUM(is_fpd30_ovd)                                                           AS fpd30_ovd_cnt
+    ,ROUND(SUM(CASE WHEN is_fpd30_obs = 1 THEN real_amount ELSE 0 END), 2)       AS fpd30_obs_amt
+    ,ROUND(SUM(CASE WHEN is_fpd30_ovd = 1 THEN real_amount ELSE 0 END), 2)       AS fpd30_ovd_amt
+    ,ROUND(100.0 * SUM(is_fpd30_ovd) / NULLIF(SUM(is_fpd30_obs), 0), 2)          AS fpd30_ovd_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_fpd30_ovd = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN is_fpd30_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd30_ovd_amt_rate
 FROM model.tmp_eliam_wagego_vintage_loan
 GROUP BY disburse_month
 ;
 
 -- ============================================================================
--- 第六步：分群与滚动 Vintage 曲线
--- 6.1 新老客分群
--- ============================================================================
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_loan_seg;
-CREATE TABLE model.tmp_eliam_wagego_vintage_loan_seg AS
-WITH ranked AS (
-    SELECT
-         *
-        ,ROW_NUMBER() OVER (
-             PARTITION BY user_id
-             ORDER BY disburse_time, loan_no
-         ) AS application_rank
-    FROM model.tmp_eliam_wagego_vintage_loan
-)
-SELECT
-     *
-    ,CASE WHEN application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
-FROM ranked
-;
-
--- ============================================================================
--- 第六步：6.2 长表 MOB（1-12 个月）
+-- 第五步：分群与滚动 Vintage 曲线
+-- 5.1 长表 MOB（1-12 个月）
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_mob;
 CREATE TABLE model.tmp_eliam_wagego_vintage_mob AS
@@ -374,7 +448,7 @@ obs AS (
         ,s.data_as_of
         ,m.mob_no
         ,LAST_DAY(ADD_MONTHS(TO_DATE(s.disburse_time), m.mob_no))     AS obs_dt
-    FROM model.tmp_eliam_wagego_vintage_loan_seg s
+    FROM model.tmp_eliam_wagego_vintage_loan s
     CROSS JOIN mob m
 )
 SELECT
@@ -395,7 +469,7 @@ SELECT
     ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
           THEN CASE WHEN d.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
     ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
-          THEN CASE WHEN d.current_overdue_days >= 30 THEN 1 ELSE 0 END END AS is_30plus
+          THEN CASE WHEN d.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus
 FROM obs o
 LEFT JOIN (
     SELECT
@@ -411,7 +485,7 @@ LEFT JOIN (
 ;
 
 -- ============================================================================
--- 第六步：6.3 分群 × MOB 曲线（笔数 + 金额双口径）
+-- 第五步：5.2 分群 × MOB 曲线（笔数 + 金额双口径）
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_curve;
 CREATE TABLE model.tmp_eliam_wagego_vintage_curve AS

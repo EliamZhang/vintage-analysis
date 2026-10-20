@@ -9,16 +9,15 @@
 | 第零步 | `model.tmp_eliam_wagego_obs_date` | 一行 | 观察日 |
 | 第一步 | `model.tmp_eliam_wagego_application` | 一次场景执行 | 申请事件主表 |
 | 第二步 | `model.tmp_eliam_wagego_loan_apply` | 一个 `loan_no` | 借款申请表 |
-| 第三步 | `model.tmp_eliam_wagego_loan_listing` | 一个 `loan_no` | 补放款金额、期限 |
-| 第四步 | `model.tmp_eliam_wagego_loan_debt` | 一个 `loan_no` | 补应还、实还、逾期 |
-| 第五步 | `model.tmp_eliam_wagego_vintage_loan` / `_vintage_month` | loan / 放款月 | 按放款月做 vintage |
-| 第六步 | `model.tmp_eliam_wagego_vintage_loan_seg` / `_vintage_mob` / `_vintage_curve` | 分群 / loan×MOB / 分群×MOB | 新老客分群与滚动曲线 |
+| 第三步 | `model.tmp_eliam_wagego_loan_debt` | 一个 `loan_no` | 补放款金额、期限、应还、实还、逾期、FPD |
+| 第四步 | `model.tmp_eliam_wagego_vintage_loan` / `_vintage_month` | loan / 放款月 | 按放款月做 vintage |
+| 第五步 | `model.tmp_eliam_wagego_vintage_mob` / `_vintage_curve` | loan×MOB / 分群×MOB | 新老客分群与滚动曲线 |
 
-每日运行顺序：第零步 → 第一~三步 → 第四步 → 第五步 → 第六步。观察日自动取快照表最新分区，SQL 里不需要改日期。
+每日运行顺序：第零步 → 第一~二步 → 第三步 → 第四步 → 第五步。观察日自动取快照表最新分区，SQL 里不需要改日期。
 
 ## 第零步：观察日控制表（每日必跑）
 
-**目标**：给第四~六步提供统一的观察日 `obs_dt`。
+**目标**：给第三~五步提供统一的观察日 `obs_dt`。
 
 **口径**：
 
@@ -186,73 +185,26 @@ LEFT JOIN (
 ;
 ```
 
-## 第三步：补放款金额、期限
+## 第三步：补放款金额、期限、应还、实还、逾期
 
-**目标**：在第二步结果上补放款金额、成交标记、期限标签，行数不变。
+**目标**：在第二步结果上补放款金额、期限、应还日、实还时间、结清状态、逾期天数、FPD 标签；仍是一行一个 `loan_no`，行数不变。
 
 **口径**：
 
-- 底表第二步结果，`LEFT JOIN edw_ewa.dwb_asset_cmn_listing`，关联键 `listing_id`（该表 `listing_id` 唯一）
+- 底表第二步结果，先 `LEFT JOIN edw_ewa.dwb_asset_cmn_listing`（关联键 `listing_id`，该表 `listing_id` 唯一）补放款金额、成交标记、期限；再 `LEFT JOIN edw_ewa.dwb_asset_debt_dtl_snp`（关联键 `listing_id`）补借据侧信息
 - `is_deal = 1` 才是成交放款；`is_deal = 0` 的 3 笔对应第二步的 `DISBURSE_FAILED`，金额保留，下游按 `is_deal` 过滤
-- 期限只保留 `term_quantity`、`term_unit`、`total_period`。`term_quantity` 全为 1；`term_unit` 为 `W`/`F`/`M`，是周/双周/月发薪周期，实际合同天数要用第四步借据的 `init_due_date − 放款时间` 计算，**不能**按 7/14/30 折算
-- 当天放款的记录在资产表可能尚未同步，保留 NULL，不丢行
-
-**SQL**：
-
-```sql
-SET spark.sql.session.timeZone = Australia/Sydney;
-
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_loan_listing;
-CREATE TABLE model.tmp_eliam_wagego_loan_listing AS
-SELECT
-     a.loan_no
-    ,a.user_id
-    ,a.application_id
-    ,a.app_id
-    ,a.listing_id
-    ,a.apply_status
-    ,a.apply_status_desc
-    ,a.is_disburse_success
-    ,a.is_reject
-    ,a.is_expired
-    ,a.is_disburse_failed
-    ,a.apply_time
-    ,a.apply_date
-    ,a.apply_month
-    ,a.disburse_time
-    ,a.apply_seq
-    ,a.is_first_apply_in_window
-    ,a.strategy_time
-    ,a.retry_count
-    ,CAST(l.real_amount AS DOUBLE)      AS real_amount
-    ,CAST(l.apply_amount AS DOUBLE)     AS apply_amount
-    ,CAST(l.interest AS DOUBLE)         AS interest
-    ,CAST(l.service_fee AS DOUBLE)      AS service_fee
-    ,CAST(l.term_quantity AS INT)       AS term_quantity
-    ,l.term_unit
-    ,l.total_period
-    ,CAST(l.is_deal AS INT)             AS is_deal
-    ,CAST(l.withdraw_time AS TIMESTAMP) AS withdraw_time
-    ,CAST(l.list_due_date AS DATE)      AS list_due_date
-FROM model.tmp_eliam_wagego_loan_apply a
-LEFT JOIN edw_ewa.dwb_asset_cmn_listing l
-  ON a.listing_id = l.listing_id
-;
-```
-
-## 第四步：补应还、实还、逾期
-
-**目标**：在第三步结果上补借据侧的应还日、实还时间、结清状态、逾期天数，行数不变。
-
-**口径**：
-
-- 底表第三步结果，`LEFT JOIN edw_ewa.dwb_asset_debt_dtl_snp`，关联键 `listing_id`
-- 取最新快照 `dt = obs_dt`（第零步控制表）、`period_no = 1`（该表粒度 `listing_id × dt`，全部单期借据）
+- 期限只保留 `term_quantity`、`term_unit`、`total_period`。`term_quantity` 全为 1；`term_unit` 为 `W`/`F`/`M`，是周/双周/月发薪周期，实际合同天数用借据的 `init_due_date − 放款时间` 计算，**不能**按 7/14/30 折算
+- 借据取最新快照 `dt = obs_dt`（第零步控制表）、`period_no = 1`（该表粒度 `listing_id × dt`，全部单期借据）
 - `debt_status`：1 未结清、2 已结清、4 逾期中；失败放款在借据表也有一条已结清记录，下游按 `is_deal = 1` 过滤即可
 - `current_overdue_days` 是快照当日逾期天数（时点口径）；`hist_overdue_days` 是历史累计逾期天数，但近 1–2 天刚结清的可能尚未回写，Vintage 不要只依赖它
 - 合同期限 = `init_due_date − 放款日`，按发薪日对齐：W 0–7 天、F 0–14 天、M 0–32 天
 - `loan_term_actual_days` = 实还日 − 放款日；`is_early_settlement` = 实还日早于应还日
-- 观察日当天放款的记录可能尚未进快照，保留 NULL
+- `current_ovd_amt` = 最新快照 `current_overdue_days > 0` 时的放款金额；无逾期记 0，无快照保留 NULL
+- FPD 只对 `is_deal = 1` 且有借据快照的记录赋值：
+  - `is_fpdN_obs`（是否已到观察点）= `LEAST(实还日, init_due_date + N) < obs_dt`（未还时取 `init_due_date + N`）
+  - `is_fpdN_ovd`（是否首期逾期）= 已还时 `实还日 > init_due_date + N`；未还时 `obs_dt > init_due_date + N`
+  - N = 3 / 7 / 15 / 30，均为严格大于，恰好第 N 天不算逾期
+- 当天放款的记录在资产表/借据快照可能尚未同步，保留 NULL，不丢行
 
 **SQL**：
 
@@ -261,6 +213,41 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_loan_debt;
 CREATE TABLE model.tmp_eliam_wagego_loan_debt AS
+WITH listing AS (
+    SELECT
+         a.loan_no
+        ,a.user_id
+        ,a.application_id
+        ,a.app_id
+        ,a.listing_id
+        ,a.apply_status
+        ,a.apply_status_desc
+        ,a.is_disburse_success
+        ,a.is_reject
+        ,a.is_expired
+        ,a.is_disburse_failed
+        ,a.apply_time
+        ,a.apply_date
+        ,a.apply_month
+        ,a.disburse_time
+        ,a.apply_seq
+        ,a.is_first_apply_in_window
+        ,a.strategy_time
+        ,a.retry_count
+        ,CAST(l.real_amount AS DOUBLE)      AS real_amount
+        ,CAST(l.apply_amount AS DOUBLE)     AS apply_amount
+        ,CAST(l.interest AS DOUBLE)         AS interest
+        ,CAST(l.service_fee AS DOUBLE)      AS service_fee
+        ,CAST(l.term_quantity AS INT)       AS term_quantity
+        ,l.term_unit
+        ,l.total_period
+        ,CAST(l.is_deal AS INT)             AS is_deal
+        ,CAST(l.withdraw_time AS TIMESTAMP) AS withdraw_time
+        ,CAST(l.list_due_date AS DATE)      AS list_due_date
+    FROM model.tmp_eliam_wagego_loan_apply a
+    LEFT JOIN edw_ewa.dwb_asset_cmn_listing l
+      ON a.listing_id = l.listing_id
+)
 SELECT
      a.*
     ,d.init_due_date
@@ -290,7 +277,47 @@ SELECT
     ,CASE WHEN d.current_overdue_days IS NOT NULL
           THEN CASE WHEN CAST(d.current_overdue_days AS INT) > 0 THEN 1 ELSE 0 END END
                                          AS is_current_overdue
-FROM model.tmp_eliam_wagego_loan_listing a
+    ,CASE WHEN a.is_deal = 1 AND d.current_overdue_days IS NOT NULL
+          THEN CASE WHEN CAST(d.current_overdue_days AS INT) > 0
+                    THEN CAST(a.real_amount AS DOUBLE) ELSE 0 END END
+                                         AS current_ovd_amt
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN LEAST(TO_DATE(d.user_actual_repay_time), DATE_ADD(d.init_due_date, 3)) < c.obs_dt
+                    THEN 1 ELSE 0 END END
+                                         AS is_fpd3_obs
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN d.user_actual_repay_time IS NOT NULL
+                    THEN CASE WHEN TO_DATE(d.user_actual_repay_time) > DATE_ADD(d.init_due_date, 3) THEN 1 ELSE 0 END
+                    ELSE CASE WHEN c.obs_dt > DATE_ADD(d.init_due_date, 3) THEN 1 ELSE 0 END END
+               END                       AS is_fpd3_ovd
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN LEAST(TO_DATE(d.user_actual_repay_time), DATE_ADD(d.init_due_date, 7)) < c.obs_dt
+                    THEN 1 ELSE 0 END END
+                                         AS is_fpd7_obs
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN d.user_actual_repay_time IS NOT NULL
+                    THEN CASE WHEN TO_DATE(d.user_actual_repay_time) > DATE_ADD(d.init_due_date, 7) THEN 1 ELSE 0 END
+                    ELSE CASE WHEN c.obs_dt > DATE_ADD(d.init_due_date, 7) THEN 1 ELSE 0 END END
+               END                       AS is_fpd7_ovd
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN LEAST(TO_DATE(d.user_actual_repay_time), DATE_ADD(d.init_due_date, 15)) < c.obs_dt
+                    THEN 1 ELSE 0 END END
+                                         AS is_fpd15_obs
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN d.user_actual_repay_time IS NOT NULL
+                    THEN CASE WHEN TO_DATE(d.user_actual_repay_time) > DATE_ADD(d.init_due_date, 15) THEN 1 ELSE 0 END
+                    ELSE CASE WHEN c.obs_dt > DATE_ADD(d.init_due_date, 15) THEN 1 ELSE 0 END END
+               END                       AS is_fpd15_ovd
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN LEAST(TO_DATE(d.user_actual_repay_time), DATE_ADD(d.init_due_date, 30)) < c.obs_dt
+                    THEN 1 ELSE 0 END END
+                                         AS is_fpd30_obs
+    ,CASE WHEN a.is_deal = 1 AND d.listing_id IS NOT NULL
+          THEN CASE WHEN d.user_actual_repay_time IS NOT NULL
+                    THEN CASE WHEN TO_DATE(d.user_actual_repay_time) > DATE_ADD(d.init_due_date, 30) THEN 1 ELSE 0 END
+                    ELSE CASE WHEN c.obs_dt > DATE_ADD(d.init_due_date, 30) THEN 1 ELSE 0 END END
+               END                       AS is_fpd30_ovd
+FROM listing a
 LEFT JOIN (
     SELECT
          listing_id
@@ -307,20 +334,25 @@ LEFT JOIN (
       AND CAST(period_no AS INT) = 1
 ) d
   ON a.listing_id = d.listing_id
+CROSS JOIN model.tmp_eliam_wagego_obs_date c
 ;
 ```
 
-## 第五步：按放款月做 Vintage
+## 第四步：按放款月做 Vintage
 
-**目标**：按放款月分群，输出放款后第 1/2 个自然月月末的 30+ 逾期，以及截至观察日的累计 30+ 逾期。产出 loan 级 `_vintage_loan` 和放款月汇总 `_vintage_month` 两张表。
+**目标**：按放款月分群，输出放款后第 1/2 个自然月月末的 30+ 逾期、截至观察日的累计 30+ 逾期，以及 FPD3/7/15/30。产出 loan 级 `_vintage_loan`（含新老客标记）和放款月汇总 `_vintage_month` 两张表。
 
 **口径**：
 
 - 分群 = `disburse_month`（放款月，实测与申请月完全一致）
+- `application_rank` = 用户内按 `disburse_time, loan_no` 排序的序号；`user_type`：序号 1 = New，其余 = Old
+- New/Old 只基于本数据集：取数窗口前已有放款的老客会被误判为 New，分群结论要带这个前提
 - MOB1 / MOB2 观察点 = 放款月后第 1 / 2 个自然月月末；`dpd_mobN` 取该日快照的 `current_overdue_days`（时点口径）
-- 30+ 逾期 = `current_overdue_days >= 30`
+- 30+ 逾期 = `current_overdue_days > 30`（严格大于；累计口径同理 `hist_overdue_days > 30`）
 - 笔数、金额双口径：MOB1/MOB2 各输出分子、分母及比率；金额分母 = 该观察点有快照的放款金额（`mob*_obs_amt`）
-- `is_ever_30plus_to_date` = 最新快照 `hist_overdue_days >= 30`，即截至 `obs_dt` 曾达到 30+
+- `is_ever_30plus_to_date` = 最新快照 `hist_overdue_days > 30`，即截至 `obs_dt` 曾达到 30+
+- `cur_ovd_*` = 最新快照 `current_overdue_days > 0` 的当前逾期笔数/金额/率
+- FPD 指标按放款月汇总：分母 `fpdN_obs_cnt/amt` = `is_fpdN_obs = 1`；分子 `fpdN_ovd_cnt/amt` = `is_fpdN_ovd = 1`
 - 分母 `obs_cnt` = 观察日有借据快照的放款数
 - 未到 MOB 观察点的月份不能当完整 vintage 看；每行带 `data_as_of = obs_dt` 标识数据截止日
 
@@ -344,6 +376,19 @@ WITH loan AS (
         ,DATE_FORMAT(LAST_DAY(ADD_MONTHS(TO_DATE(a.disburse_time), 1)), 'yyyy-MM-dd') AS mob1_dt
         ,DATE_FORMAT(LAST_DAY(ADD_MONTHS(TO_DATE(a.disburse_time), 2)), 'yyyy-MM-dd') AS mob2_dt
         ,c.obs_dt
+        ,a.current_ovd_amt
+        ,a.is_fpd3_obs
+        ,a.is_fpd3_ovd
+        ,a.is_fpd7_obs
+        ,a.is_fpd7_ovd
+        ,a.is_fpd15_obs
+        ,a.is_fpd15_ovd
+        ,a.is_fpd30_obs
+        ,a.is_fpd30_ovd
+        ,ROW_NUMBER() OVER (
+             PARTITION BY a.user_id
+             ORDER BY a.disburse_time, a.loan_no
+         )                                                   AS application_rank
     FROM model.tmp_eliam_wagego_loan_debt a
     CROSS JOIN model.tmp_eliam_wagego_obs_date c
     WHERE a.is_disburse_success = 1
@@ -374,11 +419,22 @@ SELECT
     ,cur.current_overdue_days                              AS dpd_latest
     ,cur.hist_overdue_days                                 AS hist_dpd_latest
     ,CASE WHEN m1.current_overdue_days IS NOT NULL
-          THEN CASE WHEN m1.current_overdue_days >= 30 THEN 1 ELSE 0 END END AS is_mob1_30plus
+          THEN CASE WHEN m1.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_mob1_30plus
     ,CASE WHEN m2.current_overdue_days IS NOT NULL
-          THEN CASE WHEN m2.current_overdue_days >= 30 THEN 1 ELSE 0 END END AS is_mob2_30plus
+          THEN CASE WHEN m2.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_mob2_30plus
     ,CASE WHEN cur.hist_overdue_days IS NOT NULL
-          THEN CASE WHEN cur.hist_overdue_days >= 30 THEN 1 ELSE 0 END END   AS is_ever_30plus_to_date
+          THEN CASE WHEN cur.hist_overdue_days > 30 THEN 1 ELSE 0 END END   AS is_ever_30plus_to_date
+    ,l.current_ovd_amt
+    ,l.is_fpd3_obs
+    ,l.is_fpd3_ovd
+    ,l.is_fpd7_obs
+    ,l.is_fpd7_ovd
+    ,l.is_fpd15_obs
+    ,l.is_fpd15_ovd
+    ,l.is_fpd30_obs
+    ,l.is_fpd30_ovd
+    ,l.application_rank
+    ,CASE WHEN l.application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
 FROM loan l
 LEFT JOIN debt m1  ON l.listing_id = m1.listing_id  AND m1.dt  = l.mob1_dt
 LEFT JOIN debt m2  ON l.listing_id = m2.listing_id  AND m2.dt  = l.mob2_dt
@@ -394,8 +450,14 @@ SELECT
     ,ROUND(SUM(real_amount), 2)                                                  AS loan_amt
     ,SUM(CASE WHEN dpd_latest IS NOT NULL THEN 1 ELSE 0 END)                     AS obs_cnt
     ,ROUND(SUM(CASE WHEN dpd_latest IS NOT NULL THEN real_amount ELSE 0 END), 2) AS obs_amt
-    ,SUM(CASE WHEN dpd_latest >= 30 THEN 1 ELSE 0 END)                           AS cur_30plus_cnt
-    ,ROUND(SUM(CASE WHEN dpd_latest >= 30 THEN real_amount ELSE 0 END), 2)       AS cur_30plus_amt
+    ,SUM(CASE WHEN dpd_latest > 30 THEN 1 ELSE 0 END)                            AS cur_30plus_cnt
+    ,ROUND(SUM(CASE WHEN dpd_latest > 30 THEN real_amount ELSE 0 END), 2)        AS cur_30plus_amt
+    ,SUM(CASE WHEN dpd_latest > 0 THEN 1 ELSE 0 END)                             AS cur_ovd_cnt
+    ,ROUND(SUM(current_ovd_amt), 2)                                              AS cur_ovd_amt
+    ,ROUND(100.0 * SUM(CASE WHEN dpd_latest > 0 THEN 1 ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN dpd_latest IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS cur_ovd_rate
+    ,ROUND(100.0 * SUM(current_ovd_amt)
+           / NULLIF(SUM(CASE WHEN dpd_latest IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS cur_ovd_amt_rate
     ,SUM(is_ever_30plus_to_date)                                                 AS ever_30plus_cnt
     ,ROUND(SUM(CASE WHEN is_ever_30plus_to_date = 1 THEN real_amount ELSE 0 END), 2) AS ever_30plus_amt
     ,ROUND(100.0 * SUM(is_ever_30plus_to_date)
@@ -418,50 +480,53 @@ SELECT
            / NULLIF(SUM(CASE WHEN dpd_mob2 IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS mob2_30plus_rate
     ,ROUND(100.0 * SUM(CASE WHEN is_mob2_30plus = 1 THEN real_amount ELSE 0 END)
            / NULLIF(SUM(CASE WHEN dpd_mob2 IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS mob2_30plus_amt_rate
+    ,SUM(is_fpd3_obs)                                                            AS fpd3_obs_cnt
+    ,SUM(is_fpd3_ovd)                                                            AS fpd3_ovd_cnt
+    ,ROUND(SUM(CASE WHEN is_fpd3_obs = 1 THEN real_amount ELSE 0 END), 2)        AS fpd3_obs_amt
+    ,ROUND(SUM(CASE WHEN is_fpd3_ovd = 1 THEN real_amount ELSE 0 END), 2)        AS fpd3_ovd_amt
+    ,ROUND(100.0 * SUM(is_fpd3_ovd) / NULLIF(SUM(is_fpd3_obs), 0), 2)            AS fpd3_ovd_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_fpd3_ovd = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN is_fpd3_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd3_ovd_amt_rate
+    ,SUM(is_fpd7_obs)                                                            AS fpd7_obs_cnt
+    ,SUM(is_fpd7_ovd)                                                            AS fpd7_ovd_cnt
+    ,ROUND(SUM(CASE WHEN is_fpd7_obs = 1 THEN real_amount ELSE 0 END), 2)        AS fpd7_obs_amt
+    ,ROUND(SUM(CASE WHEN is_fpd7_ovd = 1 THEN real_amount ELSE 0 END), 2)        AS fpd7_ovd_amt
+    ,ROUND(100.0 * SUM(is_fpd7_ovd) / NULLIF(SUM(is_fpd7_obs), 0), 2)            AS fpd7_ovd_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_fpd7_ovd = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN is_fpd7_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd7_ovd_amt_rate
+    ,SUM(is_fpd15_obs)                                                           AS fpd15_obs_cnt
+    ,SUM(is_fpd15_ovd)                                                           AS fpd15_ovd_cnt
+    ,ROUND(SUM(CASE WHEN is_fpd15_obs = 1 THEN real_amount ELSE 0 END), 2)       AS fpd15_obs_amt
+    ,ROUND(SUM(CASE WHEN is_fpd15_ovd = 1 THEN real_amount ELSE 0 END), 2)       AS fpd15_ovd_amt
+    ,ROUND(100.0 * SUM(is_fpd15_ovd) / NULLIF(SUM(is_fpd15_obs), 0), 2)          AS fpd15_ovd_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_fpd15_ovd = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN is_fpd15_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd15_ovd_amt_rate
+    ,SUM(is_fpd30_obs)                                                           AS fpd30_obs_cnt
+    ,SUM(is_fpd30_ovd)                                                           AS fpd30_ovd_cnt
+    ,ROUND(SUM(CASE WHEN is_fpd30_obs = 1 THEN real_amount ELSE 0 END), 2)       AS fpd30_obs_amt
+    ,ROUND(SUM(CASE WHEN is_fpd30_ovd = 1 THEN real_amount ELSE 0 END), 2)       AS fpd30_ovd_amt
+    ,ROUND(100.0 * SUM(is_fpd30_ovd) / NULLIF(SUM(is_fpd30_obs), 0), 2)          AS fpd30_ovd_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_fpd30_ovd = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN is_fpd30_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd30_ovd_amt_rate
 FROM model.tmp_eliam_wagego_vintage_loan
 GROUP BY disburse_month
 ;
 ```
 
-## 第六步：分群与滚动 Vintage 曲线
+## 第五步：分群与滚动 Vintage 曲线
 
-**目标**：在第五步结果上补新老客分群、显式成熟度标记、长表 MOB 曲线（1–12 个月、5+/30+ 双阈值）。产出 `_loan_seg`（分群）、`_mob`（长表）、`_curve`（分群 × MOB 汇总）三张表。
+**目标**：在第四步结果上补显式成熟度标记、长表 MOB 曲线（1–12 个月、5+/30+ 双阈值）。产出 `_mob`（长表）和 `_curve`（分群 × MOB 汇总）两张表。
 
 **口径**：
 
-- `application_rank` = 用户内按 `disburse_time, loan_no` 排序的序号；`user_type`：序号 1 = New，其余 = Old
-- New/Old 只基于本数据集：取数窗口前已有放款的老客会被误判为 New，分群结论要带这个前提
-- `mob_no` = 1–12；观察点 = 放款日后第 `mob_no` 个自然月月末，与第五步 MOB 定义一致
+- `mob_no` = 1–12；观察点 = 放款日后第 `mob_no` 个自然月月末，与第四步 MOB 定义一致
 - `is_matured` = 观察点 <= `data_as_of`；未到期的记录不给逾期标记，聚合自动排除
 - `dpd` = 观察点当日快照的 `current_overdue_days`，只取月末分区
-- `is_5plus` / `is_30plus` 仅在已到期且快照存在时取值
+- `is_5plus` / `is_30plus` 仅在已到期且快照存在时取值；阈值分别为 `>= 5`、`> 30`
 - 笔数、金额双口径：`_curve` 同时输出笔数率 `rate_5plus`/`rate_30plus` 与金额率 `rate_5plus_amt`/`rate_30plus_amt`；金额分母 `obs_amt` = 已到期且有快照的放款金额
 - 不借鉴 Fundo 的时点 DPD 算法（观察点前已结清一律记 0，会漏掉「曾 30+ 后结清」的笔）；累计口径仍以 `hist_overdue_days` 为准
 
-### 6.1 新老客分群
-
-```sql
-SET spark.sql.session.timeZone = Australia/Sydney;
-
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_loan_seg;
-CREATE TABLE model.tmp_eliam_wagego_vintage_loan_seg AS
-WITH ranked AS (
-    SELECT
-         *
-        ,ROW_NUMBER() OVER (
-             PARTITION BY user_id
-             ORDER BY disburse_time, loan_no
-         ) AS application_rank
-    FROM model.tmp_eliam_wagego_vintage_loan
-)
-SELECT
-     *
-    ,CASE WHEN application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
-FROM ranked
-;
-```
-
-### 6.2 长表 MOB
+### 5.1 长表 MOB
 
 ```sql
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_mob;
@@ -483,7 +548,7 @@ obs AS (
         ,s.data_as_of
         ,m.mob_no
         ,LAST_DAY(ADD_MONTHS(TO_DATE(s.disburse_time), m.mob_no))     AS obs_dt
-    FROM model.tmp_eliam_wagego_vintage_loan_seg s
+    FROM model.tmp_eliam_wagego_vintage_loan s
     CROSS JOIN mob m
 )
 SELECT
@@ -504,7 +569,7 @@ SELECT
     ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
           THEN CASE WHEN d.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
     ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
-          THEN CASE WHEN d.current_overdue_days >= 30 THEN 1 ELSE 0 END END AS is_30plus
+          THEN CASE WHEN d.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus
 FROM obs o
 LEFT JOIN (
     SELECT
@@ -520,7 +585,7 @@ LEFT JOIN (
 ;
 ```
 
-### 6.3 分群 × MOB 曲线
+### 5.2 分群 × MOB 曲线
 
 ```sql
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_curve;
