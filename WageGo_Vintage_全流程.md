@@ -4,8 +4,8 @@
 
 - [x] 第一步：申请事件主表 `model.tmp_eliam_wagego_application`（181,477 行）
 - [ ] 第二步：借款申请表 `model.tmp_eliam_wagego_loan_apply` ← 现在做
-- [ ] 第三步：补放款金额、期限（等资产 / 放款标的表）
-- [ ] 第四步：补应还、实还、逾期（等借据 / 债务快照表）
+- [ ] 第三步：补放款金额、期限（`edw_ewa.dwb_asset_cmn_listing`）
+- [ ] 第四步：补应还、实还、逾期（`edw_ewa.dwb_asset_debt_dtl_snp`）
 - [ ] 第五步：按放款月做 vintage
 
 ## 第一步：申请事件主表（已完成）
@@ -183,4 +183,4 @@ FROM model.tmp_eliam_wagego_loan_apply;
 
 预期：`apply_cnt = loan_no_cnt = 33,491`；`disburse_success_cnt = 25,549`；`reject_cnt = 5,517`；`expired_cnt = 2,280`；`disburse_failed_cnt = 137`。
 
-**下一步**：先跑这一步。资产表和债务表下载后，再补金额、期限、应还/逾期。
+**下一步**：先跑 `queries.sql` 段 1–2 验收；再跑段 3–15 确认资产/债务表结构和粒度，然后写第三步 SQL。

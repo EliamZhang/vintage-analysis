@@ -1,2 +1,5 @@
 *.csv
 *.parquet
+results/
+results.zip
+__pycache__/
