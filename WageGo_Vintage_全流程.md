@@ -319,6 +319,7 @@ LEFT JOIN (
 - 分群 = `disburse_month`（放款月，实测与申请月完全一致）
 - MOB1 / MOB2 观察点 = 放款月后第 1 / 2 个自然月月末；`dpd_mobN` 取该日快照的 `current_overdue_days`（时点口径）
 - 30+ 逾期 = `current_overdue_days >= 30`
+- 笔数、金额双口径：MOB1/MOB2 各输出分子、分母及比率；金额分母 = 该观察点有快照的放款金额（`mob*_obs_amt`）
 - `is_ever_30plus_to_date` = 最新快照 `hist_overdue_days >= 30`，即截至 `obs_dt` 曾达到 30+
 - 分母 `obs_cnt` = 观察日有借据快照的放款数
 - 未到 MOB 观察点的月份不能当完整 vintage 看；每行带 `data_as_of = obs_dt` 标识数据截止日
@@ -402,13 +403,21 @@ SELECT
     ,ROUND(100.0 * SUM(CASE WHEN is_ever_30plus_to_date = 1 THEN real_amount ELSE 0 END)
            / NULLIF(SUM(CASE WHEN dpd_latest IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS ever_30plus_amt_rate
     ,SUM(CASE WHEN dpd_mob1 IS NOT NULL THEN 1 ELSE 0 END)                       AS mob1_obs_cnt
+    ,ROUND(SUM(CASE WHEN dpd_mob1 IS NOT NULL THEN real_amount ELSE 0 END), 2)   AS mob1_obs_amt
     ,SUM(is_mob1_30plus)                                                         AS mob1_30plus_cnt
+    ,ROUND(SUM(CASE WHEN is_mob1_30plus = 1 THEN real_amount ELSE 0 END), 2)     AS mob1_30plus_amt
     ,ROUND(100.0 * SUM(is_mob1_30plus)
            / NULLIF(SUM(CASE WHEN dpd_mob1 IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS mob1_30plus_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_mob1_30plus = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN dpd_mob1 IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS mob1_30plus_amt_rate
     ,SUM(CASE WHEN dpd_mob2 IS NOT NULL THEN 1 ELSE 0 END)                       AS mob2_obs_cnt
+    ,ROUND(SUM(CASE WHEN dpd_mob2 IS NOT NULL THEN real_amount ELSE 0 END), 2)   AS mob2_obs_amt
     ,SUM(is_mob2_30plus)                                                         AS mob2_30plus_cnt
+    ,ROUND(SUM(CASE WHEN is_mob2_30plus = 1 THEN real_amount ELSE 0 END), 2)     AS mob2_30plus_amt
     ,ROUND(100.0 * SUM(is_mob2_30plus)
            / NULLIF(SUM(CASE WHEN dpd_mob2 IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS mob2_30plus_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_mob2_30plus = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN dpd_mob2 IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS mob2_30plus_amt_rate
 FROM model.tmp_eliam_wagego_vintage_loan
 GROUP BY disburse_month
 ;
@@ -426,6 +435,7 @@ GROUP BY disburse_month
 - `is_matured` = 观察点 <= `data_as_of`；未到期的记录不给逾期标记，聚合自动排除
 - `dpd` = 观察点当日快照的 `current_overdue_days`，只取月末分区
 - `is_5plus` / `is_30plus` 仅在已到期且快照存在时取值
+- 笔数、金额双口径：`_curve` 同时输出笔数率 `rate_5plus`/`rate_30plus` 与金额率 `rate_5plus_amt`/`rate_30plus_amt`；金额分母 `obs_amt` = 已到期且有快照的放款金额
 - 不借鉴 Fundo 的时点 DPD 算法（观察点前已结清一律记 0，会漏掉「曾 30+ 后结清」的笔）；累计口径仍以 `hist_overdue_days` 为准
 
 ### 6.1 新老客分群
@@ -521,13 +531,21 @@ SELECT
     ,mob_no
     ,MAX(data_as_of)                                                                            AS data_as_of
     ,COUNT(*)                                                                                  AS cohort_cnt
+    ,ROUND(SUM(real_amount), 2)                                                                AS cohort_amt
     ,SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END)                       AS obs_cnt
+    ,ROUND(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN real_amount ELSE 0 END), 2)   AS obs_amt
     ,SUM(is_5plus)                                                                             AS cnt_5plus
+    ,ROUND(SUM(CASE WHEN is_5plus = 1 THEN real_amount ELSE 0 END), 2)                         AS amt_5plus
     ,ROUND(100.0 * SUM(is_5plus)
            / NULLIF(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS rate_5plus
+    ,ROUND(100.0 * SUM(CASE WHEN is_5plus = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS rate_5plus_amt
     ,SUM(is_30plus)                                                                            AS cnt_30plus
+    ,ROUND(SUM(CASE WHEN is_30plus = 1 THEN real_amount ELSE 0 END), 2)                        AS amt_30plus
     ,ROUND(100.0 * SUM(is_30plus)
            / NULLIF(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS rate_30plus
+    ,ROUND(100.0 * SUM(CASE WHEN is_30plus = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS rate_30plus_amt
 FROM model.tmp_eliam_wagego_vintage_mob
 GROUP BY disburse_month, user_type, mob_no
 ;
