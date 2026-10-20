@@ -2,7 +2,7 @@
 
 ## 进度
 
-- [x] 第一步：申请事件主表 `model.tmp_eliam_wagego_application`（181,477 行）
+- [X] 第一步：申请事件主表 `model.tmp_eliam_wagego_application`（181,477 行）
 - [ ] 第二步：借款申请表 `model.tmp_eliam_wagego_loan_apply` ← 现在做
 - [ ] 第三步：补放款金额、期限（`edw_ewa.dwb_asset_cmn_listing`）
 - [ ] 第四步：补应还、实还、逾期（`edw_ewa.dwb_asset_debt_dtl_snp`）
