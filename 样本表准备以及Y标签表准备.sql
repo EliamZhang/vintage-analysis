@@ -8,6 +8,8 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 
 -- ============================================================================
 -- 第零步：观察日控制表
+-- 目的：统一确定这次分析看到哪一天。
+-- 加工：取借据快照表里最新的日期，只保留一行 obs_dt。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_obs_date;
 CREATE TABLE model.tmp_eliam_wagego_obs_date AS
@@ -17,6 +19,8 @@ WHERE CAST(period_no AS INT) = 1;
 
 -- ============================================================================
 -- 第一步：申请事件主表（一行 = 一次场景执行，flow_id 唯一）
+-- 目的：把用户每次跑额、借款、拉流水整理成一行，供后面取借款事件。
+-- 加工：清洗事件表，翻译场景/状态，并从 params 取出 app_id 等字段。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_application;
 CREATE TABLE model.tmp_eliam_wagego_application AS
@@ -72,6 +76,8 @@ WHERE CAST(a.is_active AS INT) = 1
 
 -- ============================================================================
 -- 第二步：借款申请表（一行一个 loan_no，覆盖全部申请）
+-- 目的：得到每笔借款申请的清单，不管成功、被拒、过期还是放款失败。
+-- 加工：以借款申请表为底，一行一个 loan_no，再补上第一步的策略执行信息。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_loan_apply;
 CREATE TABLE model.tmp_eliam_wagego_loan_apply AS
@@ -139,6 +145,8 @@ LEFT JOIN (
 
 -- ============================================================================
 -- 第三步：补放款金额、期限、应还、实还、逾期（行数不变）
+-- 目的：在每笔借款申请上补齐放款金额、期限、应还日、实还日和逾期情况。
+-- 加工：按 listing_id 关联放款表和借据快照，一笔申请仍是一行。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_loan_debt;
 CREATE TABLE model.tmp_eliam_wagego_loan_debt AS
@@ -267,8 +275,10 @@ CROSS JOIN model.tmp_eliam_wagego_obs_date c
 ;
 
 -- ============================================================================
--- 第四步：按放款月做 Vintage
+-- 第四步：按放款月做 Vintage（按放款月份观察后续逾期）
 -- 4.1 loan 级明细（含新老客标记）
+-- 目的：筛出放款成功的借款，算每笔在 MOB1/MOB2（放款后第 1/2 个月）和最新的逾期，以及 FPD（首期逾期）。
+-- 加工：只留放款成功的 loan_no，关联月末快照，打上 30+、FPD 和新老客标签。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_loan;
 CREATE TABLE model.tmp_eliam_wagego_vintage_loan AS
@@ -352,6 +362,8 @@ LEFT JOIN debt cur ON l.listing_id = cur.listing_id AND TO_DATE(cur.dt) = l.obs_
 
 -- ============================================================================
 -- 第四步：4.2 放款月汇总（笔数 + 金额双口径）
+-- 目的：按放款月份汇总，一眼看每个月的放款量、逾期率和 FPD。
+-- 加工：把 4.1 的结果按 disburse_month 分组，笔数和金额分别统计。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_month;
 CREATE TABLE model.tmp_eliam_wagego_vintage_month AS
@@ -425,8 +437,10 @@ GROUP BY disburse_month
 ;
 
 -- ============================================================================
--- 第五步：分群与滚动 Vintage 曲线
+-- 第五步：分群与滚动 Vintage 曲线（看不同客群随时间的逾期走势）
 -- 5.1 长表 MOB（1-12 个月）
+-- 目的：把每笔借款展开成 1~12 个月的观察点，为画 vintage 曲线做准备。
+-- 加工：每笔借款 × 12 个 MOB，关联对应月末快照，打上是否到期、逾期 5+/30+ 的标签。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_mob;
 CREATE TABLE model.tmp_eliam_wagego_vintage_mob AS
@@ -485,6 +499,8 @@ LEFT JOIN (
 
 -- ============================================================================
 -- 第五步：5.2 分群 × MOB 曲线（笔数 + 金额双口径）
+-- 目的：按放款月和新老客汇总每个 MOB 的逾期率，直接用于画曲线。
+-- 加工：把 5.1 的结果按放款月、新老客、MOB 分组，统计笔数和金额口径。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_curve;
 CREATE TABLE model.tmp_eliam_wagego_vintage_curve AS
