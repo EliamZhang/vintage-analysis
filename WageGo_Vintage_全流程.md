@@ -4,12 +4,43 @@
 
 ## 进度
 
+- [ ] 第零步：观察日控制表 `model.tmp_eliam_wagego_obs_date`（每日先跑）
 - [X] 第一步：申请事件主表 `model.tmp_eliam_wagego_application`（181,477 行）
 - [X] 第二步：借款申请表 `model.tmp_eliam_wagego_loan_apply`（33,491 行，已验收）
 - [X] 第三步：补放款金额、期限 `model.tmp_eliam_wagego_loan_listing`（33,491 行，已验收）
 - [X] 第四步：补应还、实还、逾期 `model.tmp_eliam_wagego_loan_debt`（33,491 行，已验收）
 - [X] 第五步：按放款月做 vintage `model.tmp_eliam_wagego_vintage_loan`（25,549 行，已验收）
 - [ ] 第六步：分群与滚动曲线（借鉴 Fundo：`user_type`、成熟度 NULL、长表 MOB）← 现在做
+
+## 第零步：观察日控制表（每日必跑）
+
+**目标**：给第四~六步提供统一的观察日 `obs_dt`，跟随快照表最新分区，不写死任何日期。
+
+**口径**：
+
+- `obs_dt = MAX(TO_DATE(dt))`，取 `edw_ewa.dwb_asset_debt_dtl_snp` 的最新分区
+- 不用 `current_date()`：ETL 延迟时当天分区可能还没产出，取最新分区才能保证有数可看
+- 每日跑数顺序：第零步 → 第一~三步 → 第四步 → 第五步 → 第六步
+
+**SQL**：
+
+```sql
+SET spark.sql.session.timeZone = Australia/Sydney;
+
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_obs_date;
+CREATE TABLE model.tmp_eliam_wagego_obs_date AS
+SELECT MAX(TO_DATE(dt)) AS obs_dt
+FROM edw_ewa.dwb_asset_debt_dtl_snp
+WHERE CAST(period_no AS INT) = 1;
+```
+
+**验收**：
+
+```sql
+SELECT obs_dt FROM model.tmp_eliam_wagego_obs_date;
+```
+
+预期：等于快照表最新分区日期（当前为 2026-10-20）；若比 `current_date()` 落后超过 1 天，说明快照 ETL 异常，先查上游再跑后续步骤。
 
 ## 第一步：申请事件主表（已完成）
 
@@ -265,12 +296,12 @@ FROM model.tmp_eliam_wagego_loan_listing;
 **口径**：
 
 - 底表第三步结果，`LEFT JOIN` `edw_ewa.dwb_asset_debt_dtl_snp`，关联键 `listing_id`
-- 取最新快照 `dt = '2026-10-20'`、`period_no = 1`（该表粒度 `listing_id × dt`，实测无重复，全部单期借据）
+- 取最新快照 `dt = obs_dt`（第零步控制表，当前 2026-10-20）、`period_no = 1`（该表粒度 `listing_id × dt`，实测无重复，全部单期借据）
 - `debt_status`：1 未结清、2 已结清、4 逾期中；3 笔 `is_deal=0` 的失败放款在借据表也有一条已结清记录，下游按 `is_deal=1` 过滤即可
 - `current_overdue_days` 是快照当日逾期天数（已验证随 dt 递增，`debt_status=4` 时等于 `hist_overdue_days`）
 - `hist_overdue_days` 是历史累计逾期天数，但近 1–2 天刚结清的记录可能尚未回写（2026-10 有 630 笔），Vintage 不要只依赖它
 - 合同期限 = `init_due_date − 放款日`。实际按发薪日对齐：W 0–7 天、F 0–14 天、M 0–32 天，均值约 4.7 / 9.0 / 18.1 天
-- 37 笔 2026-10-20 当天放款无借据记录（同步延迟），保留 NULL
+- 观察日当天放款的记录可能尚未进快照（当前 37 笔），保留 NULL
 
 **SQL**：
 
@@ -321,7 +352,7 @@ LEFT JOIN (
         ,repay_amount
         ,owing_amount
     FROM edw_ewa.dwb_asset_debt_dtl_snp
-    WHERE dt = '2026-10-20'
+    WHERE TO_DATE(dt) = (SELECT obs_dt FROM model.tmp_eliam_wagego_obs_date)
       AND CAST(period_no AS INT) = 1
 ) d
   ON a.listing_id = d.listing_id
@@ -358,9 +389,10 @@ FROM model.tmp_eliam_wagego_loan_debt;
 - 分群 = `disburse_month`（实测放款月与申请月完全一致）
 - MOB1 / MOB2 观察点 = 放款月后第 1 / 2 个自然月月末；`dpd_mobN` 取该日快照的 `current_overdue_days`（时点口径）
 - 30+ 逾期 = `current_overdue_days >= 30`
-- `is_ever_30plus_to_date` = 最新快照 `hist_overdue_days >= 30`，即截至 2026-10-20 曾达到 30+
-- 数据成熟度：截至 2026-10-20，只有 2026-07 的 MOB1/MOB2、2026-08 的 MOB1 到期；2026-09/10 的 `cur_*` 是未满观察月的现状，不能当完整 vintage 看
-- 分母：`obs_cnt` = 当日有借据快照的放款数；最新快照缺 37 笔 2026-10-20 当天放款
+- `is_ever_30plus_to_date` = 最新快照 `hist_overdue_days >= 30`，即截至 `obs_dt`（第零步控制表）曾达到 30+
+- 数据成熟度：截至 `obs_dt`，只有已过 MOB 观察点的月份可看；未到期的 `cur_*` 是现状，不能当完整 vintage
+- 分母：`obs_cnt` = 观察日有借据快照的放款数；观察日当天放款的记录可能尚未进快照
+- 每行带 `data_as_of = obs_dt`，出报表时直接展示数据截止日
 
 **SQL**：
 
@@ -371,18 +403,20 @@ DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_loan;
 CREATE TABLE model.tmp_eliam_wagego_vintage_loan AS
 WITH loan AS (
     SELECT
-         loan_no
-        ,user_id
-        ,listing_id
-        ,disburse_time
-        ,DATE_FORMAT(disburse_time, 'yyyy-MM')            AS disburse_month
-        ,TO_DATE(disburse_time)                           AS disburse_date
-        ,CAST(real_amount AS DOUBLE)                      AS real_amount
-        ,term_unit
-        ,DATE_FORMAT(LAST_DAY(ADD_MONTHS(TO_DATE(disburse_time), 1)), 'yyyy-MM-dd') AS mob1_dt
-        ,DATE_FORMAT(LAST_DAY(ADD_MONTHS(TO_DATE(disburse_time), 2)), 'yyyy-MM-dd') AS mob2_dt
-    FROM model.tmp_eliam_wagego_loan_debt
-    WHERE is_disburse_success = 1
+         a.loan_no
+        ,a.user_id
+        ,a.listing_id
+        ,a.disburse_time
+        ,DATE_FORMAT(a.disburse_time, 'yyyy-MM')            AS disburse_month
+        ,TO_DATE(a.disburse_time)                           AS disburse_date
+        ,CAST(a.real_amount AS DOUBLE)                      AS real_amount
+        ,a.term_unit
+        ,DATE_FORMAT(LAST_DAY(ADD_MONTHS(TO_DATE(a.disburse_time), 1)), 'yyyy-MM-dd') AS mob1_dt
+        ,DATE_FORMAT(LAST_DAY(ADD_MONTHS(TO_DATE(a.disburse_time), 2)), 'yyyy-MM-dd') AS mob2_dt
+        ,c.obs_dt
+    FROM model.tmp_eliam_wagego_loan_debt a
+    CROSS JOIN model.tmp_eliam_wagego_obs_date c
+    WHERE a.is_disburse_success = 1
 ),
 debt AS (
     SELECT
@@ -391,7 +425,8 @@ debt AS (
         ,CAST(current_overdue_days AS INT) AS current_overdue_days
         ,CAST(hist_overdue_days AS INT)    AS hist_overdue_days
     FROM edw_ewa.dwb_asset_debt_dtl_snp
-    WHERE dt IN ('2026-08-31', '2026-09-30', '2026-10-20')
+    WHERE (TO_DATE(dt) = LAST_DAY(TO_DATE(dt))
+           OR TO_DATE(dt) = (SELECT obs_dt FROM model.tmp_eliam_wagego_obs_date))
       AND CAST(period_no AS INT) = 1
 )
 SELECT
@@ -402,7 +437,8 @@ SELECT
     ,l.disburse_month
     ,l.real_amount
     ,l.term_unit
-    ,DATEDIFF('2026-10-20', l.disburse_date)               AS days_on_book
+    ,l.obs_dt                                                  AS data_as_of
+    ,DATEDIFF(l.obs_dt, l.disburse_date)                   AS days_on_book
     ,m1.current_overdue_days                               AS dpd_mob1
     ,m2.current_overdue_days                               AS dpd_mob2
     ,cur.current_overdue_days                              AS dpd_latest
@@ -416,13 +452,14 @@ SELECT
 FROM loan l
 LEFT JOIN debt m1  ON l.listing_id = m1.listing_id  AND m1.dt  = l.mob1_dt
 LEFT JOIN debt m2  ON l.listing_id = m2.listing_id  AND m2.dt  = l.mob2_dt
-LEFT JOIN debt cur ON l.listing_id = cur.listing_id AND cur.dt = '2026-10-20'
+LEFT JOIN debt cur ON l.listing_id = cur.listing_id AND TO_DATE(cur.dt) = l.obs_dt
 ;
 
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_month;
 CREATE TABLE model.tmp_eliam_wagego_vintage_month AS
 SELECT
      disburse_month
+    ,MAX(data_as_of)                                                             AS data_as_of
     ,COUNT(*)                                                                    AS loan_cnt
     ,ROUND(SUM(real_amount), 2)                                                  AS loan_amt
     ,SUM(CASE WHEN dpd_latest IS NOT NULL THEN 1 ELSE 0 END)                     AS obs_cnt
@@ -494,7 +531,7 @@ ORDER BY disburse_month;
 - `application_rank` = 用户内按 `disburse_time, loan_no` 排序的序号；`user_type`：序号 1 = New，其余 = Old
 - 局限：New/Old 只基于本数据集；取数窗口前已有放款的老客会被误判为 New。当前资产表只覆盖本窗口，暂无法识别更早记录
 - `mob_no` = 1–12；`obs_dt` = 放款日后第 `mob_no` 个自然月月末，与第五步 MOB 定义一致
-- `is_matured` = `obs_dt <= 2026-10-20`；未到观察日不给逾期标记
+- `is_matured` = MOB 观察点 <= `data_as_of`（第五步带入的 obs_dt）；未到观察日不给逾期标记
 - `dpd` = 观察点当日快照的 `current_overdue_days`，只取月末分区
 - `is_5plus` / `is_30plus` 仅在已到期且快照存在时取值，否则 NULL
 
@@ -542,6 +579,7 @@ obs AS (
         ,s.term_unit
         ,s.user_type
         ,s.application_rank
+        ,s.data_as_of
         ,m.mob_no
         ,LAST_DAY(ADD_MONTHS(TO_DATE(s.disburse_time), m.mob_no))     AS obs_dt
     FROM model.tmp_eliam_wagego_vintage_loan_seg s
@@ -557,13 +595,14 @@ SELECT
     ,o.term_unit
     ,o.user_type
     ,o.application_rank
+    ,o.data_as_of
     ,o.mob_no
     ,o.obs_dt
-    ,CASE WHEN o.obs_dt <= TO_DATE('2026-10-20') THEN 1 ELSE 0 END AS is_matured
-    ,d.current_overdue_days                                        AS dpd
-    ,CASE WHEN o.obs_dt <= TO_DATE('2026-10-20') AND d.current_overdue_days IS NOT NULL
+    ,CASE WHEN o.obs_dt <= o.data_as_of THEN 1 ELSE 0 END AS is_matured
+    ,d.current_overdue_days                                AS dpd
+    ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
           THEN CASE WHEN d.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
-    ,CASE WHEN o.obs_dt <= TO_DATE('2026-10-20') AND d.current_overdue_days IS NOT NULL
+    ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
           THEN CASE WHEN d.current_overdue_days >= 30 THEN 1 ELSE 0 END END AS is_30plus
 FROM obs o
 LEFT JOIN (
@@ -589,6 +628,7 @@ SELECT
      disburse_month
     ,user_type
     ,mob_no
+    ,MAX(data_as_of)                                                                            AS data_as_of
     ,COUNT(*)                                                                                  AS cohort_cnt
     ,SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END)                       AS obs_cnt
     ,SUM(is_5plus)                                                                             AS cnt_5plus
@@ -668,4 +708,4 @@ ORDER BY disburse_month, user_type;
 - 2026-09 累计 30+ 新客 2.59% 明显高于老客 0.39%，但该月 MOB1 还未到期，属于未成熟观察
 - 5+ 是短期限产品的早期预警阈值，30+ 仍是主口径；两条曲线一起看比只看 30+ 更早发现风险
 
-**后续更新方式**：每月末把本文件中的观察日 `2026-10-20` 和 SQL 里的快照日期换成最新分区，重跑第四、五、六步即可滚动刷新 vintage。
+**每日运行方式**：按 第零步 → 第一~三步 → 第四~六步 顺序每日重跑；观察日自动取快照表最新分区，SQL 里不再需要改日期。若需保留每日结果做趋势，再另建按 `obs_dt` 分区的历史表。
