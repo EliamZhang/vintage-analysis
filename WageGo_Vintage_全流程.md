@@ -1,4 +1,4 @@
-# WageGo Vintage 全流程（已完成）
+# WageGo Vintage 全流程（当前：第六步）
 
 > 注意：[现行vintage计算代码.sql](现行vintage计算代码.sql) 只能作参考，口径不一定正确，以本文档重新确认的口径为准。
 
@@ -9,6 +9,7 @@
 - [X] 第三步：补放款金额、期限 `model.tmp_eliam_wagego_loan_listing`（33,491 行，已验收）
 - [X] 第四步：补应还、实还、逾期 `model.tmp_eliam_wagego_loan_debt`（33,491 行，已验收）
 - [X] 第五步：按放款月做 vintage `model.tmp_eliam_wagego_vintage_loan`（25,549 行，已验收）
+- [ ] 第六步：分群与滚动曲线（借鉴 Fundo：`user_type`、成熟度 NULL、长表 MOB）← 现在做
 
 ## 第一步：申请事件主表（已完成）
 
@@ -477,4 +478,194 @@ ORDER BY disburse_month;
 - 2026-09 体量最大（9,501 笔），但目前只有约 1.5 个月的账龄，`ever_30+ = 1.65%` 是未成熟值，需等 10 月底 MOB1 到期
 - 2026-10 尚未进入任何观察月，30+ 为 0 属正常
 
-**后续更新方式**：每月末把本文件中的观察日 `2026-10-20` 和 SQL 里的快照日期换成最新分区，重跑第四、第五步即可滚动刷新 vintage。
+## 第六步：分群与滚动 Vintage 曲线（当前）
+
+**目标**：借鉴 Fundo 笔数口径的三点做法，在第五步结果上补：新老客分群、显式成熟度标记、长表 MOB 曲线（1–12 个月、5+/30+ 双阈值）。
+
+**借鉴与取舍**：
+
+- 借鉴 1：新老客 `user_type`——用户按放款时间排序，首笔 = New，其余 = Old
+- 借鉴 2：成熟度显式标记——观察点晚于观察日的直接置 NULL，聚合自动排除，不依赖快照是否有值
+- 借鉴 3：长表 + 观察窗口——一行一个 `loan_no × mob_no`，以后加 MOB 或加阈值只改参数，不用加列
+- 不借鉴：Fundo 的时点 DPD 算法（观察点前已结清一律记 0，会漏掉「曾 30+ 后结清」的笔）；WageGo 的累计口径仍以 `hist_overdue_days` 为准
+
+**口径**：
+
+- `application_rank` = 用户内按 `disburse_time, loan_no` 排序的序号；`user_type`：序号 1 = New，其余 = Old
+- 局限：New/Old 只基于本数据集；取数窗口前已有放款的老客会被误判为 New。当前资产表只覆盖本窗口，暂无法识别更早记录
+- `mob_no` = 1–12；`obs_dt` = 放款日后第 `mob_no` 个自然月月末，与第五步 MOB 定义一致
+- `is_matured` = `obs_dt <= 2026-10-20`；未到观察日不给逾期标记
+- `dpd` = 观察点当日快照的 `current_overdue_days`，只取月末分区
+- `is_5plus` / `is_30plus` 仅在已到期且快照存在时取值，否则 NULL
+
+**SQL**：
+
+6.1 新老客分群
+
+```sql
+SET spark.sql.session.timeZone = Australia/Sydney;
+
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_loan_seg;
+CREATE TABLE model.tmp_eliam_wagego_vintage_loan_seg AS
+WITH ranked AS (
+    SELECT
+         *
+        ,ROW_NUMBER() OVER (
+             PARTITION BY user_id
+             ORDER BY disburse_time, loan_no
+         ) AS application_rank
+    FROM model.tmp_eliam_wagego_vintage_loan
+)
+SELECT
+     *
+    ,CASE WHEN application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
+FROM ranked
+;
+```
+
+6.2 长表 MOB
+
+```sql
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_mob;
+CREATE TABLE model.tmp_eliam_wagego_vintage_mob AS
+WITH mob AS (
+    SELECT EXPLODE(SEQUENCE(1, 12)) AS mob_no
+),
+obs AS (
+    SELECT
+         s.loan_no
+        ,s.user_id
+        ,s.listing_id
+        ,TO_DATE(s.disburse_time)                                     AS disburse_date
+        ,s.disburse_month
+        ,s.real_amount
+        ,s.term_unit
+        ,s.user_type
+        ,s.application_rank
+        ,m.mob_no
+        ,LAST_DAY(ADD_MONTHS(TO_DATE(s.disburse_time), m.mob_no))     AS obs_dt
+    FROM model.tmp_eliam_wagego_vintage_loan_seg s
+    CROSS JOIN mob m
+)
+SELECT
+     o.loan_no
+    ,o.user_id
+    ,o.listing_id
+    ,o.disburse_date
+    ,o.disburse_month
+    ,o.real_amount
+    ,o.term_unit
+    ,o.user_type
+    ,o.application_rank
+    ,o.mob_no
+    ,o.obs_dt
+    ,CASE WHEN o.obs_dt <= TO_DATE('2026-10-20') THEN 1 ELSE 0 END AS is_matured
+    ,d.current_overdue_days                                        AS dpd
+    ,CASE WHEN o.obs_dt <= TO_DATE('2026-10-20') AND d.current_overdue_days IS NOT NULL
+          THEN CASE WHEN d.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
+    ,CASE WHEN o.obs_dt <= TO_DATE('2026-10-20') AND d.current_overdue_days IS NOT NULL
+          THEN CASE WHEN d.current_overdue_days >= 30 THEN 1 ELSE 0 END END AS is_30plus
+FROM obs o
+LEFT JOIN (
+    SELECT
+         listing_id
+        ,dt
+        ,CAST(current_overdue_days AS INT) AS current_overdue_days
+    FROM edw_ewa.dwb_asset_debt_dtl_snp
+    WHERE TO_DATE(dt) = LAST_DAY(TO_DATE(dt))
+      AND CAST(period_no AS INT) = 1
+) d
+  ON o.listing_id = d.listing_id
+ AND o.obs_dt      = TO_DATE(d.dt)
+;
+```
+
+6.3 分群 × MOB 曲线
+
+```sql
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_curve;
+CREATE TABLE model.tmp_eliam_wagego_vintage_curve AS
+SELECT
+     disburse_month
+    ,user_type
+    ,mob_no
+    ,COUNT(*)                                                                                  AS cohort_cnt
+    ,SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END)                       AS obs_cnt
+    ,SUM(is_5plus)                                                                             AS cnt_5plus
+    ,ROUND(100.0 * SUM(is_5plus)
+           / NULLIF(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS rate_5plus
+    ,SUM(is_30plus)                                                                            AS cnt_30plus
+    ,ROUND(100.0 * SUM(is_30plus)
+           / NULLIF(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS rate_30plus
+FROM model.tmp_eliam_wagego_vintage_mob
+GROUP BY disburse_month, user_type, mob_no
+;
+```
+
+**验收**：
+
+```sql
+-- 分群
+SELECT COUNT(*)                                           AS rows_cnt,
+       COUNT(DISTINCT loan_no)                            AS loan_no_cnt,
+       SUM(CASE WHEN user_type = 'New' THEN 1 ELSE 0 END) AS new_cnt,
+       SUM(CASE WHEN user_type = 'Old' THEN 1 ELSE 0 END) AS old_cnt,
+       MAX(application_rank)                              AS max_rank
+FROM model.tmp_eliam_wagego_vintage_loan_seg;
+
+-- MOB 长表
+SELECT COUNT(*)                                                             AS rows_cnt,
+       COUNT(DISTINCT CONCAT(loan_no, '#', mob_no))                         AS key_cnt,
+       SUM(is_matured)                                                      AS matured_cnt,
+       SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END)  AS obs_cnt,
+       SUM(is_5plus)                                                        AS cnt_5plus,
+       SUM(is_30plus)                                                       AS cnt_30plus
+FROM model.tmp_eliam_wagego_vintage_mob;
+
+-- 曲线（只看已到期）
+SELECT disburse_month, user_type, mob_no, cohort_cnt, obs_cnt,
+       cnt_5plus, rate_5plus, cnt_30plus, rate_30plus
+FROM model.tmp_eliam_wagego_vintage_curve
+WHERE obs_cnt > 0
+ORDER BY disburse_month, user_type, mob_no;
+```
+
+预期：
+
+- 分群：`rows_cnt = loan_no_cnt = 25,549`；`new_cnt = 12,489`；`old_cnt = 13,060`；`max_rank = 16`
+- MOB 长表：`rows_cnt = key_cnt = 306,588`（25,549 × 12）；`matured_cnt = 191`（7 月 14 笔 × MOB1/2 + 8 月 163 笔 × MOB1）；`obs_cnt = 191`；`cnt_5plus = 20`；`cnt_30plus = 10`
+- 曲线：
+
+| disburse_month | user_type | mob_no | cohort_cnt | obs_cnt | 5+ | rate_5plus | 30+ | rate_30plus |
+| -------------- | --------- | ------ | ---------- | ------- | -- | ---------- | --- | ----------- |
+| 2026-07        | New       | 1      | 6          | 6       | 1  | 16.67      | 1   | 16.67       |
+| 2026-07        | New       | 2      | 6          | 6       | 1  | 16.67      | 1   | 16.67       |
+| 2026-07        | Old       | 1      | 8          | 8       | 3  | 37.50      | 3   | 37.50       |
+| 2026-07        | Old       | 2      | 8          | 8       | 3  | 37.50      | 3   | 37.50       |
+| 2026-08        | New       | 1      | 142        | 142     | 11 | 7.75       | 1   | 0.70        |
+| 2026-08        | Old       | 1      | 21         | 21      | 1  | 4.76       | 1   | 4.76        |
+
+补充分群对比（截至 2026-10-20 累计 30+）：
+
+```sql
+SELECT disburse_month, user_type,
+       COUNT(*)                                                     AS loan_cnt,
+       SUM(CASE WHEN dpd_latest IS NOT NULL THEN 1 ELSE 0 END)      AS obs_cnt,
+       SUM(is_ever_30plus_to_date)                                  AS ever_30plus_cnt,
+       ROUND(100.0 * SUM(is_ever_30plus_to_date)
+             / NULLIF(SUM(CASE WHEN dpd_latest IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS ever_30plus_rate
+FROM model.tmp_eliam_wagego_vintage_loan_seg
+GROUP BY disburse_month, user_type
+ORDER BY disburse_month, user_type;
+```
+
+预期：2026-07 New 6 笔 / 1 笔 / 16.67，Old 8 / 3 / 37.50；2026-08 New 142 / 10 / 7.04，Old 21 / 1 / 4.76；2026-09 New 5,444 / 141 / 2.59，Old 4,057 / 16 / 0.39；2026-10 New 6,897 / 0 / 0.00，Old 8,974 / 0 / 0.00。
+
+**解读要点**：
+
+- `user_type` 是本数据集内的首笔口径，老客在窗口外有更早放款时会被算成 New，分群结论要带这个前提
+- 2026-08 的 MOB1：New 5+ 7.75% 高于 Old 4.76%，但 30+ 只有 1 笔对 1 笔，样本太小，不要下结论
+- 2026-09 累计 30+ 新客 2.59% 明显高于老客 0.39%，但该月 MOB1 还未到期，属于未成熟观察
+- 5+ 是短期限产品的早期预警阈值，30+ 仍是主口径；两条曲线一起看比只看 30+ 更早发现风险
+
+**后续更新方式**：每月末把本文件中的观察日 `2026-10-20` 和 SQL 里的快照日期换成最新分区，重跑第四、五、六步即可滚动刷新 vintage。
