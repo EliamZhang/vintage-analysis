@@ -25,22 +25,20 @@ def now():
 # 段号（取 SQL 段首注释「N. 段名」的编号）→ 结果 CSV 文件名。
 # 编号与 queries.sql 段首编号一一对应；文件名统一为「序号_英文_中文」。
 SEGMENT_NAMES = {
-    "1": "01_step1_validation_申请事件主表验收",
-    "2": "02_step2_validation_借款申请表验收",
-    "3": "03_desc_asset_cmn_listing_资产表结构",
-    "4": "04_desc_asset_debt_dtl_snp_债务快照结构",
-    "5": "05_desc_credit_application_授信申请表结构",
-    "6": "06_desc_credit_decision_授信决策表结构",
-    "7": "07_desc_loan_decision_提款决策表结构",
-    "8": "08_desc_user_fst_conv_新老客表结构",
-    "9": "09_sample_asset_cmn_listing_资产表样例",
-    "10": "10_sample_asset_debt_dtl_snp_债务快照样例",
-    "11": "11_grain_asset_cmn_listing_资产表粒度",
-    "12": "12_grain_asset_debt_dtl_snp_债务快照粒度",
-    "13": "13_partitions_asset_debt_dtl_snp_债务快照分区",
-    "14": "14_duplicates_asset_cmn_listing_资产表重复检查",
-    "15": "15_duplicates_asset_debt_dtl_snp_债务快照重复检查",
-    "16": "16_sample_user_fst_conv_新老客表样例",
+    "1": "01_desc_asset_cmn_listing_资产表结构",
+    "2": "02_desc_asset_debt_dtl_snp_债务快照结构",
+    "3": "03_desc_credit_application_授信申请表结构",
+    "4": "04_desc_credit_decision_授信决策表结构",
+    "5": "05_desc_loan_decision_提款决策表结构",
+    "6": "06_desc_user_fst_conv_新老客表结构",
+    "7": "07_sample_asset_cmn_listing_资产表样例",
+    "8": "08_sample_asset_debt_dtl_snp_债务快照样例",
+    "9": "09_grain_asset_cmn_listing_资产表粒度",
+    "10": "10_grain_asset_debt_dtl_snp_债务快照粒度",
+    "11": "11_partitions_asset_debt_dtl_snp_债务快照分区",
+    "12": "12_duplicates_asset_cmn_listing_资产表重复检查",
+    "13": "13_duplicates_asset_debt_dtl_snp_债务快照重复检查",
+    "14": "14_sample_user_fst_conv_新老客表样例",
 }
 
 
@@ -127,9 +125,12 @@ def run_sync(statements, query_fn):
                 success_tables.append(name)
                 print(f"成功 | {df.shape[0]} 行 × {df.shape[1]} 列 | {output_path}")
         except Exception as e:
-            entry.update(status="failed", error=str(e))
-            failed_tables.append({"table_name": name, "error": str(e), "run_time": entry["started_at"]})
-            print(f"失败 | {e}")
+            error_text = " ".join(str(e).split())
+            if len(error_text) > 2000:
+                error_text = error_text[:2000] + "...(truncated)"
+            entry.update(status="failed", error=error_text)
+            failed_tables.append({"table_name": name, "error": error_text, "run_time": entry["started_at"]})
+            print(f"失败 | {error_text}")
         finally:
             entry["finished_at"] = now().isoformat(timespec="seconds")
             save_manifest(manifest)

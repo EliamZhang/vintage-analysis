@@ -183,4 +183,4 @@ FROM model.tmp_eliam_wagego_loan_apply;
 
 预期：`apply_cnt = loan_no_cnt = 33,491`；`disburse_success_cnt = 25,549`；`reject_cnt = 5,517`；`expired_cnt = 2,280`；`disburse_failed_cnt = 137`。
 
-**下一步**：先跑 `queries.sql` 段 1–2 验收；再跑段 3–15 确认资产/债务表结构和粒度，然后写第三步 SQL。
+**下一步**：跑 `queries.sql` 段 1–14，只查原始表的结构、样例和粒度；拿到结果后写第三步 SQL。
