@@ -199,7 +199,7 @@ LEFT JOIN (
 - `current_overdue_days` 是快照当日逾期天数（时点口径）；`hist_overdue_days` 是历史累计逾期天数，但近 1–2 天刚结清的可能尚未回写，Vintage 不要只依赖它
 - 合同期限 = `init_due_date − 放款日`，按发薪日对齐：W 0–7 天、F 0–14 天、M 0–32 天
 - `loan_term_actual_days` = 实还日 − 放款日；`is_early_settlement` = 实还日早于应还日
-- `current_ovd_amt` = 最新快照 `current_overdue_days > 0` 时的放款金额；无逾期记 0，无快照保留 NULL
+- `is_current_overdue` = 最新快照 `current_overdue_days > 0`（仅 `is_deal = 1`）；`current_ovd_amt` = 逾期时的放款金额，无逾期记 0，无快照保留 NULL
 - FPD 只对 `is_deal = 1` 且有借据快照的记录赋值：
   - `is_fpdN_obs`（是否已到观察点）= `LEAST(实还日, init_due_date + N) < obs_dt`（未还时取 `init_due_date + N`）
   - `is_fpdN_ovd`（是否首期逾期）= 已还时 `实还日 > init_due_date + N`；未还时 `obs_dt > init_due_date + N`
@@ -274,7 +274,7 @@ SELECT
           THEN CASE WHEN TO_DATE(d.user_actual_repay_time) < d.init_due_date
                     THEN 1 ELSE 0 END END
                                          AS is_early_settlement
-    ,CASE WHEN d.current_overdue_days IS NOT NULL
+    ,CASE WHEN a.is_deal = 1 AND d.current_overdue_days IS NOT NULL
           THEN CASE WHEN CAST(d.current_overdue_days AS INT) > 0 THEN 1 ELSE 0 END END
                                          AS is_current_overdue
     ,CASE WHEN a.is_deal = 1 AND d.current_overdue_days IS NOT NULL
@@ -436,8 +436,8 @@ SELECT
     ,l.application_rank
     ,CASE WHEN l.application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
 FROM loan l
-LEFT JOIN debt m1  ON l.listing_id = m1.listing_id  AND m1.dt  = l.mob1_dt
-LEFT JOIN debt m2  ON l.listing_id = m2.listing_id  AND m2.dt  = l.mob2_dt
+LEFT JOIN debt m1  ON l.listing_id = m1.listing_id  AND TO_DATE(m1.dt)  = TO_DATE(l.mob1_dt)
+LEFT JOIN debt m2  ON l.listing_id = m2.listing_id  AND TO_DATE(m2.dt)  = TO_DATE(l.mob2_dt)
 LEFT JOIN debt cur ON l.listing_id = cur.listing_id AND TO_DATE(cur.dt) = l.obs_dt
 ;
 

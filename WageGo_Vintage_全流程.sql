@@ -204,7 +204,7 @@ SELECT
           THEN CASE WHEN TO_DATE(d.user_actual_repay_time) < d.init_due_date
                     THEN 1 ELSE 0 END END
                                          AS is_early_settlement
-    ,CASE WHEN d.current_overdue_days IS NOT NULL
+    ,CASE WHEN a.is_deal = 1 AND d.current_overdue_days IS NOT NULL
           THEN CASE WHEN CAST(d.current_overdue_days AS INT) > 0 THEN 1 ELSE 0 END END
                                          AS is_current_overdue
     ,CASE WHEN a.is_deal = 1 AND d.current_overdue_days IS NOT NULL
@@ -346,8 +346,8 @@ SELECT
     ,l.application_rank
     ,CASE WHEN l.application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
 FROM loan l
-LEFT JOIN debt m1  ON l.listing_id = m1.listing_id  AND m1.dt  = l.mob1_dt
-LEFT JOIN debt m2  ON l.listing_id = m2.listing_id  AND m2.dt  = l.mob2_dt
+LEFT JOIN debt m1  ON l.listing_id = m1.listing_id  AND TO_DATE(m1.dt)  = TO_DATE(l.mob1_dt)
+LEFT JOIN debt m2  ON l.listing_id = m2.listing_id  AND TO_DATE(m2.dt)  = TO_DATE(l.mob2_dt)
 LEFT JOIN debt cur ON l.listing_id = cur.listing_id AND TO_DATE(cur.dt) = l.obs_dt
 ;
 
