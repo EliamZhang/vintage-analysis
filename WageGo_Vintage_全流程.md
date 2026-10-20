@@ -1,4 +1,4 @@
-# WageGo Vintage 全流程（当前：第三步）
+# WageGo Vintage 全流程（已完成）
 
 > 注意：[现行vintage计算代码.sql](现行vintage计算代码.sql) 只能作参考，口径不一定正确，以本文档重新确认的口径为准。
 
@@ -6,9 +6,9 @@
 
 - [X] 第一步：申请事件主表 `model.tmp_eliam_wagego_application`（181,477 行）
 - [X] 第二步：借款申请表 `model.tmp_eliam_wagego_loan_apply`（33,491 行，已验收）
-- [ ] 第三步：补放款金额、期限（`edw_ewa.dwb_asset_cmn_listing`）← 现在做
-- [ ] 第四步：补应还、实还、逾期（`edw_ewa.dwb_asset_debt_dtl_snp`）
-- [ ] 第五步：按放款月做 vintage
+- [X] 第三步：补放款金额、期限 `model.tmp_eliam_wagego_loan_listing`（33,491 行，已验收）
+- [X] 第四步：补应还、实还、逾期 `model.tmp_eliam_wagego_loan_debt`（33,491 行，已验收）
+- [X] 第五步：按放款月做 vintage `model.tmp_eliam_wagego_vintage_loan`（25,549 行，已验收）
 
 ## 第一步：申请事件主表（已完成）
 
@@ -187,7 +187,7 @@ FROM model.tmp_eliam_wagego_loan_apply;
 
 **验收结果（2026-10-20，CSV 实测）**：全部一致。27 笔未关联主表的记录均为 2026-09-20 的 `EXPIRED`，与预期吻合；`apply_seq` 范围 1–9，覆盖 15,621 个用户；`disburse_time` 恰好只出现在 25,549 笔放款成功记录上。
 
-## 第三步：补放款金额、期限（当前）
+## 第三步：补放款金额、期限（已完成）
 
 **目标**：在第二步结果上补放款金额、成交标记、期限标签；仍是一行一个 `loan_no`，行数不变（33,491）。
 
@@ -255,11 +255,226 @@ FROM model.tmp_eliam_wagego_loan_listing;
 预期：`rows_cnt = loan_no_cnt = 33,491`；`matched_cnt = 25,531`（25,528 放款成功 + 3 放款失败）；`deal_cnt = 25,528`；`real_amount_sum = 4,055,150`。
 成功放款中 21 笔金额为空（2026-10-20 当天放款，资产表未同步）；期限分布 `W 12,903 / F 11,325 / M 1,300`。
 
-## 第四步预探查（已用下载的原始表确认）
+**验收结果（2026-10-20，CSV 实测）**：全部一致。25,531 笔匹配金额中放款成功 25,528 笔、放款失败 3 笔（`is_deal=0`）；21 笔空金额全部是 2026-10-20 01:33 之后放款；`is_deal=1` 的记录 `withdraw_time` 均已回填。
 
-- `dwb_asset_debt_dtl_snp` 粒度 = `listing_id × dt`，实测无重复；`period_no` 全为 1，全部是单期借据
-- 日快照共 70 个分区，2026-08-01 ~ 2026-10-20；缺 2026-08-02 ~ 08-12；月末 8/31、9/30 齐全
-- `current_overdue_days` 是快照当日状态（已验证随 dt 递增）；最新分区同时包含未结清（`debt_status=1`）、已结清（`2`）、逾期中（`4`），可直接算累计表现
-- 最新分区 25,515 笔，覆盖放款成功 25,512 笔；未覆盖的 37 笔全部发生在 2026-10-20 当天（同步延迟）
+## 第四步：补应还、实还、逾期（已完成）
 
-**下一步**：第三步验收后写第四步 SQL，按 `listing_id` 补 `init_due_date`、`user_actual_repay_time`、`hist_overdue_days`、`current_overdue_days`、`debt_status`，并用 `init_due_date − disburse_time` 计算合同期限。
+**目标**：在第三步结果上补借据侧的应还日、实还时间、结清状态、逾期天数；仍是一行一个 `loan_no`（33,491）。
+
+**口径**：
+
+- 底表第三步结果，`LEFT JOIN` `edw_ewa.dwb_asset_debt_dtl_snp`，关联键 `listing_id`
+- 取最新快照 `dt = '2026-10-20'`、`period_no = 1`（该表粒度 `listing_id × dt`，实测无重复，全部单期借据）
+- `debt_status`：1 未结清、2 已结清、4 逾期中；3 笔 `is_deal=0` 的失败放款在借据表也有一条已结清记录，下游按 `is_deal=1` 过滤即可
+- `current_overdue_days` 是快照当日逾期天数（已验证随 dt 递增，`debt_status=4` 时等于 `hist_overdue_days`）
+- `hist_overdue_days` 是历史累计逾期天数，但近 1–2 天刚结清的记录可能尚未回写（2026-10 有 630 笔），Vintage 不要只依赖它
+- 合同期限 = `init_due_date − 放款日`。实际按发薪日对齐：W 0–7 天、F 0–14 天、M 0–32 天，均值约 4.7 / 9.0 / 18.1 天
+- 37 笔 2026-10-20 当天放款无借据记录（同步延迟），保留 NULL
+
+**SQL**：
+
+```sql
+SET spark.sql.session.timeZone = Australia/Sydney;
+
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_loan_debt;
+CREATE TABLE model.tmp_eliam_wagego_loan_debt AS
+SELECT
+     a.*
+    ,d.init_due_date
+    ,d.user_actual_repay_time
+    ,CAST(d.debt_status AS INT)          AS debt_status
+    ,CASE CAST(d.debt_status AS INT)
+         WHEN 1 THEN '未结清'
+         WHEN 2 THEN '已结清'
+         WHEN 4 THEN '逾期中'
+         ELSE CAST(d.debt_status AS STRING)
+     END                                 AS debt_status_desc
+    ,CAST(d.hist_overdue_days AS INT)    AS hist_overdue_days
+    ,CAST(d.current_overdue_days AS INT) AS current_overdue_days
+    ,CAST(d.principal AS DOUBLE)         AS debt_principal
+    ,CAST(d.repay_amount AS DOUBLE)      AS repay_amount
+    ,CAST(d.owing_amount AS DOUBLE)      AS owing_amount
+    ,CASE WHEN d.listing_id IS NOT NULL
+          THEN DATEDIFF(d.init_due_date, TO_DATE(a.disburse_time)) END
+                                         AS loan_term_contract_days
+    ,CASE WHEN d.user_actual_repay_time IS NOT NULL
+          THEN DATEDIFF(TO_DATE(d.user_actual_repay_time), TO_DATE(a.disburse_time)) END
+                                         AS loan_term_actual_days
+    ,CASE WHEN d.user_actual_repay_time IS NOT NULL
+          THEN CASE WHEN TO_DATE(d.user_actual_repay_time) < d.init_due_date
+                    THEN 1 ELSE 0 END END
+                                         AS is_early_settlement
+    ,CASE WHEN d.current_overdue_days IS NOT NULL
+          THEN CASE WHEN CAST(d.current_overdue_days AS INT) > 0 THEN 1 ELSE 0 END END
+                                         AS is_current_overdue
+FROM model.tmp_eliam_wagego_loan_listing a
+LEFT JOIN (
+    SELECT
+         listing_id
+        ,init_due_date
+        ,user_actual_repay_time
+        ,debt_status
+        ,hist_overdue_days
+        ,current_overdue_days
+        ,principal
+        ,repay_amount
+        ,owing_amount
+    FROM edw_ewa.dwb_asset_debt_dtl_snp
+    WHERE dt = '2026-10-20'
+      AND CAST(period_no AS INT) = 1
+) d
+  ON a.listing_id = d.listing_id
+;
+```
+
+**验收**：
+
+```sql
+SELECT COUNT(*)                                                 AS rows_cnt,
+       COUNT(DISTINCT loan_no)                                  AS loan_no_cnt,
+       SUM(CASE WHEN debt_status IS NOT NULL THEN 1 ELSE 0 END) AS debt_matched_cnt,
+       SUM(CASE WHEN debt_status = 2 THEN 1 ELSE 0 END)         AS settled_cnt,
+       SUM(CASE WHEN debt_status = 1 THEN 1 ELSE 0 END)         AS outstanding_cnt,
+       SUM(CASE WHEN debt_status = 4 THEN 1 ELSE 0 END)         AS overdue_cnt,
+       SUM(is_current_overdue)                                  AS current_ovd_cnt,
+       SUM(CASE WHEN hist_overdue_days > 0 THEN 1 ELSE 0 END)   AS hist_ovd_cnt,
+       SUM(CASE WHEN hist_overdue_days >= 30 THEN 1 ELSE 0 END) AS hist_30plus_cnt,
+       SUM(is_early_settlement)                                 AS early_settle_cnt
+FROM model.tmp_eliam_wagego_loan_debt;
+```
+
+预期：`rows_cnt = loan_no_cnt = 33,491`；`debt_matched_cnt = 25,515`；`settled_cnt = 16,904`；`outstanding_cnt = 6,959`；`overdue_cnt = 1,652`；`current_ovd_cnt = 1,653`；`hist_ovd_cnt = 4,494`；`hist_30plus_cnt = 172`；`early_settle_cnt = 3,492`。
+放款成功中匹配借据 25,512 笔；未匹配的 37 笔全部是 2026-10-20 当天放款。
+
+**验收结果（2026-10-20，CSV 实测）**：全部一致。合同期限实测 W 均值 4.7 天（0–7）、F 9.0 天（0–14）、M 18.1 天（0–32）；`debt_principal` 合计 4,050,450，比 `real_amount` 少 4,700 = 未匹配借据的 16 笔放款金额 2,950 + 3 笔失败放款 1,750（借据本金为 0）。
+
+## 第五步：按放款月做 Vintage（已完成）
+
+**目标**：按放款月分群，输出放款后第 1/2 个自然月月末的 30+ 逾期，以及截至观察日的累计 30+ 逾期。产出两张表：`tmp_eliam_wagego_vintage_loan`（loan 级）和 `tmp_eliam_wagego_vintage_month`（放款月汇总）。
+
+**口径**：
+
+- 分群 = `disburse_month`（实测放款月与申请月完全一致）
+- MOB1 / MOB2 观察点 = 放款月后第 1 / 2 个自然月月末；`dpd_mobN` 取该日快照的 `current_overdue_days`（时点口径）
+- 30+ 逾期 = `current_overdue_days >= 30`
+- `is_ever_30plus_to_date` = 最新快照 `hist_overdue_days >= 30`，即截至 2026-10-20 曾达到 30+
+- 数据成熟度：截至 2026-10-20，只有 2026-07 的 MOB1/MOB2、2026-08 的 MOB1 到期；2026-09/10 的 `cur_*` 是未满观察月的现状，不能当完整 vintage 看
+- 分母：`obs_cnt` = 当日有借据快照的放款数；最新快照缺 37 笔 2026-10-20 当天放款
+
+**SQL**：
+
+```sql
+SET spark.sql.session.timeZone = Australia/Sydney;
+
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_loan;
+CREATE TABLE model.tmp_eliam_wagego_vintage_loan AS
+WITH loan AS (
+    SELECT
+         loan_no
+        ,user_id
+        ,listing_id
+        ,disburse_time
+        ,DATE_FORMAT(disburse_time, 'yyyy-MM')            AS disburse_month
+        ,TO_DATE(disburse_time)                           AS disburse_date
+        ,CAST(real_amount AS DOUBLE)                      AS real_amount
+        ,term_unit
+        ,DATE_FORMAT(LAST_DAY(ADD_MONTHS(TO_DATE(disburse_time), 1)), 'yyyy-MM-dd') AS mob1_dt
+        ,DATE_FORMAT(LAST_DAY(ADD_MONTHS(TO_DATE(disburse_time), 2)), 'yyyy-MM-dd') AS mob2_dt
+    FROM model.tmp_eliam_wagego_loan_debt
+    WHERE is_disburse_success = 1
+),
+debt AS (
+    SELECT
+         listing_id
+        ,dt
+        ,CAST(current_overdue_days AS INT) AS current_overdue_days
+        ,CAST(hist_overdue_days AS INT)    AS hist_overdue_days
+    FROM edw_ewa.dwb_asset_debt_dtl_snp
+    WHERE dt IN ('2026-08-31', '2026-09-30', '2026-10-20')
+      AND CAST(period_no AS INT) = 1
+)
+SELECT
+     l.loan_no
+    ,l.user_id
+    ,l.listing_id
+    ,l.disburse_time
+    ,l.disburse_month
+    ,l.real_amount
+    ,l.term_unit
+    ,DATEDIFF('2026-10-20', l.disburse_date)               AS days_on_book
+    ,m1.current_overdue_days                               AS dpd_mob1
+    ,m2.current_overdue_days                               AS dpd_mob2
+    ,cur.current_overdue_days                              AS dpd_latest
+    ,cur.hist_overdue_days                                 AS hist_dpd_latest
+    ,CASE WHEN m1.current_overdue_days IS NOT NULL
+          THEN CASE WHEN m1.current_overdue_days >= 30 THEN 1 ELSE 0 END END AS is_mob1_30plus
+    ,CASE WHEN m2.current_overdue_days IS NOT NULL
+          THEN CASE WHEN m2.current_overdue_days >= 30 THEN 1 ELSE 0 END END AS is_mob2_30plus
+    ,CASE WHEN cur.hist_overdue_days IS NOT NULL
+          THEN CASE WHEN cur.hist_overdue_days >= 30 THEN 1 ELSE 0 END END   AS is_ever_30plus_to_date
+FROM loan l
+LEFT JOIN debt m1  ON l.listing_id = m1.listing_id  AND m1.dt  = l.mob1_dt
+LEFT JOIN debt m2  ON l.listing_id = m2.listing_id  AND m2.dt  = l.mob2_dt
+LEFT JOIN debt cur ON l.listing_id = cur.listing_id AND cur.dt = '2026-10-20'
+;
+
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_vintage_month;
+CREATE TABLE model.tmp_eliam_wagego_vintage_month AS
+SELECT
+     disburse_month
+    ,COUNT(*)                                                                    AS loan_cnt
+    ,ROUND(SUM(real_amount), 2)                                                  AS loan_amt
+    ,SUM(CASE WHEN dpd_latest IS NOT NULL THEN 1 ELSE 0 END)                     AS obs_cnt
+    ,ROUND(SUM(CASE WHEN dpd_latest IS NOT NULL THEN real_amount ELSE 0 END), 2) AS obs_amt
+    ,SUM(CASE WHEN dpd_latest >= 30 THEN 1 ELSE 0 END)                           AS cur_30plus_cnt
+    ,ROUND(SUM(CASE WHEN dpd_latest >= 30 THEN real_amount ELSE 0 END), 2)       AS cur_30plus_amt
+    ,SUM(is_ever_30plus_to_date)                                                 AS ever_30plus_cnt
+    ,ROUND(SUM(CASE WHEN is_ever_30plus_to_date = 1 THEN real_amount ELSE 0 END), 2) AS ever_30plus_amt
+    ,ROUND(100.0 * SUM(is_ever_30plus_to_date)
+           / NULLIF(SUM(CASE WHEN dpd_latest IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS ever_30plus_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_ever_30plus_to_date = 1 THEN real_amount ELSE 0 END)
+           / NULLIF(SUM(CASE WHEN dpd_latest IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS ever_30plus_amt_rate
+    ,SUM(CASE WHEN dpd_mob1 IS NOT NULL THEN 1 ELSE 0 END)                       AS mob1_obs_cnt
+    ,SUM(is_mob1_30plus)                                                         AS mob1_30plus_cnt
+    ,ROUND(100.0 * SUM(is_mob1_30plus)
+           / NULLIF(SUM(CASE WHEN dpd_mob1 IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS mob1_30plus_rate
+    ,SUM(CASE WHEN dpd_mob2 IS NOT NULL THEN 1 ELSE 0 END)                       AS mob2_obs_cnt
+    ,SUM(is_mob2_30plus)                                                         AS mob2_30plus_cnt
+    ,ROUND(100.0 * SUM(is_mob2_30plus)
+           / NULLIF(SUM(CASE WHEN dpd_mob2 IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS mob2_30plus_rate
+FROM model.tmp_eliam_wagego_vintage_loan
+GROUP BY disburse_month
+;
+```
+
+**验收**：
+
+```sql
+SELECT disburse_month, loan_cnt, loan_amt, obs_cnt, obs_amt,
+       cur_30plus_cnt, cur_30plus_amt,
+       ever_30plus_cnt, ever_30plus_amt, ever_30plus_rate, ever_30plus_amt_rate,
+       mob1_obs_cnt, mob1_30plus_cnt, mob1_30plus_rate,
+       mob2_obs_cnt, mob2_30plus_cnt, mob2_30plus_rate
+FROM model.tmp_eliam_wagego_vintage_month
+ORDER BY disburse_month;
+```
+
+预期：
+
+| disburse_month | loan_cnt | loan_amt  | obs_cnt | obs_amt   | cur_30+ | cur_30+_amt | ever_30+ | ever_30+_amt | ever_rate | ever_amt_rate | mob1_obs | mob1_30+ | mob1_rate | mob2_obs | mob2_30+ | mob2_rate |
+| -------------- | -------- | --------- | ------- | --------- | ------- | ----------- | -------- | ------------ | --------- | ------------- | -------- | -------- | --------- | -------- | -------- | --------- |
+| 2026-07        | 14       | 900       | 14      | 900       | 4       | 250         | 4        | 250          | 28.57     | 27.78         | 14       | 4        | 28.57     | 14       | 4        | 28.57     |
+| 2026-08        | 163      | 24,450    | 163     | 24,450    | 7       | 800         | 11       | 1,400        | 6.75      | 5.73          | 163      | 2        | 1.23      | 0        | 0        | NULL      |
+| 2026-09        | 9,501    | 1,464,950 | 9,501   | 1,464,950 | 147     | 18,200      | 157      | 19,350       | 1.65      | 1.32          | 0        | 0        | NULL      | 0        | 0        | NULL      |
+| 2026-10        | 15,871   | 2,563,100 | 15,834  | 2,560,150 | 0       | 0           | 0        | 0            | 0.00      | 0.00          | 0        | 0        | NULL      | 0        | 0        | NULL      |
+
+**验收结果（2026-10-20，CSV 实测）**：全部一致。`tmp_eliam_wagego_vintage_loan.csv` 共 25,549 行、`loan_no` 唯一；各月人数 14/163/9,501/15,871，MOB1 观测 14/163/0/0 且 30+ 为 4/2/0/0，MOB2 观测 14/0/0/0 且 30+ 为 4/0/0/0，最新快照观测 14/163/9,501/15,834 且 30+ 为 4/7/147/0，累计 30+ 为 4/11/157/0；`days_on_book` 区间分别为 81–91、50–76、20–49、0–19，与放款月吻合。由 loan 级 CSV 重算的月度汇总与上表逐项相同。
+
+**解读要点**：
+
+- 2026-07 只有 14 笔、900 AUD，像试运营/测试量，28.57% 的 vintage 不宜当业务结论
+- 2026-08 的 MOB1（9/30）30+ 为 2 笔（1.23%），到 10/20 累计升到 11 笔（6.75%），说明 MOB1 之后仍有暴露
+- 2026-09 体量最大（9,501 笔），但目前只有约 1.5 个月的账龄，`ever_30+ = 1.65%` 是未成熟值，需等 10 月底 MOB1 到期
+- 2026-10 尚未进入任何观察月，30+ 为 0 属正常
+
+**后续更新方式**：每月末把本文件中的观察日 `2026-10-20` 和 SQL 里的快照日期换成最新分区，重跑第四、第五步即可滚动刷新 vintage。
