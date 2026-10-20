@@ -183,4 +183,4 @@ FROM model.tmp_eliam_wagego_loan_apply;
 
 预期：`apply_cnt = loan_no_cnt = 33,491`；`disburse_success_cnt = 25,549`；`reject_cnt = 5,517`；`expired_cnt = 2,280`；`disburse_failed_cnt = 137`。
 
-**下一步**：跑 `queries.sql` 段 1–11，只查核心 vintage 需要的原始表结构、样例和粒度；拿到结果后写第三步 SQL。
+**下一步**：先查核心原始表（`dwb_asset_cmn_listing`、`dwb_asset_debt_dtl_snp`、`dwb_user_fst_conv_dtl`）的结构和粒度，再写第三步 SQL。
