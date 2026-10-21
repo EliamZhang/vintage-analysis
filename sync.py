@@ -107,7 +107,7 @@ SEGMENT_SPECS = {
         "required_columns": {
             "loan_no", "user_id", "listing_id", "disburse_time", "disburse_date",
             "disburse_month", "real_amount", "term_quantity", "term_unit",
-            "init_due_date", "user_type",
+            "init_due_date", "application_rank", "user_type",
         },
         "unique_keys": ["loan_no"],
     },

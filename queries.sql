@@ -684,6 +684,7 @@ SELECT
     ,term_quantity
     ,term_unit
     ,init_due_date
+    ,application_rank
     ,CASE WHEN application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
 FROM disbursed
 ;
