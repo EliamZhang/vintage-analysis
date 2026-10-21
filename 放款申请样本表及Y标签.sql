@@ -109,6 +109,10 @@ FROM agg
 --   MOB n        放款后的第 n 个表现观察点，取放款日往后推 n 个月所在月的月末；
 --   成熟         标签观察日已经真实发生（不早于放款日、且不晚于观察日），否则标签无法判断。
 --
+-- Y 标签命名规范：
+--   统一以 y_ 开头；_cnt 为笔数口径（0/1 标记，SUM 得到逾期笔数、AVG 得到逾期率），
+--   _amt 为金额口径，_dpd 为逾期天数；观察点用 obs（观察日）、label（标签日）、fpdN（首期）、mobN（第 N 月）。
+--
 -- 加工逻辑（与下面 CTE 一一对应）：
 --   1) apply：从放款申请表取有效申请（isactive = 1），一行一个申请，保留用户、借款、申请状态、
 --      申请时间、放款时间，并按用户申请时间排序生成申请序号 apply_seq（该用户的第几次申请）。
@@ -130,7 +134,7 @@ FROM agg
 --      同时算出标签日实际还款日 label_obs_day：优先取标签日快照里的首期还款时间，其次取观察日快照里
 --      不晚于标签日的首期还款时间，两者都没有则取标签日本身（表示"截至标签日仍未还款"）。
 --   8) mob_obs / mob_detail / mob_wide：对放款成功的借款，分别到 MOB1、MOB2、MOB3 的观察点关联当天债务快照，
---      计算 5+（当天逾期天数 >= 5）和 30+（当天逾期天数 > 30），再按借款透视为 mob1_5plus ... mob3_30plus。
+--      计算 5+（当天逾期天数 >= 5）和 30+（当天逾期天数 > 30），再按借款透视为 y_mob1_5plus_cnt ... y_mob3_30plus_cnt。
 --      观察点还没到（晚于 obs_dt）或当天没有快照时，对应标记为 NULL。
 --   9) 最终 SELECT：标签日指标（标签日 DPD、5+ / 30+、是否逾期、逾期金额）之外，计算 FPD3/7/14/30：
 --      用标签日实际还款日 label_obs_day 与首期应还日比较，晚于"首期应还日 + N 天"记为 FPD_N 逾期 = 1，否则 0；
@@ -343,12 +347,12 @@ mob_detail AS (
 mob_wide AS (
     SELECT
          loan_no
-        ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS mob1_5plus
-        ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS mob2_5plus
-        ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS mob3_5plus
-        ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS mob1_30plus
-        ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS mob2_30plus
-        ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS mob3_30plus
+        ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS y_mob1_5plus_cnt
+        ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS y_mob2_5plus_cnt
+        ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS y_mob3_5plus_cnt
+        ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS y_mob1_30plus_cnt
+        ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS y_mob2_30plus_cnt
+        ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS y_mob3_30plus_cnt
     FROM mob_detail
     GROUP BY loan_no
 )
@@ -401,31 +405,31 @@ SELECT
     ,b.label_current_overdue_days
     ,b.label_hist_overdue_days
     ,b.label_owing_amount
-    ,b.label_dpd                                           AS dpd_at_label_obs
-    ,b.label_hist_dpd                                      AS hist_dpd_at_label_obs
-    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN 1 ELSE 0 END END AS is_current_overdue_at_label_obs
-    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN b.real_amount ELSE 0 END END AS current_ovd_amt_at_label_obs
-    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd >= 5 THEN 1 ELSE 0 END END AS is_5plus_at_label_obs
-    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 30 THEN 1 ELSE 0 END END AS is_30plus_at_label_obs
-    ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 30 THEN 1 ELSE 0 END END AS is_ever_30plus_in_window
-    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3) THEN 1 ELSE 0 END END AS is_fpd3_ovd
-    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS is_fpd7_ovd
-    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END AS is_fpd14_ovd
-    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS is_fpd30_ovd
+    ,b.label_dpd                                           AS y_label_dpd
+    ,b.label_hist_dpd                                      AS y_label_hist_dpd
+    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN 1 ELSE 0 END END AS y_label_ovd_cnt
+    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_label_ovd_amt
+    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd >= 5 THEN 1 ELSE 0 END END AS y_label_5plus_cnt
+    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 30 THEN 1 ELSE 0 END END AS y_label_30plus_cnt
+    ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 30 THEN 1 ELSE 0 END END AS y_label_ever30plus_cnt
+    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3) THEN 1 ELSE 0 END END AS y_fpd3_ovd_cnt
+    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd_cnt
+    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END AS y_fpd14_ovd_cnt
+    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS y_fpd30_ovd_cnt
     ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
     ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN DATEDIFF(TO_DATE(b.user_actual_repay_time), TO_DATE(b.disburse_time)) END AS loan_term_actual_days
     ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN CASE WHEN TO_DATE(b.user_actual_repay_time) < b.init_due_date THEN 1 ELSE 0 END END AS is_early_settlement
-    ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN 1 ELSE 0 END END AS is_current_overdue
-    ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS current_ovd_amt
+    ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN 1 ELSE 0 END END AS y_obs_ovd_cnt
+    ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ovd_amt
     ,DATE_FORMAT(b.disburse_time, 'yyyy-MM')                 AS disburse_month
     ,DATEDIFF(b.obs_dt, TO_DATE(b.disburse_time))            AS days_on_book
     ,CASE WHEN b.application_rank = 1 THEN 'New' WHEN b.application_rank IS NOT NULL THEN 'Old' END AS user_type
-    ,m.mob1_5plus
-    ,m.mob2_5plus
-    ,m.mob3_5plus
-    ,m.mob1_30plus
-    ,m.mob2_30plus
-    ,m.mob3_30plus
+    ,m.y_mob1_5plus_cnt
+    ,m.y_mob2_5plus_cnt
+    ,m.y_mob3_5plus_cnt
+    ,m.y_mob1_30plus_cnt
+    ,m.y_mob2_30plus_cnt
+    ,m.y_mob3_30plus_cnt
 FROM base b
 LEFT JOIN mob_wide m
   ON b.loan_no = m.loan_no
