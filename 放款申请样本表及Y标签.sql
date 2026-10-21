@@ -26,7 +26,8 @@ FROM edw_ewa.dwb_asset_debt_dtl_snp
 -- 目的：把多期快照聚合成一个借款一天一行，供标签窗口（init_due_date + 31 天）和 MOB 观察点取数。
 -- 加工逻辑：债务快照表（edw_ewa.dwb_asset_debt_dtl_snp）一行是借款（listing_id）× 期次（period_no）× 日期（dt），
 --   这里按借款（listing_id）× 日期（dt）聚合，把多期压成一行：应还日（init_due_date）取 MIN、逾期天数（current_overdue_days、hist_overdue_days）取 MAX、
---   金额（principal、repay_amount、owing_amount）取 SUM、债务状态（debt_status）取最差（4 逾期中 > 1 未结清 > 2 已结清），并输出中文描述（debt_status_desc）；
+--   金额（principal、repay_amount、owing_amount、owing_principal）取 SUM、债务状态（debt_status）取最差（4 逾期中 > 1 未结清 > 2 已结清），并输出中文描述（debt_status_desc）；
+--   owing_principal 是快照中的未还本金，供第二步 MOB 账龄跟踪字段 estimate_principal_remaining_mobN 使用；
 --   还款时间拆两个：首期还款时间（first_repay_time）只取 period_no = 1，供 FPD 判定；结清时间（user_actual_repay_time）只在全部期次结清时取 MAX，否则为 NULL；
 --   扫描范围取放款申请表（ods_ewa.aus_ewa_loan_biz_t_loan_application）最早申请时间（inserttime）前 1 个月，到观察日参数表（param_obs_date）的 obs_dt。
 -- ============================================================================
@@ -46,6 +47,7 @@ WITH src AS (
         ,CAST(d.principal AS DOUBLE)                          AS principal
         ,CAST(d.repay_amount AS DOUBLE)                       AS repay_amount
         ,CAST(d.owing_amount AS DOUBLE)                       AS owing_amount
+        ,CAST(d.owing_principal AS DOUBLE)                    AS owing_principal
     FROM edw_ewa.dwb_asset_debt_dtl_snp d
     CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
     WHERE TO_DATE(d.dt) <= p.obs_dt
@@ -70,6 +72,7 @@ agg AS (
         ,SUM(principal)                                       AS principal
         ,SUM(repay_amount)                                    AS repay_amount
         ,SUM(owing_amount)                                    AS owing_amount
+        ,SUM(owing_principal)                                 AS owing_principal
     FROM src
     GROUP BY listing_id, stat_date
 )
@@ -87,6 +90,7 @@ SELECT
     ,principal
     ,repay_amount
     ,owing_amount
+    ,owing_principal
 FROM agg
 ;                                                                 -- 日快照（stat_date），支持任意 init_due_date + 31 标签观察点
 
@@ -97,7 +101,8 @@ FROM agg
 --       + ods_ewa.aus_listing_tb_loan_limit_apply + edw_ewa.dwb_asset_cmn_listing
 --       + stg_debt_snp + param_obs_date
 -- 下游：下游分析 / 建模取数
--- 目的：一行一个申请，包含申请状态、放款属性、观察日债务状态、FPD3/7/14/30 标签和 MOB1~MOB3 的 5+ / 30+ 标记；
+-- 目的：一行一个申请，包含申请状态、放款属性、观察日债务状态、FPD3/7/14/30 标签、MOB1~MOB3 的 5+ / 30+ 标记，
+--       以及 MOB0~MOB4 的剩余本金、当期逾期天数、历史最大逾期天数账龄跟踪字段；
 --       后续分析按 is_disburse_success = 1 筛放款成功样本。
 -- 阅读前先认识几个名词：
 --   loan_no      一次放款申请的编号，本表一行一个申请，loan_no 唯一；
@@ -106,12 +111,15 @@ FROM agg
 --   init_due_date 首期应还日，用来判断首期是否逾期（FPD）；
 --   obs_dt       观察日，取债务快照表的最新一天，"当前状态"都以这一天为准；
 --   label_obs_dt 标签观察日 = 首期应还日 + 31 天，用来观察首期到期一个月后的表现；
---   MOB n        放款后的第 n 个表现观察点，取放款日往后推 n 个月所在月的月末；
+--   MOB n        放款后的第 n 个表现观察点，取放款日往后推 n 个月所在月的月末（MOB0 即放款当月月末）；
+--   principal    放款本金，仅放款成功样本有值，取借款信息表 real_amount（0/空时回退债务快照 principal）；
 --   成熟         标签观察日已经真实发生（不早于放款日、且不晚于观察日），否则标签无法判断。
 --
 -- Y 标签命名规范：
 --   统一以 y_ 开头；_cnt 为笔数口径（0/1 标记，SUM 得到逾期笔数、AVG 得到逾期率），
 --   _amt 为金额口径，_dpd 为逾期天数；观察点用 obs（观察日）、label（标签日）、fpdN（首期）、mobN（第 N 月）。
+--   账龄跟踪字段（principal、estimate_principal_remaining_mobN、dpd_days_mobN、dpd_days_ever_mobN）
+--   是连续值而不是 0/1 标签，因此不强制加 y_ 前缀。
 --
 -- 加工逻辑（与下面 CTE 一一对应）：
 --   1) apply：从放款申请表取有效申请（isactive = 1），一行一个申请，保留用户、借款、申请状态、
@@ -127,16 +135,25 @@ FROM agg
 --   5) loan_apply：把申请、策略事件、放款序号、戳额时点按 loan_no 拼成申请主表，
 --      把申请状态翻译成中文，并打上放款成功、拒绝、过期、放款失败等标记。
 --   6) latest：按 listing_id 关联借款信息表（dwb_asset_cmn_listing），补充放款金额、利息、服务费、
---      期限、是否成交、合同应还日等放款属性；同时关联观察日 obs_dt 的债务快照，得到截至观察日的
---      首期应还日、首期还款时间、结清时间、债务状态、逾期天数和应还/已还金额。
+--      期限、是否成交、合同应还日等放款属性，并计算放款本金 principal（取 real_amount，0/空时回退债务快照 principal）；
+--      同时关联观察日 obs_dt 的债务快照，得到截至观察日的首期应还日、首期还款时间、结清时间、
+--      债务状态、逾期天数和应还/已还金额。
 --   7) base：再以"首期应还日 + 31 天"作为标签观察日，关联同一张债务快照，得到标签日的债务状态；
 --      并判断样本是否成熟 is_label_matured（放款成功 + 已成交 + 有债务快照 + 标签观察日在放款日和观察日之间）；
 --      同时算出标签日实际还款日 label_obs_day：优先取标签日快照里的首期还款时间，其次取观察日快照里
 --      不晚于标签日的首期还款时间，两者都没有则取标签日本身（表示"截至标签日仍未还款"）。
---   8) mob_obs / mob_detail / mob_wide：对放款成功的借款，分别到 MOB1、MOB2、MOB3 的观察点关联当天债务快照，
---      计算 5+（当天逾期天数 >= 5）和 30+（当天逾期天数 > 30），再按借款透视为 y_mob1_5plus_cnt ... y_mob3_30plus_cnt。
---      观察点还没到（晚于 obs_dt）或当天没有快照时，对应标记为 NULL。
---   9) 最终 SELECT：标签日指标（标签日 DPD、5+ / 30+、是否逾期、逾期金额）之外，计算 FPD3/7/14/30：
+--   8) mob_obs：对放款成功的借款，按放款日期展开 MOB0~MOB4 共 5 个观察点，观察点 = 放款月往后第 N 个月的月末；
+--      只保留不晚于 obs_dt 的观察点，观察期不足的 MOB 不展开，最终对应字段为 NULL。
+--   9) mob_detail / mob_wide：在 MOB1~MOB3 观察点关联当天债务快照，计算 5+（当天逾期天数 >= 5）和
+--      30+（当天逾期天数 > 30），再按借款透视为 y_mob1_5plus_cnt ... y_mob3_30plus_cnt。
+--      观察点还没到或当天没有快照时，对应标记为 NULL（保持原标签口径不变）。
+--  10) mob_track / mob_track_wide：在每个 MOB 观察点取"当天或之前最近一天"的债务快照（MOB0 月末当天及之前
+--      没有快照时，取月末后 7 天内最早一天），透视出：
+--      estimate_principal_remaining_mobN（未还本金 owing_principal，下限 0）、
+--      dpd_days_mobN（当期逾期天数 current_overdue_days）、
+--      dpd_days_ever_mobN（历史最大逾期天数 hist_overdue_days）；
+--      观察点无快照或观察期不足时为 NULL，快照存在但字段为空时按 0 处理。
+--  11) 最终 SELECT：标签日指标（标签日 DPD、5+ / 30+、是否逾期、逾期金额）之外，计算 FPD3/7/14/30：
 --      用标签日实际还款日 label_obs_day 与首期应还日比较，晚于"首期应还日 + N 天"记为 FPD_N 逾期 = 1，否则 0；
 --      到标签日仍未还款时用标签日参与比较，等价于"截至标签日仍未还清"。最后补充合同期限、实际期限、
 --      是否早结清、观察日是否逾期、在贷天数和 New/Old 等派生指标。
@@ -282,7 +299,8 @@ latest AS (
         ,s.debt_status_desc
         ,s.hist_overdue_days
         ,s.current_overdue_days
-        ,s.principal                                          AS debt_principal
+        ,CASE WHEN a.is_disburse_success = 1
+              THEN COALESCE(NULLIF(CAST(l.real_amount AS DOUBLE), 0), s.principal) END AS principal
         ,s.repay_amount
         ,s.owing_amount
         ,p.obs_dt
@@ -324,10 +342,11 @@ mob_obs AS (
     SELECT
          b.loan_no
         ,b.listing_id
+        ,TO_DATE(b.disburse_time)                             AS disburse_date
         ,m.mob_no
         ,LAST_DAY(ADD_MONTHS(TO_DATE(b.disburse_time), m.mob_no)) AS mob_obs_dt
     FROM base b
-    CROSS JOIN (SELECT EXPLODE(SEQUENCE(1, 3)) AS mob_no) m
+    CROSS JOIN (SELECT EXPLODE(SEQUENCE(0, 4)) AS mob_no) m
     WHERE b.is_disburse_success = 1
       AND LAST_DAY(ADD_MONTHS(TO_DATE(b.disburse_time), m.mob_no)) <= b.obs_dt
 ),
@@ -354,6 +373,67 @@ mob_wide AS (
         ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS y_mob2_30plus_cnt
         ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS y_mob3_30plus_cnt
     FROM mob_detail
+    GROUP BY loan_no
+),
+-- MOB 账龄跟踪字段口径：
+--   适用范围：仅放款成功（is_disburse_success = 1）的申请；其余申请三个字段为 NULL。
+--   观察点：MOB N = 放款当月往后第 N 个月的月末（MOB0 = 放款当月月末），当前 N = 4；
+--     扩展期数时同步修改 mob_obs 的 SEQUENCE、mob_track_wide 和最终 SELECT。
+--   快照选取：每个观察点只取一条债务快照——优先观察点当天，当天没有则取观察点之前最近一天（as-of）；
+--     MOB0 特例：若月末当天及之前都没有快照（常见于月末最后一天放款、快照从次日起），
+--     取月末后 7 天内最早一天；仍没有则视为缺失。
+--   观察期不足：观察点晚于 obs_dt 的 MOB 不展开，三个字段均为 NULL。
+--   estimate_principal_remaining_mobN：快照中的未还本金 SUM(owing_principal)，下限 0；
+--     直接用系统未还本金，不按还款比例做摊销估算。
+--   dpd_days_mobN：快照中的当期逾期天数 current_overdue_days，空值按 0。
+--   dpd_days_ever_mobN：快照中的历史最大逾期天数 hist_overdue_days，空值按 0。
+mob_track AS (
+    SELECT
+         t.loan_no
+        ,t.mob_no
+        ,GREATEST(COALESCE(t.owing_principal, 0), 0) AS estimate_principal_remaining
+        ,COALESCE(t.current_overdue_days, 0)         AS dpd_days
+        ,COALESCE(t.hist_overdue_days, 0)            AS dpd_days_ever
+    FROM (
+        SELECT
+             o.loan_no
+            ,o.mob_no
+            ,d.owing_principal
+            ,d.current_overdue_days
+            ,d.hist_overdue_days
+            ,ROW_NUMBER() OVER (
+                 PARTITION BY o.loan_no, o.mob_no
+                 ORDER BY CASE WHEN d.stat_date <= o.mob_obs_dt THEN 0 ELSE 1 END
+                         ,CASE WHEN d.stat_date <= o.mob_obs_dt THEN DATEDIFF(o.mob_obs_dt, d.stat_date)
+                               ELSE DATEDIFF(d.stat_date, o.mob_obs_dt) END
+             ) AS rn
+        FROM mob_obs o
+        JOIN model.tmp_eliam_wagego_stg_debt_snp d
+          ON o.listing_id = d.listing_id
+         AND d.stat_date >= o.disburse_date
+         AND d.stat_date <= DATE_ADD(o.mob_obs_dt, CASE WHEN o.mob_no = 0 THEN 7 ELSE 0 END)
+    ) t
+    WHERE t.rn = 1
+),
+mob_track_wide AS (
+    SELECT
+         loan_no
+        ,MAX(CASE WHEN mob_no = 0 THEN estimate_principal_remaining END) AS estimate_principal_remaining_mob0
+        ,MAX(CASE WHEN mob_no = 0 THEN dpd_days END)                     AS dpd_days_mob0
+        ,MAX(CASE WHEN mob_no = 0 THEN dpd_days_ever END)                AS dpd_days_ever_mob0
+        ,MAX(CASE WHEN mob_no = 1 THEN estimate_principal_remaining END) AS estimate_principal_remaining_mob1
+        ,MAX(CASE WHEN mob_no = 1 THEN dpd_days END)                     AS dpd_days_mob1
+        ,MAX(CASE WHEN mob_no = 1 THEN dpd_days_ever END)                AS dpd_days_ever_mob1
+        ,MAX(CASE WHEN mob_no = 2 THEN estimate_principal_remaining END) AS estimate_principal_remaining_mob2
+        ,MAX(CASE WHEN mob_no = 2 THEN dpd_days END)                     AS dpd_days_mob2
+        ,MAX(CASE WHEN mob_no = 2 THEN dpd_days_ever END)                AS dpd_days_ever_mob2
+        ,MAX(CASE WHEN mob_no = 3 THEN estimate_principal_remaining END) AS estimate_principal_remaining_mob3
+        ,MAX(CASE WHEN mob_no = 3 THEN dpd_days END)                     AS dpd_days_mob3
+        ,MAX(CASE WHEN mob_no = 3 THEN dpd_days_ever END)                AS dpd_days_ever_mob3
+        ,MAX(CASE WHEN mob_no = 4 THEN estimate_principal_remaining END) AS estimate_principal_remaining_mob4
+        ,MAX(CASE WHEN mob_no = 4 THEN dpd_days END)                     AS dpd_days_mob4
+        ,MAX(CASE WHEN mob_no = 4 THEN dpd_days_ever END)                AS dpd_days_ever_mob4
+    FROM mob_track
     GROUP BY loan_no
 )
 SELECT
@@ -394,7 +474,7 @@ SELECT
     ,b.debt_status_desc
     ,b.hist_overdue_days
     ,b.current_overdue_days
-    ,b.debt_principal
+    ,b.principal
     ,b.repay_amount
     ,b.owing_amount
     ,b.obs_dt
@@ -430,7 +510,24 @@ SELECT
     ,m.y_mob1_30plus_cnt
     ,m.y_mob2_30plus_cnt
     ,m.y_mob3_30plus_cnt
+    ,t.estimate_principal_remaining_mob0
+    ,t.dpd_days_mob0
+    ,t.dpd_days_ever_mob0
+    ,t.estimate_principal_remaining_mob1
+    ,t.dpd_days_mob1
+    ,t.dpd_days_ever_mob1
+    ,t.estimate_principal_remaining_mob2
+    ,t.dpd_days_mob2
+    ,t.dpd_days_ever_mob2
+    ,t.estimate_principal_remaining_mob3
+    ,t.dpd_days_mob3
+    ,t.dpd_days_ever_mob3
+    ,t.estimate_principal_remaining_mob4
+    ,t.dpd_days_mob4
+    ,t.dpd_days_ever_mob4
 FROM base b
 LEFT JOIN mob_wide m
   ON b.loan_no = m.loan_no
+LEFT JOIN mob_track_wide t
+  ON b.loan_no = t.loan_no
 ;
