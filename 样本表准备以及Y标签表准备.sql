@@ -15,65 +15,7 @@ FROM edw_ewa.dwb_asset_debt_dtl_snp
 ;
 
 -- ============================================================================
--- 第一步：债务快照子集（stg_debt_snp）
--- 粒度：借款（listing_id）× 快照日期（stat_date），一个借款一天一行
--- 上游：
---   edw_ewa.dwb_asset_debt_dtl_snp
---   ods_ewa.aus_ewa_loan_biz_t_loan_application
---   model.tmp_eliam_wagego_param_obs_date
--- 下游：dwd_loan_debt、dws_vintage_loan
--- 日期范围：最早申请日前 1 个月 ~ 观察日（obs_dt）。
--- 目的：把多期快照聚合成一个借款一天一行，供标签窗口（init_due_date + 31 天）和 MOB 观察点取数。
--- 加工逻辑：债务快照表（edw_ewa.dwb_asset_debt_dtl_snp）一行是借款（listing_id）× 期次（period_no）× 日期（dt），
---   这里按借款（listing_id）× 日期（dt）聚合，把多期压成一行：应还日（init_due_date）取 MIN、逾期天数（current_overdue_days、hist_overdue_days）取 MAX、
---   金额（principal、repay_amount、owing_amount）取 SUM、债务状态（debt_status）取最差（4 逾期中 > 1 未结清 > 2 已结清）；
---   还款时间拆两个：首期还款时间（first_repay_time）只取 period_no = 1，供 FPD 判定；结清时间（user_actual_repay_time）只在全部期次结清时取 MAX，否则为 NULL；
---   扫描范围取借款申请表（ods_ewa.aus_ewa_loan_biz_t_loan_application）最早申请时间（inserttime）前 1 个月，到观察日参数表（param_obs_date）的 obs_dt。
--- ============================================================================
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_stg_debt_snp;
-CREATE TABLE model.tmp_eliam_wagego_stg_debt_snp AS
-WITH src AS (
-    SELECT
-         d.listing_id
-        ,d.user_id
-        ,TO_DATE(d.dt)                                        AS stat_date
-        ,CAST(d.init_due_date AS DATE)                        AS init_due_date
-        ,CAST(d.period_no AS INT)                             AS period_no
-        ,CAST(d.user_actual_repay_time AS TIMESTAMP)          AS user_actual_repay_time
-        ,CAST(d.debt_status AS INT)                           AS debt_status
-        ,CAST(d.hist_overdue_days AS INT)                     AS hist_overdue_days
-        ,CAST(d.current_overdue_days AS INT)                  AS current_overdue_days
-        ,CAST(d.principal AS DOUBLE)                          AS principal
-        ,CAST(d.repay_amount AS DOUBLE)                       AS repay_amount
-        ,CAST(d.owing_amount AS DOUBLE)                       AS owing_amount
-    FROM edw_ewa.dwb_asset_debt_dtl_snp d
-    CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
-    WHERE TO_DATE(d.dt) <= p.obs_dt
-      AND TO_DATE(d.dt) >= (
-          SELECT ADD_MONTHS(MIN(TO_DATE(a.inserttime)), -1)
-          FROM ods_ewa.aus_ewa_loan_biz_t_loan_application a
-          WHERE CAST(a.isactive AS INT) = 1
-      )
-)
-SELECT
-     listing_id
-    ,MAX(user_id)                                         AS user_id
-    ,stat_date
-    ,MIN(init_due_date)                                   AS init_due_date
-    ,MAX(CASE WHEN period_no = 1 THEN user_actual_repay_time END) AS first_repay_time
-    ,CASE WHEN COUNT(*) = SUM(CASE WHEN debt_status = 2 THEN 1 ELSE 0 END) THEN MAX(user_actual_repay_time) END AS user_actual_repay_time
-    ,CASE MAX(CASE debt_status WHEN 4 THEN 3 WHEN 1 THEN 2 WHEN 2 THEN 1 ELSE 0 END) WHEN 3 THEN 4 WHEN 2 THEN 1 WHEN 1 THEN 2 ELSE MAX(debt_status) END AS debt_status
-    ,MAX(hist_overdue_days)                               AS hist_overdue_days
-    ,MAX(current_overdue_days)                            AS current_overdue_days
-    ,SUM(principal)                                       AS principal
-    ,SUM(repay_amount)                                    AS repay_amount
-    ,SUM(owing_amount)                                    AS owing_amount
-FROM src
-GROUP BY listing_id, stat_date
-;                                                                 -- 日快照（stat_date），支持任意 init_due_date + 31 标签观察点
-
--- ============================================================================
--- 第二步：借款申请明细（dwd_loan_apply）
+-- 第一步：借款申请明细（dwd_loan_apply）
 -- 粒度：借款申请（loan_no），一行一个申请（含成功/拒绝/过期/放款失败）
 -- 上游：ods_ewa.aus_ewa_loan_biz_t_loan_application + ods_ewa.aus_ewa_risk_risk_event_task
 -- 下游：dwd_loan_debt、dwd_loan_stamp
@@ -151,10 +93,159 @@ LEFT JOIN event e
 ;
 
 -- ============================================================================
--- 第三步：借款 / 债务明细（dwd_loan_debt）
+-- 第二步：戳额表（dwd_loan_stamp）
+-- 粒度：借款申请（loan_no），一行一个申请
+-- 上游：dwd_loan_apply + ods_ewa.aus_listing_tb_loan_limit_apply
+--       + ods_ewa.aus_ewa_risk_risk_event_task + ods_ewa.aus_listing_tb_loan_user_limit_log
+-- 下游：下游分析 / 建模取数
+-- 目的：为每个借款申请（loan_no）匹配同一用户（user_id）在申请时间（apply_time）前
+--       最近一次戳额时点（stamp_time），并带出当时额度；不要求放款成功。
+-- 加工逻辑：借款申请明细（dwd_loan_apply）提供每个申请（loan_no）的用户（user_id）和申请时间（apply_time）；
+--   额度申请表（ods_ewa.aus_listing_tb_loan_limit_apply）记录用户主动戳额，biz_type = 400 为戳额动作；
+--   风控事件表（ods_ewa.aus_ewa_risk_risk_event_task）中 biz_id = 10000 的记录是历史戳额，仅在额度申请表没有匹配记录时兜底；
+--   每个申请按 user_id 取申请时间之前最近一条戳额（stamp_time），得到戳额来源（stamp_source）和戳额流水（flow_no）；
+--   再用 flow_no = relate_id 关联额度日志表（ods_ewa.aus_listing_tb_loan_user_limit_log），取 event_type = 1、limit_category = 1 的记录带出戳额时点额度。
+-- ============================================================================
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_stamp;
+CREATE TABLE model.tmp_eliam_wagego_dwd_loan_stamp AS
+WITH stamp AS (
+    SELECT
+         a.borrower_id                                        AS user_id
+        ,CAST(a.inserttime AS TIMESTAMP)                      AS stamp_time
+        ,a.limit_apply_no
+        ,a.flow_no
+        ,CAST(a.id AS BIGINT)                                 AS stamp_id
+        ,'limit_apply'                                        AS stamp_source
+        ,1                                                    AS source_priority
+    FROM ods_ewa.aus_listing_tb_loan_limit_apply a
+    WHERE CAST(a.isactive AS INT) = 1
+      AND CAST(a.biz_type AS INT) = 400
+    UNION ALL
+    SELECT
+         e.user_id
+        ,CAST(e.inserttime AS TIMESTAMP)
+        ,CAST(NULL AS STRING)
+        ,e.flow_id
+        ,CAST(e.id AS BIGINT)
+        ,'risk_event'
+        ,2
+    FROM ods_ewa.aus_ewa_risk_risk_event_task e
+    WHERE CAST(e.is_active AS INT) = 1
+      AND CAST(e.biz_id AS STRING) = '10000'
+),
+matched AS (
+    SELECT
+         a.loan_no
+        ,s.stamp_time
+        ,s.limit_apply_no
+        ,s.flow_no
+        ,s.stamp_source
+        ,ROW_NUMBER() OVER (PARTITION BY a.loan_no ORDER BY s.source_priority, s.stamp_time DESC, s.stamp_id DESC) AS rn
+    FROM model.tmp_eliam_wagego_dwd_loan_apply a
+    JOIN stamp s
+      ON a.user_id = s.user_id
+     AND s.stamp_time <= a.apply_time
+),
+limit_grant AS (
+    SELECT
+         l.relate_id
+        ,CAST(l.total_amount_before AS DOUBLE)                AS limit_total_before
+        ,CAST(l.total_amount_after AS DOUBLE)                 AS limit_total_after
+        ,CAST(l.available_amount_after AS DOUBLE)             AS limit_available_after
+        ,CAST(l.occupied_amount_after AS DOUBLE)              AS limit_occupied_after
+        ,CAST(l.expire_time_after AS TIMESTAMP)               AS limit_expire_time
+        ,ROW_NUMBER() OVER (PARTITION BY l.relate_id ORDER BY CAST(l.id AS BIGINT) DESC) AS rn
+    FROM ods_ewa.aus_listing_tb_loan_user_limit_log l
+    WHERE CAST(l.isactive AS INT) = 1
+      AND CAST(l.event_type AS INT) = 1
+      AND CAST(l.limit_category AS INT) = 1
+)
+SELECT
+     a.loan_no
+    ,a.user_id
+    ,a.apply_time
+    ,m.stamp_time
+    ,DATEDIFF(TO_DATE(a.apply_time), TO_DATE(m.stamp_time))    AS stamp_to_apply_days
+    ,m.stamp_source
+    ,m.limit_apply_no
+    ,m.flow_no                                               AS stamp_flow_no
+    ,g.limit_total_before
+    ,g.limit_total_after
+    ,g.limit_available_after
+    ,g.limit_occupied_after
+    ,g.limit_expire_time
+FROM model.tmp_eliam_wagego_dwd_loan_apply a
+LEFT JOIN matched m
+  ON a.loan_no = m.loan_no
+ AND m.rn = 1
+LEFT JOIN limit_grant g
+  ON m.flow_no = g.relate_id
+ AND g.rn = 1
+;
+
+-- ============================================================================
+-- 第三步：债务快照子集（stg_debt_snp）
+-- 粒度：借款（listing_id）× 快照日期（stat_date），一个借款一天一行
+-- 上游：
+--   edw_ewa.dwb_asset_debt_dtl_snp
+--   ods_ewa.aus_ewa_loan_biz_t_loan_application
+--   model.tmp_eliam_wagego_param_obs_date
+-- 下游：dwd_loan_debt、dws_vintage_loan
+-- 日期范围：最早申请日前 1 个月 ~ 观察日（obs_dt）。
+-- 目的：把多期快照聚合成一个借款一天一行，供标签窗口（init_due_date + 31 天）和 MOB 观察点取数。
+-- 加工逻辑：债务快照表（edw_ewa.dwb_asset_debt_dtl_snp）一行是借款（listing_id）× 期次（period_no）× 日期（dt），
+--   这里按借款（listing_id）× 日期（dt）聚合，把多期压成一行：应还日（init_due_date）取 MIN、逾期天数（current_overdue_days、hist_overdue_days）取 MAX、
+--   金额（principal、repay_amount、owing_amount）取 SUM、债务状态（debt_status）取最差（4 逾期中 > 1 未结清 > 2 已结清）；
+--   还款时间拆两个：首期还款时间（first_repay_time）只取 period_no = 1，供 FPD 判定；结清时间（user_actual_repay_time）只在全部期次结清时取 MAX，否则为 NULL；
+--   扫描范围取借款申请表（ods_ewa.aus_ewa_loan_biz_t_loan_application）最早申请时间（inserttime）前 1 个月，到观察日参数表（param_obs_date）的 obs_dt。
+-- ============================================================================
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_stg_debt_snp;
+CREATE TABLE model.tmp_eliam_wagego_stg_debt_snp AS
+WITH src AS (
+    SELECT
+         d.listing_id
+        ,d.user_id
+        ,TO_DATE(d.dt)                                        AS stat_date
+        ,CAST(d.init_due_date AS DATE)                        AS init_due_date
+        ,CAST(d.period_no AS INT)                             AS period_no
+        ,CAST(d.user_actual_repay_time AS TIMESTAMP)          AS user_actual_repay_time
+        ,CAST(d.debt_status AS INT)                           AS debt_status
+        ,CAST(d.hist_overdue_days AS INT)                     AS hist_overdue_days
+        ,CAST(d.current_overdue_days AS INT)                  AS current_overdue_days
+        ,CAST(d.principal AS DOUBLE)                          AS principal
+        ,CAST(d.repay_amount AS DOUBLE)                       AS repay_amount
+        ,CAST(d.owing_amount AS DOUBLE)                       AS owing_amount
+    FROM edw_ewa.dwb_asset_debt_dtl_snp d
+    CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
+    WHERE TO_DATE(d.dt) <= p.obs_dt
+      AND TO_DATE(d.dt) >= (
+          SELECT ADD_MONTHS(MIN(TO_DATE(a.inserttime)), -1)
+          FROM ods_ewa.aus_ewa_loan_biz_t_loan_application a
+          WHERE CAST(a.isactive AS INT) = 1
+      )
+)
+SELECT
+     listing_id
+    ,MAX(user_id)                                         AS user_id
+    ,stat_date
+    ,MIN(init_due_date)                                   AS init_due_date
+    ,MAX(CASE WHEN period_no = 1 THEN user_actual_repay_time END) AS first_repay_time
+    ,CASE WHEN COUNT(*) = SUM(CASE WHEN debt_status = 2 THEN 1 ELSE 0 END) THEN MAX(user_actual_repay_time) END AS user_actual_repay_time
+    ,CASE MAX(CASE debt_status WHEN 4 THEN 3 WHEN 1 THEN 2 WHEN 2 THEN 1 ELSE 0 END) WHEN 3 THEN 4 WHEN 2 THEN 1 WHEN 1 THEN 2 ELSE MAX(debt_status) END AS debt_status
+    ,MAX(hist_overdue_days)                               AS hist_overdue_days
+    ,MAX(current_overdue_days)                            AS current_overdue_days
+    ,SUM(principal)                                       AS principal
+    ,SUM(repay_amount)                                    AS repay_amount
+    ,SUM(owing_amount)                                    AS owing_amount
+FROM src
+GROUP BY listing_id, stat_date
+;                                                                 -- 日快照（stat_date），支持任意 init_due_date + 31 标签观察点
+
+-- ============================================================================
+-- 第四步：借款 / 债务明细（dwd_loan_debt）
 -- 粒度：借款申请（loan_no），行数与 dwd_loan_apply 一致
 -- 上游：dwd_loan_apply + edw_ewa.dwb_asset_cmn_listing + stg_debt_snp
--- 下游：dws_vintage_loan
+-- 下游：dwd_loan_disburse_sample、dwd_disbursed_loan、dws_vintage_loan
 -- 目的：给每笔借款申请补上放款金额（real_amount）、期限（term_quantity / term_unit）、
 --       债务状态（debt_status）、还款时间（user_actual_repay_time）、逾期天数（current_overdue_days）
 --       和统一窗口标签。
@@ -323,7 +414,7 @@ FROM base b
 ;
 
 -- ============================================================================
--- 第三步补充：放款样本表（dwd_loan_disburse_sample）
+-- 第五步：放款样本表（dwd_loan_disburse_sample）
 -- 粒度：借款申请（loan_no），一行一个申请
 -- 上游：dwd_loan_debt
 -- 下游：放款样本分析
@@ -340,7 +431,7 @@ WHERE apply_status IN ('DISBURSE', 'DISBURSE_SUCCESS', 'DISBURSE_FAILED')
 ;
 
 -- ============================================================================
--- 第四步：放款成功表（dwd_disbursed_loan）
+-- 第六步：放款成功表（dwd_disbursed_loan）
 -- 粒度：借款申请（loan_no），只保留放款成功（is_disburse_success = 1）的记录
 -- 上游：dwd_loan_debt
 -- 下游：下游分析 / 建模取数
@@ -383,98 +474,7 @@ FROM disbursed
 ;
 
 -- ============================================================================
--- 第五步：戳额表（dwd_loan_stamp）
--- 粒度：借款申请（loan_no），一行一个申请
--- 上游：dwd_loan_apply + ods_ewa.aus_listing_tb_loan_limit_apply
---       + ods_ewa.aus_ewa_risk_risk_event_task + ods_ewa.aus_listing_tb_loan_user_limit_log
--- 下游：下游分析 / 建模取数
--- 目的：为每个借款申请（loan_no）匹配同一用户（user_id）在申请时间（apply_time）前
---       最近一次戳额时点（stamp_time），并带出当时额度；不要求放款成功。
--- 加工逻辑：借款申请明细（dwd_loan_apply）提供每个申请（loan_no）的用户（user_id）和申请时间（apply_time）；
---   额度申请表（ods_ewa.aus_listing_tb_loan_limit_apply）记录用户主动戳额，biz_type = 400 为戳额动作；
---   风控事件表（ods_ewa.aus_ewa_risk_risk_event_task）中 biz_id = 10000 的记录是历史戳额，仅在额度申请表没有匹配记录时兜底；
---   每个申请按 user_id 取申请时间之前最近一条戳额（stamp_time），得到戳额来源（stamp_source）和戳额流水（flow_no）；
---   再用 flow_no = relate_id 关联额度日志表（ods_ewa.aus_listing_tb_loan_user_limit_log），取 event_type = 1、limit_category = 1 的记录带出戳额时点额度。
--- ============================================================================
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_stamp;
-CREATE TABLE model.tmp_eliam_wagego_dwd_loan_stamp AS
-WITH stamp AS (
-    SELECT
-         a.borrower_id                                        AS user_id
-        ,CAST(a.inserttime AS TIMESTAMP)                      AS stamp_time
-        ,a.limit_apply_no
-        ,a.flow_no
-        ,CAST(a.id AS BIGINT)                                 AS stamp_id
-        ,'limit_apply'                                        AS stamp_source
-        ,1                                                    AS source_priority
-    FROM ods_ewa.aus_listing_tb_loan_limit_apply a
-    WHERE CAST(a.isactive AS INT) = 1
-      AND CAST(a.biz_type AS INT) = 400
-    UNION ALL
-    SELECT
-         e.user_id
-        ,CAST(e.inserttime AS TIMESTAMP)
-        ,CAST(NULL AS STRING)
-        ,e.flow_id
-        ,CAST(e.id AS BIGINT)
-        ,'risk_event'
-        ,2
-    FROM ods_ewa.aus_ewa_risk_risk_event_task e
-    WHERE CAST(e.is_active AS INT) = 1
-      AND CAST(e.biz_id AS STRING) = '10000'
-),
-matched AS (
-    SELECT
-         a.loan_no
-        ,s.stamp_time
-        ,s.limit_apply_no
-        ,s.flow_no
-        ,s.stamp_source
-        ,ROW_NUMBER() OVER (PARTITION BY a.loan_no ORDER BY s.source_priority, s.stamp_time DESC, s.stamp_id DESC) AS rn
-    FROM model.tmp_eliam_wagego_dwd_loan_apply a
-    JOIN stamp s
-      ON a.user_id = s.user_id
-     AND s.stamp_time <= a.apply_time
-),
-limit_grant AS (
-    SELECT
-         l.relate_id
-        ,CAST(l.total_amount_before AS DOUBLE)                AS limit_total_before
-        ,CAST(l.total_amount_after AS DOUBLE)                 AS limit_total_after
-        ,CAST(l.available_amount_after AS DOUBLE)             AS limit_available_after
-        ,CAST(l.occupied_amount_after AS DOUBLE)              AS limit_occupied_after
-        ,CAST(l.expire_time_after AS TIMESTAMP)               AS limit_expire_time
-        ,ROW_NUMBER() OVER (PARTITION BY l.relate_id ORDER BY CAST(l.id AS BIGINT) DESC) AS rn
-    FROM ods_ewa.aus_listing_tb_loan_user_limit_log l
-    WHERE CAST(l.isactive AS INT) = 1
-      AND CAST(l.event_type AS INT) = 1
-      AND CAST(l.limit_category AS INT) = 1
-)
-SELECT
-     a.loan_no
-    ,a.user_id
-    ,a.apply_time
-    ,m.stamp_time
-    ,DATEDIFF(TO_DATE(a.apply_time), TO_DATE(m.stamp_time))    AS stamp_to_apply_days
-    ,m.stamp_source
-    ,m.limit_apply_no
-    ,m.flow_no                                               AS stamp_flow_no
-    ,g.limit_total_before
-    ,g.limit_total_after
-    ,g.limit_available_after
-    ,g.limit_occupied_after
-    ,g.limit_expire_time
-FROM model.tmp_eliam_wagego_dwd_loan_apply a
-LEFT JOIN matched m
-  ON a.loan_no = m.loan_no
- AND m.rn = 1
-LEFT JOIN limit_grant g
-  ON m.flow_no = g.relate_id
- AND g.rn = 1
-;
-
--- ============================================================================
--- 第六步：借款级 Vintage 宽表（dws_vintage_loan）
+-- 第七步：借款级 Vintage 宽表（dws_vintage_loan）
 -- 粒度：借款申请（loan_no），一行一笔
 -- 上游：dwd_loan_debt + dwd_disbursed_loan + stg_debt_snp + param_obs_date
 -- 下游：暂无
