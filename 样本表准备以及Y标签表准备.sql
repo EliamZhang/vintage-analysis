@@ -7,6 +7,7 @@
 --     → stg_debt_snp
 --     → dwd_loan_apply
 --     → dwd_loan_debt       ← dwd_loan_apply + listing + stg_debt_snp + param
+--     → dwd_disbursed_loan  ← dwd_loan_debt
 --     → dws_vintage_loan    ← dwd_loan_debt + param
 --     → dws_vintage_mob     ← dws_vintage_loan + stg_debt_snp
 --     → ads_vintage_month   ← dws_vintage_loan
@@ -17,6 +18,7 @@
 --   stg_debt_snp       listing_id × stat_date  / (listing_id, stat_date)    / 快照表 + 借款申请表 + param → dwd_loan_debt / dws_vintage_mob
 --   dwd_loan_apply     loan_no                 / loan_no                    / 借款申请表 + 事件表 → dwd_loan_debt
 --   dwd_loan_debt      loan_no                 / loan_no                    / dwd_loan_apply + listing + stg_debt_snp → dws_vintage_loan
+--   dwd_disbursed_loan loan_no                 / loan_no                    / dwd_loan_debt → 下游分析
 --   dws_vintage_loan   loan_no                 / loan_no                    / dwd_loan_debt + param → dws_vintage_mob / ads_vintage_month
 --   dws_vintage_mob    loan_no × mob_no        / (loan_no, mob_no)          / dws_vintage_loan + stg_debt_snp → ads_vintage_curve（仅曲线）
 --   ads_vintage_month  disburse_month          / disburse_month             / dws_vintage_loan → 报表
@@ -400,7 +402,31 @@ FROM base b
 ;
 
 -- ============================================================================
--- 第四步：借据级 Vintage 标签（dws）
+-- 第四步：放款成功表（dwd）
+-- 粒度：loan_no；主键：loan_no（仅放款成功的借据）
+-- 上游：dwd_loan_debt
+-- 下游：下游分析 / 建模取数
+-- 目的：从借据明细中筛出放款成功记录，作为通用放款样本表。
+-- ============================================================================
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_disbursed_loan;
+CREATE TABLE model.tmp_eliam_wagego_dwd_disbursed_loan AS
+SELECT
+     loan_no
+    ,user_id
+    ,listing_id
+    ,disburse_time
+    ,TO_DATE(disburse_time)                               AS disburse_date
+    ,DATE_FORMAT(disburse_time, 'yyyy-MM')                AS disburse_month
+    ,real_amount
+    ,term_quantity
+    ,term_unit
+    ,init_due_date
+FROM model.tmp_eliam_wagego_dwd_loan_debt
+WHERE is_disburse_success = 1
+;
+
+-- ============================================================================
+-- 第五步：借据级 Vintage 标签（dws）
 -- 粒度：loan_no；主键：loan_no（仅放款成功借据）
 -- 上游：dwd_loan_debt + param_obs_date
 -- 下游：dws_vintage_mob、ads_vintage_month
@@ -480,7 +506,7 @@ CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
 ;
 
 -- ============================================================================
--- 第五步：借据 × MOB 长表（dws）
+-- 第六步：借据 × MOB 长表（dws）
 -- 粒度：loan_no × mob_no；主键：(loan_no, mob_no)
 -- 上游：dws_vintage_loan + stg_debt_snp
 -- 下游：ads_vintage_curve
@@ -536,7 +562,7 @@ LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d
 ;
 
 -- ============================================================================
--- 第六步：放款月汇总（ads）
+-- 第七步：放款月汇总（ads）
 -- 粒度：disburse_month；主键：disburse_month
 -- 上游：dws_vintage_loan
 -- 下游：报表
@@ -603,7 +629,7 @@ GROUP BY disburse_month
 ;
 
 -- ============================================================================
--- 第七步：分群 × MOB 曲线汇总（ads）
+-- 第八步：分群 × MOB 曲线汇总（ads）
 -- 粒度：disburse_month × user_type × mob_no；主键：三列组合
 -- 上游：dws_vintage_mob
 -- 下游：报表 / 曲线
