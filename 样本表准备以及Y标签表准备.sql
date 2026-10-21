@@ -145,7 +145,7 @@ LEFT JOIN event e
 -- 加工逻辑：借款申请（dwd_loan_apply）一行一个申请（loan_no），放款信息表（edw_ewa.dwb_asset_cmn_listing）一行一笔放款（listing_id），
 --   两者按 listing_id LEFT JOIN，补放款金额（real_amount、apply_amount）、期限（term_quantity、term_unit）和放款时间（disburse_time）；
 --   再关联借款日快照（stg_debt_snp）两次：一次取观察日（obs_dt）当天，得到当前债务状态、逾期天数和金额；一次取标签观察日（label_obs_dt = init_due_date + 31）当天，得到标签口径；
---   然后基于两份快照计算当前逾期、30+、5+、FPD3/7/15/30、结清天数和早结清标记；
+--   然后基于两份快照计算当前逾期、30+、5+、FPD3/7/14/30、结清天数和早结清标记；
 --   借款未放款成功、未到标签观察日或标签日无快照时，is_label_matured = 0，标签置 NULL。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_debt;
@@ -303,10 +303,10 @@ SELECT
     ,CASE WHEN b.is_label_matured = 1
           THEN CASE WHEN b.repay_at_label_obs IS NOT NULL THEN CASE WHEN TO_DATE(b.repay_at_label_obs) > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END
                     ELSE CASE WHEN b.label_obs_dt > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END END AS is_fpd7_ovd
-    ,CASE WHEN b.is_label_matured = 1 THEN 1 ELSE NULL END AS is_fpd15_obs
+    ,CASE WHEN b.is_label_matured = 1 THEN 1 ELSE NULL END AS is_fpd14_obs
     ,CASE WHEN b.is_label_matured = 1
-          THEN CASE WHEN b.repay_at_label_obs IS NOT NULL THEN CASE WHEN TO_DATE(b.repay_at_label_obs) > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END
-                    ELSE CASE WHEN b.label_obs_dt > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END END END AS is_fpd15_ovd
+          THEN CASE WHEN b.repay_at_label_obs IS NOT NULL THEN CASE WHEN TO_DATE(b.repay_at_label_obs) > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END
+                    ELSE CASE WHEN b.label_obs_dt > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END END AS is_fpd14_ovd
     ,CASE WHEN b.is_label_matured = 1 THEN 1 ELSE NULL END AS is_fpd30_obs
     ,CASE WHEN b.is_label_matured = 1
           THEN CASE WHEN b.repay_at_label_obs IS NOT NULL THEN CASE WHEN TO_DATE(b.repay_at_label_obs) > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END
@@ -514,8 +514,8 @@ WITH loan AS (
         ,a.is_fpd3_ovd
         ,a.is_fpd7_obs
         ,a.is_fpd7_ovd
-        ,a.is_fpd15_obs
-        ,a.is_fpd15_ovd
+        ,a.is_fpd14_obs
+        ,a.is_fpd14_ovd
         ,a.is_fpd30_obs
         ,a.is_fpd30_ovd
         ,ROW_NUMBER() OVER (PARTITION BY a.user_id ORDER BY a.disburse_time, a.loan_no) AS application_rank
@@ -546,8 +546,8 @@ SELECT
     ,l.is_fpd3_ovd
     ,l.is_fpd7_obs
     ,l.is_fpd7_ovd
-    ,l.is_fpd15_obs
-    ,l.is_fpd15_ovd
+    ,l.is_fpd14_obs
+    ,l.is_fpd14_ovd
     ,l.is_fpd30_obs
     ,l.is_fpd30_ovd
     ,l.application_rank
@@ -623,7 +623,7 @@ LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d
 --       30+（cur_30plus_cnt）和 FPD（fpd3_ovd_cnt 等），笔数与金额双口径。
 -- 加工逻辑：借款级 Vintage 标签表（dws_vintage_loan）一行一笔放款，这里按放款月（disburse_month）分组汇总；
 --   放款量：放款笔数（loan_cnt）和金额（loan_amt）；
---   风险：当前逾期（cur_ovd_cnt）、标签观察日 30+（cur_30plus_cnt）、窗口内曾 30+（ever_30plus_cnt）、FPD3/7/15/30 的笔数和金额；
+--   风险：当前逾期（cur_ovd_cnt）、标签观察日 30+（cur_30plus_cnt）、窗口内曾 30+（ever_30plus_cnt）、FPD3/7/14/30 的笔数和金额；
 --   分母：matured_cnt 为已到标签观察点的借款数（FPD 分母），obs_cnt 为其中能取到标签日快照的借款数（当前逾期/30+/ever 30+ 分母）；
 --   最后用逾期笔数/金额除以对应分母，得到各占比。
 -- ============================================================================
@@ -660,12 +660,12 @@ SELECT
     ,ROUND(SUM(CASE WHEN is_fpd7_ovd = 1 THEN real_amount ELSE 0 END), 2)        AS fpd7_ovd_amt
     ,ROUND(100.0 * SUM(is_fpd7_ovd) / NULLIF(SUM(is_fpd7_obs), 0), 2)            AS fpd7_ovd_rate
     ,ROUND(100.0 * SUM(CASE WHEN is_fpd7_ovd = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_fpd7_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd7_ovd_amt_rate
-    ,COALESCE(SUM(is_fpd15_obs), 0)                                              AS fpd15_obs_cnt
-    ,COALESCE(SUM(is_fpd15_ovd), 0)                                              AS fpd15_ovd_cnt
-    ,ROUND(SUM(CASE WHEN is_fpd15_obs = 1 THEN real_amount ELSE 0 END), 2)       AS fpd15_obs_amt
-    ,ROUND(SUM(CASE WHEN is_fpd15_ovd = 1 THEN real_amount ELSE 0 END), 2)       AS fpd15_ovd_amt
-    ,ROUND(100.0 * SUM(is_fpd15_ovd) / NULLIF(SUM(is_fpd15_obs), 0), 2)          AS fpd15_ovd_rate
-    ,ROUND(100.0 * SUM(CASE WHEN is_fpd15_ovd = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_fpd15_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd15_ovd_amt_rate
+    ,COALESCE(SUM(is_fpd14_obs), 0)                                              AS fpd14_obs_cnt
+    ,COALESCE(SUM(is_fpd14_ovd), 0)                                              AS fpd14_ovd_cnt
+    ,ROUND(SUM(CASE WHEN is_fpd14_obs = 1 THEN real_amount ELSE 0 END), 2)       AS fpd14_obs_amt
+    ,ROUND(SUM(CASE WHEN is_fpd14_ovd = 1 THEN real_amount ELSE 0 END), 2)       AS fpd14_ovd_amt
+    ,ROUND(100.0 * SUM(is_fpd14_ovd) / NULLIF(SUM(is_fpd14_obs), 0), 2)          AS fpd14_ovd_rate
+    ,ROUND(100.0 * SUM(CASE WHEN is_fpd14_ovd = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_fpd14_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd14_ovd_amt_rate
     ,COALESCE(SUM(is_fpd30_obs), 0)                                              AS fpd30_obs_cnt
     ,COALESCE(SUM(is_fpd30_ovd), 0)                                              AS fpd30_ovd_cnt
     ,ROUND(SUM(CASE WHEN is_fpd30_obs = 1 THEN real_amount ELSE 0 END), 2)       AS fpd30_obs_amt
