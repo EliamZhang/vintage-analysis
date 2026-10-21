@@ -410,6 +410,23 @@ FROM base b
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_disbursed_loan;
 CREATE TABLE model.tmp_eliam_wagego_dwd_disbursed_loan AS
+WITH disbursed AS (
+    SELECT
+         loan_no
+        ,user_id
+        ,listing_id
+        ,disburse_time
+        ,real_amount
+        ,term_quantity
+        ,term_unit
+        ,init_due_date
+        ,ROW_NUMBER() OVER (
+             PARTITION BY user_id
+             ORDER BY disburse_time, loan_no
+         )                                                    AS application_rank
+    FROM model.tmp_eliam_wagego_dwd_loan_debt
+    WHERE is_disburse_success = 1
+)
 SELECT
      loan_no
     ,user_id
@@ -421,8 +438,8 @@ SELECT
     ,term_quantity
     ,term_unit
     ,init_due_date
-FROM model.tmp_eliam_wagego_dwd_loan_debt
-WHERE is_disburse_success = 1
+    ,CASE WHEN application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
+FROM disbursed
 ;
 
 -- ============================================================================
