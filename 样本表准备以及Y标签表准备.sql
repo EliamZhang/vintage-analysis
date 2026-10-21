@@ -79,7 +79,7 @@ GROUP BY listing_id, stat_date
 --       + ods_ewa.aus_listing_tb_loan_limit_apply + edw_ewa.dwb_asset_cmn_listing
 --       + stg_debt_snp + param_obs_date
 -- 下游：下游分析 / 建模取数
--- 目的：一行一个申请，包含申请状态、放款属性、观察日债务状态、FPD3/7/14/30 标签和 MOB1~MOB12 的 5+ / 30+ 标记；
+-- 目的：一行一个申请，包含申请状态、放款属性、观察日债务状态、FPD3/7/14/30 标签和 MOB1~MOB3 的 5+ / 30+ 标记；
 --       后续分析按 is_disburse_success = 1 筛放款成功样本。
 -- 加工逻辑：
 --   1) 以有效申请（isactive = 1）为主表，补风控事件（biz_id = 20050）、申请状态中文和放款时间；
@@ -88,7 +88,7 @@ GROUP BY listing_id, stat_date
 --   4) 按 listing_id 关联放款信息表（dwb_asset_cmn_listing），补放款金额、利息费用、期限、是否成交和合同应还日；
 --   5) 按 listing_id + 观察日关联债务快照（stg_debt_snp），取观察日债务状态，并以 init_due_date + 31 为标签观察日再关联一次快照；
 --   6) 成熟后计算标签日 DPD、5+ / 30+、FPD3/7/14/30、合同期限、实际期限和早结清等指标；
---   7) 按 MOB1~MOB12 关联债务快照，输出每个观察点的 5+ / 30+ 标记，未到观察日或无快照时标记为 NULL。
+--   7) 按 MOB1~MOB3 关联债务快照，输出每个观察点的 5+ / 30+ 标记，未到观察日或无快照时标记为 NULL。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_apply_label;
 CREATE TABLE model.tmp_eliam_wagego_dwd_loan_apply_label AS
@@ -277,7 +277,7 @@ loan AS (
     WHERE b.is_disburse_success = 1
 ),
 mob AS (
-    SELECT EXPLODE(SEQUENCE(1, 12)) AS mob_no
+    SELECT EXPLODE(SEQUENCE(1, 3)) AS mob_no
 ),
 mob_obs AS (
     SELECT
@@ -308,27 +308,9 @@ mob_wide AS (
         ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS mob1_5plus
         ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS mob2_5plus
         ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS mob3_5plus
-        ,MAX(CASE WHEN mob_no = 4  THEN is_5plus END) AS mob4_5plus
-        ,MAX(CASE WHEN mob_no = 5  THEN is_5plus END) AS mob5_5plus
-        ,MAX(CASE WHEN mob_no = 6  THEN is_5plus END) AS mob6_5plus
-        ,MAX(CASE WHEN mob_no = 7  THEN is_5plus END) AS mob7_5plus
-        ,MAX(CASE WHEN mob_no = 8  THEN is_5plus END) AS mob8_5plus
-        ,MAX(CASE WHEN mob_no = 9  THEN is_5plus END) AS mob9_5plus
-        ,MAX(CASE WHEN mob_no = 10 THEN is_5plus END) AS mob10_5plus
-        ,MAX(CASE WHEN mob_no = 11 THEN is_5plus END) AS mob11_5plus
-        ,MAX(CASE WHEN mob_no = 12 THEN is_5plus END) AS mob12_5plus
         ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS mob1_30plus
         ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS mob2_30plus
         ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS mob3_30plus
-        ,MAX(CASE WHEN mob_no = 4  THEN is_30plus END) AS mob4_30plus
-        ,MAX(CASE WHEN mob_no = 5  THEN is_30plus END) AS mob5_30plus
-        ,MAX(CASE WHEN mob_no = 6  THEN is_30plus END) AS mob6_30plus
-        ,MAX(CASE WHEN mob_no = 7  THEN is_30plus END) AS mob7_30plus
-        ,MAX(CASE WHEN mob_no = 8  THEN is_30plus END) AS mob8_30plus
-        ,MAX(CASE WHEN mob_no = 9  THEN is_30plus END) AS mob9_30plus
-        ,MAX(CASE WHEN mob_no = 10 THEN is_30plus END) AS mob10_30plus
-        ,MAX(CASE WHEN mob_no = 11 THEN is_30plus END) AS mob11_30plus
-        ,MAX(CASE WHEN mob_no = 12 THEN is_30plus END) AS mob12_30plus
     FROM mob_detail
     GROUP BY loan_no
 )
@@ -411,27 +393,9 @@ SELECT
     ,m.mob1_5plus
     ,m.mob2_5plus
     ,m.mob3_5plus
-    ,m.mob4_5plus
-    ,m.mob5_5plus
-    ,m.mob6_5plus
-    ,m.mob7_5plus
-    ,m.mob8_5plus
-    ,m.mob9_5plus
-    ,m.mob10_5plus
-    ,m.mob11_5plus
-    ,m.mob12_5plus
     ,m.mob1_30plus
     ,m.mob2_30plus
     ,m.mob3_30plus
-    ,m.mob4_30plus
-    ,m.mob5_30plus
-    ,m.mob6_30plus
-    ,m.mob7_30plus
-    ,m.mob8_30plus
-    ,m.mob9_30plus
-    ,m.mob10_30plus
-    ,m.mob11_30plus
-    ,m.mob12_30plus
 FROM base b
 LEFT JOIN mob_wide m
   ON b.loan_no = m.loan_no
