@@ -1,5 +1,3 @@
-
-
 SET spark.sql.session.timeZone = Australia/Sydney;
 
 -- ============================================================================
@@ -11,50 +9,63 @@ DROP TABLE IF EXISTS model.tmp_eliam_wagego_param_obs_date;
 CREATE TABLE model.tmp_eliam_wagego_param_obs_date AS
 SELECT MAX(TO_DATE(dt)) AS obs_dt
 FROM edw_ewa.dwb_asset_debt_dtl_snp
-WHERE CAST(period_no AS INT) = 1;                         -- 当前单期口径；转多期见文件头“多期改造点”
+;
 
 -- ============================================================================
 -- 第一步：债务快照子集（stg）
 -- 粒度：listing_id × stat_date；主键：(listing_id, stat_date)
 -- 上游：edw_ewa.dwb_asset_debt_dtl_snp + param_obs_date
 -- 下游：dwd_loan_debt、dws_vintage_loan、dws_vintage_mob
--- 目的：把原来 3 次扫描快照（观察日、MOB1/2、12 个 MOB 月末）收敛为 1 次，
---       保留观察日、各月末以及日快照，供统一标签窗口（init_due_date + 31 天）精确取点。
+-- 目的：保留观察日、各月末以及日快照，供统一标签窗口（init_due_date + 31 天）精确取点。
 -- 日期下界：最早借款申请月再往前 1 个月，覆盖所有借款的 MOB1~MOB12 观察点。
--- 当前单期口径：period_no = 1；转多期后需把 period_no 纳入粒度和主键。
+-- 口径：期次级快照按借据 × 日期聚合；期数随借据而异，不依赖固定期数。
+--       first_repay_time 为首期实际还款时间（FPD 用）；
+--       user_actual_repay_time 为借据结清时间，全部期次结清时才有值。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_stg_debt_snp;
 CREATE TABLE model.tmp_eliam_wagego_stg_debt_snp AS
 SELECT
      d.listing_id
     ,TO_DATE(d.dt)                                        AS stat_date
-    ,CAST(d.init_due_date AS DATE)                        AS init_due_date
-    ,CAST(d.user_actual_repay_time AS TIMESTAMP)          AS user_actual_repay_time
-    ,CAST(d.debt_status AS INT)                           AS debt_status
-    ,CAST(d.hist_overdue_days AS INT)                     AS hist_overdue_days
-    ,CAST(d.current_overdue_days AS INT)                  AS current_overdue_days
-    ,CAST(d.principal AS DOUBLE)                          AS principal
-    ,CAST(d.repay_amount AS DOUBLE)                       AS repay_amount
-    ,CAST(d.owing_amount AS DOUBLE)                       AS owing_amount
+    ,MIN(CAST(d.init_due_date AS DATE))                   AS init_due_date
+    ,MAX(CASE WHEN CAST(d.period_no AS INT) = 1
+              THEN CAST(d.user_actual_repay_time AS TIMESTAMP) END)
+                                                          AS first_repay_time
+    ,CASE WHEN COUNT(*) = SUM(CASE WHEN CAST(d.debt_status AS INT) = 2 THEN 1 ELSE 0 END)
+          THEN MAX(CAST(d.user_actual_repay_time AS TIMESTAMP)) END
+                                                          AS user_actual_repay_time
+    ,CASE MAX(CASE CAST(d.debt_status AS INT)
+                   WHEN 4 THEN 3
+                   WHEN 1 THEN 2
+                   WHEN 2 THEN 1
+                   ELSE 0 END)
+          WHEN 3 THEN 4
+          WHEN 2 THEN 1
+          WHEN 1 THEN 2
+          ELSE MAX(CAST(d.debt_status AS INT)) END        AS debt_status
+    ,MAX(CAST(d.hist_overdue_days AS INT))                AS hist_overdue_days
+    ,MAX(CAST(d.current_overdue_days AS INT))             AS current_overdue_days
+    ,SUM(CAST(d.principal AS DOUBLE))                     AS principal
+    ,SUM(CAST(d.repay_amount AS DOUBLE))                  AS repay_amount
+    ,SUM(CAST(d.owing_amount AS DOUBLE))                  AS owing_amount
 FROM edw_ewa.dwb_asset_debt_dtl_snp d
 CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
-WHERE CAST(d.period_no AS INT) = 1                         -- 当前单期口径；转多期见文件头“多期改造点”
-  AND TO_DATE(d.dt) <= p.obs_dt
+WHERE TO_DATE(d.dt) <= p.obs_dt
   AND TO_DATE(d.dt) >= (
       SELECT ADD_MONTHS(MIN(TO_DATE(a.inserttime)), -1)
       FROM ods_ewa.aus_ewa_loan_biz_t_loan_application a
       WHERE CAST(a.isactive AS INT) = 1
   )
-;                                                                 -- 保留日快照，支持任意 due+31 标签观察点
+GROUP BY d.listing_id, TO_DATE(d.dt)
+;                                                                 -- 日快照，支持任意 due+31 标签观察点
 
 -- ============================================================================
 -- 第二步：借款申请明细（dwd）
 -- 粒度：loan_no；主键：loan_no（一行一个借款申请，覆盖成功/拒绝/过期/放款失败）
 -- 上游：ods_ewa.aus_ewa_loan_biz_t_loan_application + ods_ewa.aus_ewa_risk_risk_event_task
 -- 下游：dwd_loan_debt
--- 说明：原 application 表只被本表用到 4 个字段，这里直接内联，避免多落一张
---       18 万行的宽表；事件表按 flow_id 去重，保证 1:1 关联不放大行数。
---       apply_seq / is_first_apply_in_window 保留为样本属性，本 vintage 链路未使用；
+-- 说明：借款申请表直接内联；事件表按 flow_id 去重，保证 1:1 关联不放大行数。
+--       apply_seq / is_first_apply_in_window 为样本属性，本链路不参与计算；
 --       新老客在 dws_vintage_loan 中按首笔放款判定。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_apply;
@@ -145,7 +156,7 @@ LEFT JOIN event e
 -- 说明：listing 与快照均按唯一键关联，不做聚合，保证不改变申请级行数。
 --       标签观察点 label_obs_dt = init_due_date + 31 天（30 天窗口，+1 天保证严格 >30
 --       可被观察）；未到观察点的借据 is_label_matured = 0，窗口标签置 NULL。
---       FPD3/7/15/30 共用同一观察点，仅表示逾期严重度分层。
+--       FPD3/7/15/30 共用同一观察点，仅表示逾期严重度分层；FPD 以首期实际还款时间判定。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_debt;
 CREATE TABLE model.tmp_eliam_wagego_dwd_loan_debt AS
@@ -184,6 +195,7 @@ WITH latest AS (
         ,s.init_due_date
         ,CASE WHEN s.init_due_date IS NOT NULL
               THEN DATE_ADD(s.init_due_date, 31) END          AS label_obs_dt
+        ,s.first_repay_time
         ,s.user_actual_repay_time
         ,s.debt_status
         ,CASE s.debt_status
@@ -209,6 +221,7 @@ WITH latest AS (
 label AS (
     SELECT
          l.loan_no
+        ,s.first_repay_time                                   AS label_first_repay_time
         ,s.user_actual_repay_time                             AS label_user_actual_repay_time
         ,s.debt_status                                        AS label_debt_status
         ,s.hist_overdue_days                                  AS label_hist_overdue_days
@@ -222,6 +235,7 @@ label AS (
 base AS (
     SELECT
          b.*
+        ,x.label_first_repay_time
         ,x.label_user_actual_repay_time
         ,x.label_debt_status
         ,x.label_hist_overdue_days
@@ -235,10 +249,10 @@ base AS (
                AND b.label_obs_dt <= b.obs_dt
               THEN 1 ELSE 0 END                               AS is_label_matured
         ,COALESCE(
-             x.label_user_actual_repay_time
-            ,CASE WHEN b.user_actual_repay_time IS NOT NULL
-                   AND TO_DATE(b.user_actual_repay_time) <= b.label_obs_dt
-                  THEN b.user_actual_repay_time END
+             x.label_first_repay_time
+            ,CASE WHEN b.first_repay_time IS NOT NULL
+                   AND TO_DATE(b.first_repay_time) <= b.label_obs_dt
+                  THEN b.first_repay_time END
          )                                                    AS repay_at_label_obs
     FROM latest b
     LEFT JOIN label x
@@ -604,7 +618,7 @@ CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
 -- 下游：ads_vintage_curve
 -- 目的：把每笔借据展开为 MOB1~MOB12 观察点，供滚动 vintage 曲线使用。
 -- 说明：本表仅作曲线描述，不进入建模宽表；每个 MOB 点按相同 mob_no 对齐。
---       未到期 MOB 保留（is_matured = 0），不改变原有样本范围。
+--       未到期 MOB 保留（is_matured = 0）。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dws_vintage_mob;
 CREATE TABLE model.tmp_eliam_wagego_dws_vintage_mob AS
