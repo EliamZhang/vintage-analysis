@@ -2,7 +2,7 @@
 
 queries.sql 按段组织，每段以分号结尾，段首注释写明「N. 段名」。本脚本：
 1. 段 1–6 是底表，写入 原始数据/；
-2. 段 7–14 是《样本表准备以及Y标签表准备.sql》里的 8 张加工表，
+2. 段 7–9 是《样本表准备以及Y标签表准备.sql》里的 3 张加工表，
    因为库里没有 model.tmp_eliam_wagego_*，SQL 已把上游逻辑内联，直接把结果写入 查询结果/；
 3. 打包成 vintage_data.zip，压缩包根目录只有 原始数据/ 和 查询结果/ 两个文件夹；
 4. 运行日志、失败清单和 manifest 放在 同步日志/，不进入压缩包。
@@ -74,79 +74,32 @@ SEGMENT_SPECS = {
     },
     "9": {
         "kind": "result",
-        "file": "09_借款申请明细_dwd_loan_apply",
+        "file": "09_放款申请明细_dwd_loan_apply",
         "required_columns": {
             "loan_no", "user_id", "application_id", "app_id", "listing_id",
             "apply_status", "apply_status_desc", "is_disburse_success", "is_reject",
             "is_expired", "is_disburse_failed", "apply_time", "apply_date", "apply_month",
-            "disburse_time", "apply_seq", "is_first_apply_in_window", "strategy_time",
-            "retry_count",
-        },
-        "unique_keys": ["loan_no"],
-    },
-    "10": {
-        "kind": "result",
-        "file": "10_借款债务明细_dwd_loan_debt",
-        "required_columns": {
-            "loan_no", "user_id", "listing_id", "apply_status", "apply_status_desc",
-            "is_disburse_success", "apply_time", "disburse_time", "apply_seq",
-            "real_amount", "term_quantity", "term_unit", "init_due_date", "obs_dt",
-            "label_obs_dt", "is_label_matured", "dpd_at_label_obs",
-            "hist_dpd_at_label_obs", "is_current_overdue_at_label_obs",
-            "is_5plus_at_label_obs", "is_30plus_at_label_obs",
-            "is_ever_30plus_in_window", "loan_term_contract_days",
-            "loan_term_actual_days", "is_early_settlement", "is_current_overdue",
-            "current_ovd_amt",
-        } | FPD_FLAGS,
-        "unique_keys": ["loan_no"],
-        "obs_column": "obs_dt",
-    },
-    "11": {
-        "kind": "result",
-        "file": "11_放款成功表_dwd_disbursed_loan",
-        "required_columns": {
-            "loan_no", "user_id", "listing_id", "disburse_time", "disburse_date",
-            "disburse_month", "real_amount", "term_quantity", "term_unit",
-            "init_due_date", "application_rank", "user_type",
-        },
-        "unique_keys": ["loan_no"],
-    },
-    "12": {
-        "kind": "result",
-        "file": "12_戳额表_dwd_loan_stamp",
-        "required_columns": {
-            "loan_no", "user_id", "apply_time", "stamp_time",
-            "stamp_to_apply_days", "stamp_source", "limit_apply_no",
-            "stamp_flow_no", "limit_total_before", "limit_total_after",
-            "limit_available_after", "limit_occupied_after", "limit_expire_time",
-        },
-        "unique_keys": ["loan_no"],
-    },
-    "13": {
-        "kind": "result",
-        "file": "13_借款级Vintage宽表_dws_vintage_loan",
-        "required_columns": {
-            "loan_no", "user_id", "listing_id", "disburse_time", "disburse_month",
-            "real_amount", "term_unit", "init_due_date", "label_obs_dt",
-            "is_label_matured", "data_as_of", "days_on_book", "dpd_at_label_obs",
-            "hist_dpd_at_label_obs", "is_current_overdue_at_label_obs",
-            "current_ovd_amt_at_label_obs", "is_5plus_at_label_obs",
-            "is_30plus_at_label_obs", "is_ever_30plus_in_window",
-            "application_rank", "user_type",
+            "disburse_time", "apply_seq", "application_rank", "is_first_apply_in_window",
+            "strategy_time", "retry_count", "stamp_time",
+            "real_amount", "apply_amount", "interest", "service_fee", "term_quantity",
+            "term_unit", "total_period", "is_deal", "withdraw_time", "list_due_date",
+            "init_due_date", "user_actual_repay_time", "debt_status", "debt_status_desc",
+            "hist_overdue_days", "current_overdue_days", "debt_principal",
+            "repay_amount", "owing_amount",
+            "obs_dt", "label_obs_dt", "is_label_matured",
+            "label_user_actual_repay_time", "label_debt_status",
+            "label_current_overdue_days", "label_hist_overdue_days", "label_owing_amount",
+            "dpd_at_label_obs", "hist_dpd_at_label_obs", "is_current_overdue_at_label_obs",
+            "current_ovd_amt_at_label_obs", "is_5plus_at_label_obs", "is_30plus_at_label_obs",
+            "is_ever_30plus_in_window",
+            "loan_term_contract_days", "loan_term_actual_days", "is_early_settlement",
+            "is_current_overdue", "current_ovd_amt",
+            "disburse_month", "data_as_of", "days_on_book", "user_type",
         } | FPD_FLAGS
           | {f"mob{n}_{suffix}" for n in range(1, 13) for suffix in ("5plus", "30plus")},
         "unique_keys": ["loan_no"],
-        "obs_column": "data_as_of",
+        "obs_column": "obs_dt",
     },
-}
-
-# 放款样本表字段与借款 / 债务明细完全一致，直接复用同一套字段校验。
-SEGMENT_SPECS["14"] = {
-    "kind": "result",
-    "file": "14_放款样本表_dwd_loan_disburse_sample",
-    "required_columns": SEGMENT_SPECS["10"]["required_columns"],
-    "unique_keys": ["loan_no"],
-    "obs_column": "obs_dt",
 }
 
 _TITLE_RE = re.compile(r"^\s*(\d+)\.\s+(.+?)\s*$", flags=re.M)

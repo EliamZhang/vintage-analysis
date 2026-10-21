@@ -39,12 +39,7 @@ SHEETS = {
     "06": ("06_额度日志表", "额度变动流水：占用 / 释放 / 过期"),
     "07": ("07_观察日参数表", "全局观察日参数"),
     "08": ("08_债务快照子集", "由 03 按挂牌 × 快照日聚合的债务快照"),
-    "09": ("09_借款申请明细", "申请级明细：申请序列、是否首申、策略时间"),
-    "10": ("10_借款债务明细", "申请 + 债务合并，一行一笔借据"),
-    "11": ("11_放款成功表", "仅放款成功的借据，含放款月与 New / Old"),
-    "12": ("12_戳额表", "申请对应的额度戳额记录"),
-    "13": ("13_借款级Vintage宽表", "借据级 Vintage 宽表：标签 + MOB 5+ / 30+ 标记"),
-    "14": ("14_放款样本表", "最终放款样本，一行一笔借据"),
+    "09": ("09_放款申请明细", "申请级明细：放款属性、债务状态、FPD 标签、MOB 5+ / 30+ 标记"),
 }
 
 ILLEGAL_XML_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
@@ -160,10 +155,14 @@ def collect_tables(raw_dir, result_dir):
             raise FileNotFoundError(f"文件夹不存在：{folder}")
         for path in folder.glob("*.csv"):
             prefix = path.name[:2]
+            if prefix not in SHEETS:
+                continue
+            if kind == "result" and not path.name.startswith(SHEETS[prefix][0]):
+                continue
             if prefix in tables:
                 raise ValueError(f"文件名前缀重复：{path.name}")
             tables[prefix] = (path, kind)
-    missing = [f"{number:02d}" for number in range(1, 15) if f"{number:02d}" not in tables]
+    missing = [f"{number:02d}" for number in range(1, 10) if f"{number:02d}" not in tables]
     if missing:
         raise FileNotFoundError(f"缺少以下文件：{', '.join(missing)}")
     return [(prefix, *tables[prefix]) for prefix in sorted(tables)]
