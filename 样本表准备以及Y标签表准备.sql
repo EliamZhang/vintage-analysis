@@ -560,7 +560,7 @@ CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
 -- 第七步：借款 × MOB 长表（dws_vintage_mob）
 -- 粒度：借款申请（loan_no）× MOB（mob_no）
 -- 上游：dws_vintage_loan + stg_debt_snp
--- 下游：ads_vintage_curve
+-- 下游：暂无
 -- 目的：把每笔借款展开为 MOB1~MOB12 观察点，供滚动 vintage 曲线使用。
 -- 加工逻辑：借款级 Vintage 标签表（dws_vintage_loan）一行一笔放款，这里把每笔放款按 MOB1~MOB12 展开成 12 行；
 --   每个 MOB 的观察日（obs_dt）= LAST_DAY(ADD_MONTHS(disburse_time, mob_no))，即放款后第 N 个月的月末；
@@ -674,37 +674,4 @@ SELECT
     ,ROUND(100.0 * SUM(CASE WHEN is_fpd30_ovd = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_fpd30_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd30_ovd_amt_rate
 FROM model.tmp_eliam_wagego_dws_vintage_loan
 GROUP BY disburse_month
-;
-
--- ============================================================================
--- 第九步：分群 × MOB 曲线汇总（ads_vintage_curve）
--- 粒度：放款月（disburse_month）× 用户类型（user_type）× MOB（mob_no）
--- 上游：dws_vintage_mob
--- 下游：报表 / 曲线
--- 目的：按放款月和新老客汇总每个 MOB 的逾期率，笔数与金额双口径。
--- 加工逻辑：借款 × MOB 长表（dws_vintage_mob）一行是一笔放款在一个 MOB 的观察结果，这里按放款月（disburse_month）× 用户类型（user_type）× MOB（mob_no）分组；
---   汇总队列笔数/金额（cohort_cnt、cohort_amt）和有效观测数/金额（obs_cnt、obs_amt，只算已到期且有快照的 MOB）；
---   再汇总 5+（is_5plus）、30+（is_30plus）的笔数和金额，除以有效观测数/金额得到逾期率。
--- ============================================================================
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_ads_vintage_curve;
-CREATE TABLE model.tmp_eliam_wagego_ads_vintage_curve AS
-SELECT
-     disburse_month
-    ,user_type
-    ,mob_no
-    ,MAX(data_as_of)                                                                            AS data_as_of
-    ,COUNT(*)                                                                                  AS cohort_cnt
-    ,ROUND(SUM(real_amount), 2)                                                                AS cohort_amt
-    ,SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END)                       AS obs_cnt
-    ,ROUND(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN real_amount ELSE 0 END), 2)   AS obs_amt
-    ,SUM(is_5plus)                                                                             AS cnt_5plus
-    ,ROUND(SUM(CASE WHEN is_5plus = 1 THEN real_amount ELSE 0 END), 2)                         AS amt_5plus
-    ,ROUND(100.0 * SUM(is_5plus) / NULLIF(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS rate_5plus
-    ,ROUND(100.0 * SUM(CASE WHEN is_5plus = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS rate_5plus_amt
-    ,SUM(is_30plus)                                                                            AS cnt_30plus
-    ,ROUND(SUM(CASE WHEN is_30plus = 1 THEN real_amount ELSE 0 END), 2)                        AS amt_30plus
-    ,ROUND(100.0 * SUM(is_30plus) / NULLIF(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS rate_30plus
-    ,ROUND(100.0 * SUM(CASE WHEN is_30plus = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_matured = 1 AND dpd IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS rate_30plus_amt
-FROM model.tmp_eliam_wagego_dws_vintage_mob
-GROUP BY disburse_month, user_type, mob_no
 ;
