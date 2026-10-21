@@ -505,7 +505,7 @@ LEFT JOIN limit_grant g
 -- 第六步：借款级 Vintage 标签（dws_vintage_loan）
 -- 粒度：借款申请（loan_no），只保留放款成功的借款
 -- 上游：dwd_loan_debt + param_obs_date
--- 下游：dws_vintage_mob、ads_vintage_month
+-- 下游：dws_vintage_mob
 -- 目的：每笔放款一行，输出统一窗口（init_due_date + 31 天）的逾期（is_current_overdue_at_label_obs）、
 --       30+（is_30plus_at_label_obs）、5+（is_5plus_at_label_obs）、FPD（is_fpd3_ovd 等）
 --       和新老客标签（user_type）；MOB 曲线（mob_no）不在本表输出。
@@ -582,15 +582,16 @@ CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
 ;
 
 -- ============================================================================
--- 第七步：借款 × MOB 长表（dws_vintage_mob）
--- 粒度：借款申请（loan_no）× MOB（mob_no）
+-- 第七步：借款 × MOB 宽表（dws_vintage_mob）
+-- 粒度：借款申请（loan_no），一行一笔
 -- 上游：dws_vintage_loan + stg_debt_snp
 -- 下游：暂无
--- 目的：把每笔借款展开为 MOB1~MOB12 观察点，供滚动 vintage 曲线使用。
--- 加工逻辑：借款级 Vintage 标签表（dws_vintage_loan）一行一笔放款，这里把每笔放款按 MOB1~MOB12 展开成 12 行；
+-- 目的：每笔借款一行，输出 MOB1~MOB12 观察点的 5+ / 30+ 标记，供滚动 vintage 曲线使用。
+-- 加工逻辑：借款级 Vintage 标签表（dws_vintage_loan）一行一笔放款，先按 MOB1~MOB12 展开；
 --   每个 MOB 的观察日（obs_dt）= LAST_DAY(ADD_MONTHS(disburse_time, mob_no))，即放款后第 N 个月的月末；
---   再按借款（listing_id）+ 观察日（stat_date）LEFT JOIN 借款日快照（stg_debt_snp），取当天的逾期天数（current_overdue_days）；
---   观察日超过数据截止日（data_as_of）或没有快照时，is_matured = 0；逾期天数 >= 5 记 5+，> 30 记 30+。
+--   按借款（listing_id）+ 观察日（stat_date）LEFT JOIN 借款日快照（stg_debt_snp），取当天逾期天数（current_overdue_days）；
+--   观察日超过数据截止日（data_as_of）或没有快照时，该 MOB 标记为 NULL，不计入分母；
+--   逾期天数 >= 5 记 5+，> 30 记 30+，最后按借款聚合为一行，输出 mob1_5plus ~ mob12_30plus。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dws_vintage_mob;
 CREATE TABLE model.tmp_eliam_wagego_dws_vintage_mob AS
@@ -613,90 +614,65 @@ obs AS (
         ,LAST_DAY(ADD_MONTHS(TO_DATE(s.disburse_time), m.mob_no)) AS obs_dt
     FROM model.tmp_eliam_wagego_dws_vintage_loan s
     CROSS JOIN mob m
+),
+mob_detail AS (
+    SELECT
+         o.*
+        ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
+              THEN CASE WHEN d.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
+        ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
+              THEN CASE WHEN d.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus
+    FROM obs o
+    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d
+      ON o.listing_id = d.listing_id
+     AND o.obs_dt = d.stat_date
 )
 SELECT
-     o.loan_no
-    ,o.user_id
-    ,o.listing_id
-    ,o.disburse_date
-    ,o.disburse_month
-    ,o.real_amount
-    ,o.term_unit
-    ,o.user_type
-    ,o.application_rank
-    ,o.data_as_of
-    ,o.mob_no
-    ,o.obs_dt
-    ,CASE WHEN o.obs_dt <= o.data_as_of THEN 1 ELSE 0 END     AS is_matured
-    ,d.current_overdue_days                                   AS dpd
-    ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
-          THEN CASE WHEN d.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
-    ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
-          THEN CASE WHEN d.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus
-FROM obs o
-LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d
-  ON o.listing_id = d.listing_id
- AND o.obs_dt = d.stat_date
+     loan_no
+    ,user_id
+    ,listing_id
+    ,disburse_date
+    ,disburse_month
+    ,real_amount
+    ,term_unit
+    ,user_type
+    ,application_rank
+    ,data_as_of
+    ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS mob1_5plus
+    ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS mob2_5plus
+    ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS mob3_5plus
+    ,MAX(CASE WHEN mob_no = 4  THEN is_5plus END) AS mob4_5plus
+    ,MAX(CASE WHEN mob_no = 5  THEN is_5plus END) AS mob5_5plus
+    ,MAX(CASE WHEN mob_no = 6  THEN is_5plus END) AS mob6_5plus
+    ,MAX(CASE WHEN mob_no = 7  THEN is_5plus END) AS mob7_5plus
+    ,MAX(CASE WHEN mob_no = 8  THEN is_5plus END) AS mob8_5plus
+    ,MAX(CASE WHEN mob_no = 9  THEN is_5plus END) AS mob9_5plus
+    ,MAX(CASE WHEN mob_no = 10 THEN is_5plus END) AS mob10_5plus
+    ,MAX(CASE WHEN mob_no = 11 THEN is_5plus END) AS mob11_5plus
+    ,MAX(CASE WHEN mob_no = 12 THEN is_5plus END) AS mob12_5plus
+    ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS mob1_30plus
+    ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS mob2_30plus
+    ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS mob3_30plus
+    ,MAX(CASE WHEN mob_no = 4  THEN is_30plus END) AS mob4_30plus
+    ,MAX(CASE WHEN mob_no = 5  THEN is_30plus END) AS mob5_30plus
+    ,MAX(CASE WHEN mob_no = 6  THEN is_30plus END) AS mob6_30plus
+    ,MAX(CASE WHEN mob_no = 7  THEN is_30plus END) AS mob7_30plus
+    ,MAX(CASE WHEN mob_no = 8  THEN is_30plus END) AS mob8_30plus
+    ,MAX(CASE WHEN mob_no = 9  THEN is_30plus END) AS mob9_30plus
+    ,MAX(CASE WHEN mob_no = 10 THEN is_30plus END) AS mob10_30plus
+    ,MAX(CASE WHEN mob_no = 11 THEN is_30plus END) AS mob11_30plus
+    ,MAX(CASE WHEN mob_no = 12 THEN is_30plus END) AS mob12_30plus
+FROM mob_detail
+GROUP BY
+     loan_no
+    ,user_id
+    ,listing_id
+    ,disburse_date
+    ,disburse_month
+    ,real_amount
+    ,term_unit
+    ,user_type
+    ,application_rank
+    ,data_as_of
 ;
 
--- ============================================================================
--- 第八步：放款月汇总（ads_vintage_month）
--- 粒度：放款月（disburse_month）
--- 上游：dws_vintage_loan
--- 下游：报表
--- 目的：按放款月汇总放款量，以及统一窗口（init_due_date + 31 天）的逾期（cur_ovd_cnt）、
---       30+（cur_30plus_cnt）和 FPD（fpd3_ovd_cnt 等），笔数与金额双口径。
--- 加工逻辑：借款级 Vintage 标签表（dws_vintage_loan）一行一笔放款，这里按放款月（disburse_month）分组汇总；
---   放款量：放款笔数（loan_cnt）和金额（loan_amt）；
---   风险：当前逾期（cur_ovd_cnt）、标签观察日 30+（cur_30plus_cnt）、窗口内曾 30+（ever_30plus_cnt）、FPD3/7/14/30 的笔数和金额；
---   分母：matured_cnt 为已到标签观察点的借款数（FPD 分母），obs_cnt 为其中能取到标签日快照的借款数（当前逾期/30+/ever 30+ 分母）；
---   最后用逾期笔数/金额除以对应分母，得到各占比。
--- ============================================================================
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_ads_vintage_month;
-CREATE TABLE model.tmp_eliam_wagego_ads_vintage_month AS
-SELECT
-     disburse_month
-    ,MAX(data_as_of)                                                             AS data_as_of
-    ,COUNT(*)                                                                    AS loan_cnt
-    ,ROUND(SUM(real_amount), 2)                                                  AS loan_amt
-    ,SUM(is_label_matured)                                                       AS matured_cnt
-    ,ROUND(SUM(CASE WHEN is_label_matured = 1 THEN real_amount ELSE 0 END), 2)   AS matured_amt
-    ,SUM(CASE WHEN is_label_matured = 1 AND dpd_at_label_obs IS NOT NULL THEN 1 ELSE 0 END) AS obs_cnt
-    ,ROUND(SUM(CASE WHEN is_label_matured = 1 AND dpd_at_label_obs IS NOT NULL THEN real_amount ELSE 0 END), 2) AS obs_amt
-    ,SUM(CASE WHEN is_30plus_at_label_obs = 1 THEN 1 ELSE 0 END)                 AS cur_30plus_cnt
-    ,ROUND(SUM(CASE WHEN is_30plus_at_label_obs = 1 THEN real_amount ELSE 0 END), 2) AS cur_30plus_amt
-    ,SUM(CASE WHEN is_current_overdue_at_label_obs = 1 THEN 1 ELSE 0 END)        AS cur_ovd_cnt
-    ,ROUND(COALESCE(SUM(current_ovd_amt_at_label_obs), 0), 2)                    AS cur_ovd_amt
-    ,ROUND(100.0 * SUM(CASE WHEN is_current_overdue_at_label_obs = 1 THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN is_label_matured = 1 AND dpd_at_label_obs IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS cur_ovd_rate
-    ,ROUND(100.0 * SUM(current_ovd_amt_at_label_obs) / NULLIF(SUM(CASE WHEN is_label_matured = 1 AND dpd_at_label_obs IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS cur_ovd_amt_rate
-    ,COALESCE(SUM(is_ever_30plus_in_window), 0)                                  AS ever_30plus_cnt
-    ,ROUND(SUM(CASE WHEN is_ever_30plus_in_window = 1 THEN real_amount ELSE 0 END), 2) AS ever_30plus_amt
-    ,ROUND(100.0 * SUM(is_ever_30plus_in_window) / NULLIF(SUM(CASE WHEN is_label_matured = 1 AND dpd_at_label_obs IS NOT NULL THEN 1 ELSE 0 END), 0), 2) AS ever_30plus_rate
-    ,ROUND(100.0 * SUM(CASE WHEN is_ever_30plus_in_window = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_label_matured = 1 AND dpd_at_label_obs IS NOT NULL THEN real_amount ELSE 0 END), 0), 2) AS ever_30plus_amt_rate
-    ,COALESCE(SUM(is_fpd3_obs), 0)                                               AS fpd3_obs_cnt
-    ,COALESCE(SUM(is_fpd3_ovd), 0)                                               AS fpd3_ovd_cnt
-    ,ROUND(SUM(CASE WHEN is_fpd3_obs = 1 THEN real_amount ELSE 0 END), 2)        AS fpd3_obs_amt
-    ,ROUND(SUM(CASE WHEN is_fpd3_ovd = 1 THEN real_amount ELSE 0 END), 2)        AS fpd3_ovd_amt
-    ,ROUND(100.0 * SUM(is_fpd3_ovd) / NULLIF(SUM(is_fpd3_obs), 0), 2)            AS fpd3_ovd_rate
-    ,ROUND(100.0 * SUM(CASE WHEN is_fpd3_ovd = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_fpd3_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd3_ovd_amt_rate
-    ,COALESCE(SUM(is_fpd7_obs), 0)                                               AS fpd7_obs_cnt
-    ,COALESCE(SUM(is_fpd7_ovd), 0)                                               AS fpd7_ovd_cnt
-    ,ROUND(SUM(CASE WHEN is_fpd7_obs = 1 THEN real_amount ELSE 0 END), 2)        AS fpd7_obs_amt
-    ,ROUND(SUM(CASE WHEN is_fpd7_ovd = 1 THEN real_amount ELSE 0 END), 2)        AS fpd7_ovd_amt
-    ,ROUND(100.0 * SUM(is_fpd7_ovd) / NULLIF(SUM(is_fpd7_obs), 0), 2)            AS fpd7_ovd_rate
-    ,ROUND(100.0 * SUM(CASE WHEN is_fpd7_ovd = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_fpd7_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd7_ovd_amt_rate
-    ,COALESCE(SUM(is_fpd14_obs), 0)                                              AS fpd14_obs_cnt
-    ,COALESCE(SUM(is_fpd14_ovd), 0)                                              AS fpd14_ovd_cnt
-    ,ROUND(SUM(CASE WHEN is_fpd14_obs = 1 THEN real_amount ELSE 0 END), 2)       AS fpd14_obs_amt
-    ,ROUND(SUM(CASE WHEN is_fpd14_ovd = 1 THEN real_amount ELSE 0 END), 2)       AS fpd14_ovd_amt
-    ,ROUND(100.0 * SUM(is_fpd14_ovd) / NULLIF(SUM(is_fpd14_obs), 0), 2)          AS fpd14_ovd_rate
-    ,ROUND(100.0 * SUM(CASE WHEN is_fpd14_ovd = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_fpd14_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd14_ovd_amt_rate
-    ,COALESCE(SUM(is_fpd30_obs), 0)                                              AS fpd30_obs_cnt
-    ,COALESCE(SUM(is_fpd30_ovd), 0)                                              AS fpd30_ovd_cnt
-    ,ROUND(SUM(CASE WHEN is_fpd30_obs = 1 THEN real_amount ELSE 0 END), 2)       AS fpd30_obs_amt
-    ,ROUND(SUM(CASE WHEN is_fpd30_ovd = 1 THEN real_amount ELSE 0 END), 2)       AS fpd30_ovd_amt
-    ,ROUND(100.0 * SUM(is_fpd30_ovd) / NULLIF(SUM(is_fpd30_obs), 0), 2)          AS fpd30_ovd_rate
-    ,ROUND(100.0 * SUM(CASE WHEN is_fpd30_ovd = 1 THEN real_amount ELSE 0 END) / NULLIF(SUM(CASE WHEN is_fpd30_obs = 1 THEN real_amount ELSE 0 END), 0), 2) AS fpd30_ovd_amt_rate
-FROM model.tmp_eliam_wagego_dws_vintage_loan
-GROUP BY disburse_month
-;

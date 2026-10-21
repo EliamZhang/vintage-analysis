@@ -2,7 +2,7 @@
 
 queries.sql 按段组织，每段以分号结尾，段首注释写明「N. 段名」。本脚本：
 1. 段 1–6 是底表，写入 原始数据/；
-2. 段 7–16 是《样本表准备以及Y标签表准备.sql》里的 10 张加工表，
+2. 段 7–15 是《样本表准备以及Y标签表准备.sql》里的 9 张加工表，
    因为库里没有 model.tmp_eliam_wagego_*，SQL 已把上游逻辑内联，直接把结果写入 查询结果/；
 3. 打包成 vintage_data.zip，压缩包根目录只有 原始数据/ 和 查询结果/ 两个文件夹；
 4. 运行日志、失败清单和 manifest 放在 同步日志/，不进入压缩包。
@@ -45,11 +45,6 @@ BUSINESS_TZ = timezone(timedelta(hours=8))
 
 # FPD 标签列由 3/7/14/30 天四组组成，单独列出来避免注册表里重复抄写。
 FPD_FLAGS = {f"is_fpd{n}_{suffix}" for n in (3, 7, 14, 30) for suffix in ("obs", "ovd")}
-FPD_MONTH_COLUMNS = {
-    f"fpd{n}_{suffix}"
-    for n in (3, 7, 14, 30)
-    for suffix in ("obs_cnt", "ovd_cnt", "obs_amt", "ovd_amt", "ovd_rate", "ovd_amt_rate")
-}
 
 # 段号 → 输出文件与校验规则。段号必须和 queries.sql 段首注释一一对应。
 # unique_keys / required_columns / obs_column 只对结果段生效，用来防止 SQL 写错后仍产出“成功”的空表或放大表。
@@ -144,35 +139,21 @@ SEGMENT_SPECS = {
     },
     "14": {
         "kind": "result",
-        "file": "14_借款MOB长表_dws_vintage_mob",
+        "file": "14_借款MOB宽表_dws_vintage_mob",
         "required_columns": {
             "loan_no", "user_id", "listing_id", "disburse_date", "disburse_month",
             "real_amount", "term_unit", "user_type", "application_rank",
-            "data_as_of", "mob_no", "obs_dt", "is_matured", "dpd",
-            "is_5plus", "is_30plus",
-        },
-        "unique_keys": ["loan_no", "mob_no"],
-        "obs_column": "data_as_of",
-    },
-    "15": {
-        "kind": "result",
-        "file": "15_放款月汇总_ads_vintage_month",
-        "required_columns": {
-            "disburse_month", "data_as_of", "loan_cnt", "loan_amt",
-            "matured_cnt", "matured_amt", "obs_cnt", "obs_amt",
-            "cur_30plus_cnt", "cur_30plus_amt", "cur_ovd_cnt", "cur_ovd_amt",
-            "cur_ovd_rate", "cur_ovd_amt_rate", "ever_30plus_cnt",
-            "ever_30plus_amt", "ever_30plus_rate", "ever_30plus_amt_rate",
-        } | FPD_MONTH_COLUMNS,
-        "unique_keys": ["disburse_month"],
+            "data_as_of",
+        } | {f"mob{n}_{suffix}" for n in range(1, 13) for suffix in ("5plus", "30plus")},
+        "unique_keys": ["loan_no"],
         "obs_column": "data_as_of",
     },
 }
 
 # 放款样本表字段与借款 / 债务明细完全一致，直接复用同一套字段校验。
-SEGMENT_SPECS["16"] = {
+SEGMENT_SPECS["15"] = {
     "kind": "result",
-    "file": "16_放款样本表_dwd_loan_disburse_sample",
+    "file": "15_放款样本表_dwd_loan_disburse_sample",
     "required_columns": SEGMENT_SPECS["10"]["required_columns"],
     "unique_keys": ["loan_no"],
     "obs_column": "obs_dt",
