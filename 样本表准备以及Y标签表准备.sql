@@ -142,11 +142,19 @@ LEFT JOIN event e
 -- 目的：给每笔借款申请补上放款金额（real_amount）、期限（term_quantity / term_unit）、
 --       债务状态（debt_status）、还款时间（user_actual_repay_time）、逾期天数（current_overdue_days）
 --       和统一窗口标签。
--- 加工逻辑：借款申请（dwd_loan_apply）一行一个申请（loan_no），放款信息表（edw_ewa.dwb_asset_cmn_listing）一行一笔放款（listing_id），
---   两者按 listing_id LEFT JOIN，补放款金额（real_amount、apply_amount）、期限（term_quantity、term_unit）和放款时间（disburse_time）；
---   再关联借款日快照（stg_debt_snp）两次：一次取观察日（obs_dt）当天，得到当前债务状态、逾期天数和金额；一次取标签观察日（label_obs_dt = init_due_date + 31）当天，得到标签口径；
---   然后基于两份快照计算当前逾期、30+、5+、FPD3/7/14/30、结清天数和早结清标记；
---   借款未放款成功、未到标签观察日或标签日无快照时，is_label_matured = 0，标签置 NULL。
+-- 加工逻辑：以借款申请（dwd_loan_apply）为主表（一行一个 loan_no），CROSS JOIN 观察日参数表（param_obs_date）拿到 obs_dt；
+--   1) 按 listing_id LEFT JOIN 放款信息表（edw_ewa.dwb_asset_cmn_listing），补放款金额（real_amount、apply_amount）、利息和费用（interest、service_fee）、
+--      期限（term_quantity、term_unit、total_period）、是否成交（is_deal）、放款时间（withdraw_time）和合同应还日（list_due_date）；
+--   2) 按 listing_id + stat_date = obs_dt LEFT JOIN 借款日快照（stg_debt_snp），取观察日当天的 init_due_date、first_repay_time、user_actual_repay_time、
+--      debt_status、hist_overdue_days、current_overdue_days 和金额，并用 init_due_date + 31 算出标签观察日（label_obs_dt）；
+--   3) 再按 listing_id + stat_date = label_obs_dt 关联一次快照，得到标签日口径，字段统一加 label_ 前缀；
+--   4) 判定标签是否成熟（is_label_matured）：放款成功、is_deal = 1、有债务快照、标签观察日存在且落在放款日与 obs_dt 之间；
+--   5) 成熟后计算标签：标签日 DPD（dpd_at_label_obs）、历史最大 DPD（hist_dpd_at_label_obs）、当前逾期（is_current_overdue_at_label_obs）、
+--      5+（is_5plus_at_label_obs，DPD >= 5）、30+（is_30plus_at_label_obs，DPD > 30）、窗口内曾 30+（is_ever_30plus_in_window）、
+--      FPD3/7/14/30（is_fpdN_obs / is_fpdN_ovd，还款时间晚于 init_due_date + N 记逾期；无还款时间时用 label_obs_dt 是否超过阈值判断）；
+--   6) 同时计算合同期限（loan_term_contract_days = init_due_date - 放款日）、实际期限（loan_term_actual_days）、早结清（is_early_settlement）、
+--      观察日当前逾期（is_current_overdue、current_ovd_amt，仅 is_deal = 1 时计算）；
+--   未成熟的借款标签统一为 NULL；FPD 还款时间优先取标签日快照，缺失时用观察日快照中不晚于 label_obs_dt 的首期还款时间回补。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_debt;
 CREATE TABLE model.tmp_eliam_wagego_dwd_loan_debt AS
@@ -317,6 +325,23 @@ SELECT
     ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN 1 ELSE 0 END END AS is_current_overdue
     ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS current_ovd_amt
 FROM base b
+;
+
+-- ============================================================================
+-- 第三步补充：放款样本表（dwd_loan_disburse_sample）
+-- 粒度：借款申请（loan_no），一行一个申请
+-- 上游：dwd_loan_debt
+-- 下游：放款样本分析
+-- 目的：保留所有走到支用/放款环节的申请，不要求最终成交（is_deal = 1）或放款成功。
+-- 加工逻辑：从借款 / 债务明细（dwd_loan_debt）中筛选申请状态为 DISBURSE（放款中）、
+--   DISBURSE_SUCCESS（放款成功）、DISBURSE_FAILED（放款失败）的记录；
+--   字段与 dwd_loan_debt 完全一致，便于直接复用下游标签和金额口径。
+-- ============================================================================
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_disburse_sample;
+CREATE TABLE model.tmp_eliam_wagego_dwd_loan_disburse_sample AS
+SELECT *
+FROM model.tmp_eliam_wagego_dwd_loan_debt
+WHERE apply_status IN ('DISBURSE', 'DISBURSE_SUCCESS', 'DISBURSE_FAILED')
 ;
 
 -- ============================================================================

@@ -2,4 +2,7 @@
 *.parquet
 results/
 results.zip
+同步日志/
+vintage_data.zip
+vintage_data.zip.tmp
 __pycache__/
