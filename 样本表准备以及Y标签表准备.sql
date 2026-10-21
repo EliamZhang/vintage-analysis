@@ -21,7 +21,7 @@ FROM edw_ewa.dwb_asset_debt_dtl_snp
 --   edw_ewa.dwb_asset_debt_dtl_snp
 --   ods_ewa.aus_ewa_loan_biz_t_loan_application
 --   model.tmp_eliam_wagego_param_obs_date
--- 下游：dwd_loan_apply
+-- 下游：dwd_loan_apply_label
 -- 日期范围：最早申请日前 1 个月 ~ 观察日（obs_dt）。
 -- 目的：把多期快照聚合成一个借款一天一行，供标签窗口（init_due_date + 31 天）和 MOB 观察点取数。
 -- 加工逻辑：债务快照表（edw_ewa.dwb_asset_debt_dtl_snp）一行是借款（listing_id）× 期次（period_no）× 日期（dt），
@@ -73,7 +73,7 @@ GROUP BY listing_id, stat_date
 ;                                                                 -- 日快照（stat_date），支持任意 init_due_date + 31 标签观察点
 
 -- ============================================================================
--- 第二步：放款申请明细（dwd_loan_apply）
+-- 第二步：放款申请明细与Y标签（dwd_loan_apply_label）
 -- 粒度：放款申请（loan_no），一行一个申请（含成功/拒绝/过期/放款失败）
 -- 上游：ods_ewa.aus_ewa_loan_biz_t_loan_application + ods_ewa.aus_ewa_risk_risk_event_task
 --       + ods_ewa.aus_listing_tb_loan_limit_apply + edw_ewa.dwb_asset_cmn_listing
@@ -90,8 +90,8 @@ GROUP BY listing_id, stat_date
 --   6) 成熟后计算标签日 DPD、5+ / 30+、FPD3/7/14/30、合同期限、实际期限和早结清等指标；
 --   7) 按 MOB1~MOB12 关联债务快照，输出每个观察点的 5+ / 30+ 标记，未到观察日或无快照时标记为 NULL。
 -- ============================================================================
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_apply;
-CREATE TABLE model.tmp_eliam_wagego_dwd_loan_apply AS
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_apply_label;
+CREATE TABLE model.tmp_eliam_wagego_dwd_loan_apply_label AS
 WITH apply AS (
     SELECT
          a.loan_no
