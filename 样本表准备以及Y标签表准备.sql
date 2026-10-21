@@ -1,52 +1,4 @@
--- ============================================================================
--- WageGo 每日 Vintage 跑批（优化版）
--- 观察日自动取快照表最新分区，无需修改日期。
---
--- 依赖顺序：
---   param_obs_date
---     → stg_debt_snp
---     → dwd_loan_apply
---     → dwd_loan_debt       ← dwd_loan_apply + listing + stg_debt_snp + param
---     → dwd_disbursed_loan  ← dwd_loan_debt
---     → dws_vintage_loan    ← dwd_loan_debt + param
---     → dws_vintage_mob     ← dws_vintage_loan + stg_debt_snp
---     → ads_vintage_month   ← dws_vintage_loan
---     → ads_vintage_curve   ← dws_vintage_mob
---
--- 表清单（粒度 / 主键 / 上游 → 下游）：
---   param_obs_date     1 行                    / obs_dt                     / 快照表 → 全链路
---   stg_debt_snp       listing_id × stat_date  / (listing_id, stat_date)    / 快照表 + 借款申请表 + param → dwd_loan_debt / dws_vintage_mob
---   dwd_loan_apply     loan_no                 / loan_no                    / 借款申请表 + 事件表 → dwd_loan_debt
---   dwd_loan_debt      loan_no                 / loan_no                    / dwd_loan_apply + listing + stg_debt_snp → dws_vintage_loan
---   dwd_disbursed_loan loan_no                 / loan_no                    / dwd_loan_debt → 下游分析
---   dws_vintage_loan   loan_no                 / loan_no                    / dwd_loan_debt + param → dws_vintage_mob / ads_vintage_month
---   dws_vintage_mob    loan_no × mob_no        / (loan_no, mob_no)          / dws_vintage_loan + stg_debt_snp → ads_vintage_curve（仅曲线）
---   ads_vintage_month  disburse_month          / disburse_month             / dws_vintage_loan → 报表
---   ads_vintage_curve  disburse_month × user_type × mob_no / 三列同主键     / dws_vintage_mob → 报表
---
--- 口径说明（除统一标签窗口外，其余口径与优化前保持一致）：
---   1) 样本：ods_ewa / edw_ewa 原生表；当前按单期产品口径，借据快照取 period_no = 1。
---      已知后续会转多期：届时需按 period_no 展开，并重新确认借据级 MOB/FPD/逾期聚合口径。
---   2) 观察日：借据快照最新分区，作为 data_as_of。
---   3) 标签观察窗：统一锚定首个应还日 init_due_date，观察点 = init_due_date + 31 天
---      （30 天窗口，+1 天保证严格 >30 可被观察）。所有产品期限（7/14/30 天）共用同一窗口；
---      未到观察点的借据标签置 NULL，不提前记 0。
---      FPD3/7/15/30 仅表示同一观察点下的严重度分层，不再代表不同观察窗。
---   4) MOB1~MOB12 曲线保留在 dws_vintage_mob，按同 MOB 对齐，仅作描述性分析；
---      dws_vintage_loan 不再输出 MOB1/MOB2 标签。
---   5) 新老客：按用户首笔“放款成功”的借据判定（application_rank = 1 为 New），已确认。
---   6) 逾期阈值：30+ 为严格大于 30；5+ 为大于等于 5。
---   7) application_id / app_id 仅作展示，不参与关联；借款统一用 loan_no 关联。
---
--- 多期改造点（当前不实现，待产品上线后按业务口径调整）：
---   stg_debt_snp  : 粒度改为 listing_id × period_no × stat_date，主键加入 period_no，
---                   不再固定 period_no = 1。
---   dwd_loan_debt : 观察日快照需按 period_no 汇总；init_due_date / user_actual_repay_time
---                   不再取首期单值。
---   dws_vintage_* : 统一标签窗口需明确以哪一期应还日为锚点；多期下建议按借据最早未结清
---                   期次或全部期次汇总重新定义 DPD / 逾期金额 / FPD。
---   ads_*         : 需明确统计单位是“借据”还是“期次”，分母/分子同步调整。
--- ============================================================================
+
 
 SET spark.sql.session.timeZone = Australia/Sydney;
 
@@ -443,7 +395,130 @@ FROM disbursed
 ;
 
 -- ============================================================================
--- 第五步：借据级 Vintage 标签（dws）
+-- 第五步：戳额表（dwd）
+-- 粒度：loan_no；主键：loan_no（一行一笔放款）
+-- 上游：dwd_disbursed_loan + aus_listing_tb_loan_limit_apply
+--       + aus_ewa_risk_risk_event_task（兜底）+ aus_listing_tb_loan_user_limit_log（额度）
+-- 下游：下游分析 / 建模取数
+-- 目的：为每笔放款匹配同用户在放款前最近一次戳额时点，并带出当时额度。
+-- 说明：主源为 limit_apply 的 biz_type = 400（戳额）；仅当主源无记录时，用风控事件表
+--       biz_id = 10000（戳额场景）兜底。每个 loan_no 只保留最近一条，避免重复关联。
+--       额度金额取同一流水的 event_type = 1 且 limit_category = 1 记录（每流水一条）。
+-- ============================================================================
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_stamp;
+CREATE TABLE model.tmp_eliam_wagego_dwd_loan_stamp AS
+WITH apply_stamp AS (
+    SELECT
+         a.borrower_id                                        AS user_id
+        ,CAST(a.inserttime AS TIMESTAMP)                      AS stamp_time
+        ,a.limit_apply_no
+        ,a.flow_no
+        ,CAST(a.id AS BIGINT)                                 AS stamp_id
+    FROM ods_ewa.aus_listing_tb_loan_limit_apply a
+    WHERE CAST(a.isactive AS INT) = 1
+      AND CAST(a.biz_type AS INT) = 400
+),
+event_stamp AS (
+    SELECT
+         e.user_id
+        ,CAST(e.inserttime AS TIMESTAMP)                      AS stamp_time
+        ,CAST(NULL AS STRING)                                 AS limit_apply_no
+        ,e.flow_id                                            AS flow_no
+        ,CAST(e.id AS BIGINT)                                 AS stamp_id
+    FROM ods_ewa.aus_ewa_risk_risk_event_task e
+    WHERE CAST(e.is_active AS INT) = 1
+      AND CAST(e.biz_id AS STRING) = '10000'
+),
+primary_match AS (
+    SELECT
+         d.loan_no
+        ,d.user_id
+        ,d.disburse_time
+        ,s.stamp_time
+        ,s.limit_apply_no
+        ,s.flow_no
+        ,'limit_apply'                                        AS stamp_source
+        ,ROW_NUMBER() OVER (
+             PARTITION BY d.loan_no
+             ORDER BY s.stamp_time DESC, s.stamp_id DESC
+         )                                                    AS rn
+    FROM model.tmp_eliam_wagego_dwd_disbursed_loan d
+    JOIN apply_stamp s
+      ON d.user_id = s.user_id
+     AND s.stamp_time <= d.disburse_time
+),
+fallback_match AS (
+    SELECT
+         d.loan_no
+        ,d.user_id
+        ,d.disburse_time
+        ,s.stamp_time
+        ,s.limit_apply_no
+        ,s.flow_no
+        ,'risk_event'                                         AS stamp_source
+        ,ROW_NUMBER() OVER (
+             PARTITION BY d.loan_no
+             ORDER BY s.stamp_time DESC, s.stamp_id DESC
+         )                                                    AS rn
+    FROM model.tmp_eliam_wagego_dwd_disbursed_loan d
+    LEFT JOIN (SELECT DISTINCT loan_no FROM primary_match) p
+      ON d.loan_no = p.loan_no
+    JOIN event_stamp s
+      ON d.user_id = s.user_id
+     AND s.stamp_time <= d.disburse_time
+    WHERE p.loan_no IS NULL
+),
+matched AS (
+    SELECT loan_no, user_id, disburse_time, stamp_time, limit_apply_no, flow_no, stamp_source
+    FROM primary_match
+    WHERE rn = 1
+    UNION ALL
+    SELECT loan_no, user_id, disburse_time, stamp_time, limit_apply_no, flow_no, stamp_source
+    FROM fallback_match
+    WHERE rn = 1
+),
+limit_grant AS (
+    SELECT
+         l.relate_id
+        ,CAST(l.total_amount_before AS DOUBLE)                AS limit_total_before
+        ,CAST(l.total_amount_after AS DOUBLE)                 AS limit_total_after
+        ,CAST(l.available_amount_after AS DOUBLE)             AS limit_available_after
+        ,CAST(l.occupied_amount_after AS DOUBLE)              AS limit_occupied_after
+        ,CAST(l.expire_time_after AS TIMESTAMP)               AS limit_expire_time
+        ,ROW_NUMBER() OVER (
+             PARTITION BY l.relate_id
+             ORDER BY CAST(l.id AS BIGINT) DESC
+         )                                                    AS rn
+    FROM ods_ewa.aus_listing_tb_loan_user_limit_log l
+    WHERE CAST(l.isactive AS INT) = 1
+      AND CAST(l.event_type AS INT) = 1
+      AND CAST(l.limit_category AS INT) = 1
+)
+SELECT
+     d.loan_no
+    ,d.user_id
+    ,d.disburse_time
+    ,m.stamp_time
+    ,DATEDIFF(TO_DATE(d.disburse_time), TO_DATE(m.stamp_time))
+                                                             AS stamp_to_disburse_days
+    ,m.stamp_source
+    ,m.limit_apply_no
+    ,m.flow_no                                               AS stamp_flow_no
+    ,g.limit_total_before
+    ,g.limit_total_after
+    ,g.limit_available_after
+    ,g.limit_occupied_after
+    ,g.limit_expire_time
+FROM model.tmp_eliam_wagego_dwd_disbursed_loan d
+LEFT JOIN matched m
+  ON d.loan_no = m.loan_no
+LEFT JOIN limit_grant g
+  ON m.flow_no = g.relate_id
+ AND g.rn = 1
+;
+
+-- ============================================================================
+-- 第六步：借据级 Vintage 标签（dws）
 -- 粒度：loan_no；主键：loan_no（仅放款成功借据）
 -- 上游：dwd_loan_debt + param_obs_date
 -- 下游：dws_vintage_mob、ads_vintage_month
@@ -523,7 +598,7 @@ CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
 ;
 
 -- ============================================================================
--- 第六步：借据 × MOB 长表（dws）
+-- 第七步：借据 × MOB 长表（dws）
 -- 粒度：loan_no × mob_no；主键：(loan_no, mob_no)
 -- 上游：dws_vintage_loan + stg_debt_snp
 -- 下游：ads_vintage_curve
@@ -579,7 +654,7 @@ LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d
 ;
 
 -- ============================================================================
--- 第七步：放款月汇总（ads）
+-- 第八步：放款月汇总（ads）
 -- 粒度：disburse_month；主键：disburse_month
 -- 上游：dws_vintage_loan
 -- 下游：报表
@@ -646,7 +721,7 @@ GROUP BY disburse_month
 ;
 
 -- ============================================================================
--- 第八步：分群 × MOB 曲线汇总（ads）
+-- 第九步：分群 × MOB 曲线汇总（ads）
 -- 粒度：disburse_month × user_type × mob_no；主键：三列组合
 -- 上游：dws_vintage_mob
 -- 下游：报表 / 曲线
@@ -678,78 +753,3 @@ SELECT
 FROM model.tmp_eliam_wagego_dws_vintage_mob
 GROUP BY disburse_month, user_type, mob_no
 ;
-
--- ============================================================================
--- 校验（按需执行；默认注释，不参与每日跑批）
--- ============================================================================
--- 1) 主键唯一性：row_cnt 应等于 pk_cnt
--- SELECT 'dwd_loan_apply'       AS tbl, COUNT(*) AS row_cnt, COUNT(DISTINCT loan_no) AS pk_cnt
--- FROM model.tmp_eliam_wagego_dwd_loan_apply
--- UNION ALL
--- SELECT 'stg_debt_snp', COUNT(*), COUNT(DISTINCT CONCAT(listing_id, '|', stat_date))
--- FROM model.tmp_eliam_wagego_stg_debt_snp
--- UNION ALL
--- SELECT 'dwd_loan_debt', COUNT(*), COUNT(DISTINCT loan_no)
--- FROM model.tmp_eliam_wagego_dwd_loan_debt
--- UNION ALL
--- SELECT 'dws_vintage_loan', COUNT(*), COUNT(DISTINCT loan_no)
--- FROM model.tmp_eliam_wagego_dws_vintage_loan
--- UNION ALL
--- SELECT 'dws_vintage_mob', COUNT(*), COUNT(DISTINCT CONCAT(loan_no, '|', mob_no))
--- FROM model.tmp_eliam_wagego_dws_vintage_mob
--- UNION ALL
--- SELECT 'ads_vintage_month', COUNT(*), COUNT(DISTINCT disburse_month)
--- FROM model.tmp_eliam_wagego_ads_vintage_month
--- UNION ALL
--- SELECT 'ads_vintage_curve', COUNT(*), COUNT(DISTINCT CONCAT(disburse_month, '|', user_type, '|', mob_no))
--- FROM model.tmp_eliam_wagego_ads_vintage_curve;
-
--- 2) 关联扇出：申请数与借据明细数必须一致
--- SELECT
---     (SELECT COUNT(*) FROM model.tmp_eliam_wagego_dwd_loan_apply) AS apply_cnt,
---     (SELECT COUNT(*) FROM model.tmp_eliam_wagego_dwd_loan_debt)  AS debt_cnt;
-
--- 3) 样本一致性：vintage 借据数必须等于放款成功申请数
--- SELECT
---     (SELECT COUNT(*) FROM model.tmp_eliam_wagego_dwd_loan_debt WHERE is_disburse_success = 1) AS disburse_cnt,
---     (SELECT COUNT(*) FROM model.tmp_eliam_wagego_dws_vintage_loan)                            AS vintage_loan_cnt;
-
--- 4) 汇总一致性：月度汇总与曲线 cohort 均不应丢借据
--- SELECT
---     (SELECT COUNT(*) FROM model.tmp_eliam_wagego_dws_vintage_loan)       AS loan_cnt,
---     (SELECT SUM(loan_cnt) FROM model.tmp_eliam_wagego_ads_vintage_month) AS month_loan_cnt,
---     (SELECT SUM(cohort_cnt) / 12 FROM model.tmp_eliam_wagego_ads_vintage_curve) AS curve_loan_cnt;
-
--- 5) 标签关系：逾期笔数不得超过观察笔数
--- SELECT disburse_month
--- FROM model.tmp_eliam_wagego_ads_vintage_month
--- WHERE cur_30plus_cnt > obs_cnt
---    OR cur_ovd_cnt    > obs_cnt
---    OR ever_30plus_cnt > obs_cnt
---    OR fpd3_ovd_cnt   > fpd3_obs_cnt
---    OR fpd7_ovd_cnt   > fpd7_obs_cnt
---    OR fpd15_ovd_cnt  > fpd15_obs_cnt
---    OR fpd30_ovd_cnt  > fpd30_obs_cnt;
-
--- 6) 标签窗口覆盖：已成熟借据应有 due+31 快照；missing_snp_cnt 应接近 0
--- SELECT
---     COUNT(*) AS loan_cnt,
---     SUM(is_label_matured) AS matured_cnt,
---     SUM(CASE WHEN is_label_matured = 1 AND dpd_at_label_obs IS NOT NULL THEN 1 ELSE 0 END) AS label_snp_cnt,
---     SUM(CASE WHEN is_label_matured = 1 AND dpd_at_label_obs IS NULL THEN 1 ELSE 0 END) AS missing_snp_cnt
--- FROM model.tmp_eliam_wagego_dws_vintage_loan;
-
--- 7) FPD 严重度应单调：FPD30 ⊆ FPD15 ⊆ FPD7 ⊆ FPD3
--- SELECT COUNT(*) AS violation_cnt
--- FROM model.tmp_eliam_wagego_dws_vintage_loan
--- WHERE is_fpd3_ovd < is_fpd7_ovd
---    OR is_fpd7_ovd < is_fpd15_ovd
---    OR is_fpd15_ovd < is_fpd30_ovd;
-
--- 8) 统一观察点下，FPD 分母应等于已成熟借据数
--- SELECT disburse_month
--- FROM model.tmp_eliam_wagego_ads_vintage_month
--- WHERE fpd3_obs_cnt  <> matured_cnt
---    OR fpd7_obs_cnt  <> matured_cnt
---    OR fpd15_obs_cnt <> matured_cnt
---    OR fpd30_obs_cnt <> matured_cnt;
