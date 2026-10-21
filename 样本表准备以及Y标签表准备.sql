@@ -21,7 +21,7 @@ FROM edw_ewa.dwb_asset_debt_dtl_snp
 --   edw_ewa.dwb_asset_debt_dtl_snp
 --   ods_ewa.aus_ewa_loan_biz_t_loan_application
 --   model.tmp_eliam_wagego_param_obs_date
--- 下游：dwd_loan_debt、dws_vintage_loan、dws_vintage_mob
+-- 下游：dwd_loan_debt、dws_vintage_loan
 -- 日期范围：最早申请日前 1 个月 ~ 观察日（obs_dt）。
 -- 目的：把多期快照聚合成一个借款一天一行，供标签窗口（init_due_date + 31 天）和 MOB 观察点取数。
 -- 加工逻辑：债务快照表（edw_ewa.dwb_asset_debt_dtl_snp）一行是借款（listing_id）× 期次（period_no）× 日期（dt），
@@ -502,16 +502,18 @@ LEFT JOIN limit_grant g
 ;
 
 -- ============================================================================
--- 第六步：借款级 Vintage 标签（dws_vintage_loan）
--- 粒度：借款申请（loan_no），只保留放款成功的借款
--- 上游：dwd_loan_debt + param_obs_date
--- 下游：dws_vintage_mob
--- 目的：每笔放款一行，输出统一窗口（init_due_date + 31 天）的逾期（is_current_overdue_at_label_obs）、
---       30+（is_30plus_at_label_obs）、5+（is_5plus_at_label_obs）、FPD（is_fpd3_ovd 等）
---       和新老客标签（user_type）；MOB 曲线（mob_no）不在本表输出。
+-- 第六步：借款级 Vintage 宽表（dws_vintage_loan）
+-- 粒度：借款申请（loan_no），一行一笔
+-- 上游：dwd_loan_debt + stg_debt_snp + param_obs_date
+-- 下游：暂无
+-- 目的：每笔放款一行，输出借款属性、统一窗口（init_due_date + 31 天）的标签，
+--       以及 MOB1~MOB12 观察点的 5+ / 30+ 标记。
 -- 加工逻辑：借款明细（dwd_loan_debt）已算好观察日标签，这里只保留放款成功（is_disburse_success = 1）的借款（loan_no）；
 --   按用户（user_id）放款时间（disburse_time）升序生成放款序号（application_rank），1 表示新客（New），其余为老客（Old）；
---   输出放款属性、全部标签列、标签观察日（label_obs_dt）、数据截止日（data_as_of = obs_dt）和在贷天数（days_on_book）。
+--   输出放款属性、全部标签列、标签观察日（label_obs_dt）、数据截止日（data_as_of = obs_dt）和在贷天数（days_on_book）；
+--   再把每笔放款按 MOB1~MOB12 展开，观察日（obs_dt）= LAST_DAY(ADD_MONTHS(disburse_time, mob_no))，
+--   按借款（listing_id）+ 观察日（stat_date）关联借款日快照（stg_debt_snp）取逾期天数，>= 5 记 5+，> 30 记 30+；
+--   观察日超过数据截止日或没有快照时标记为 NULL，最后按借款聚合回一行，输出 mob1_5plus ~ mob12_30plus。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dws_vintage_loan;
 CREATE TABLE model.tmp_eliam_wagego_dws_vintage_loan AS
@@ -546,133 +548,154 @@ WITH loan AS (
         ,ROW_NUMBER() OVER (PARTITION BY a.user_id ORDER BY a.disburse_time, a.loan_no) AS application_rank
     FROM model.tmp_eliam_wagego_dwd_loan_debt a
     WHERE a.is_disburse_success = 1
-)
-SELECT
-     l.loan_no
-    ,l.user_id
-    ,l.listing_id
-    ,l.disburse_time
-    ,l.disburse_month
-    ,l.real_amount
-    ,l.term_unit
-    ,l.init_due_date
-    ,l.label_obs_dt
-    ,l.is_label_matured
-    ,p.obs_dt                                                  AS data_as_of
-    ,DATEDIFF(p.obs_dt, l.disburse_date)                       AS days_on_book
-    ,l.dpd_at_label_obs
-    ,l.hist_dpd_at_label_obs
-    ,l.is_current_overdue_at_label_obs
-    ,l.current_ovd_amt_at_label_obs
-    ,l.is_5plus_at_label_obs
-    ,l.is_30plus_at_label_obs
-    ,l.is_ever_30plus_in_window
-    ,l.is_fpd3_obs
-    ,l.is_fpd3_ovd
-    ,l.is_fpd7_obs
-    ,l.is_fpd7_ovd
-    ,l.is_fpd14_obs
-    ,l.is_fpd14_ovd
-    ,l.is_fpd30_obs
-    ,l.is_fpd30_ovd
-    ,l.application_rank
-    ,CASE WHEN l.application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
-FROM loan l
-CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
-;
-
--- ============================================================================
--- 第七步：借款 × MOB 宽表（dws_vintage_mob）
--- 粒度：借款申请（loan_no），一行一笔
--- 上游：dws_vintage_loan + stg_debt_snp
--- 下游：暂无
--- 目的：每笔借款一行，输出 MOB1~MOB12 观察点的 5+ / 30+ 标记，供滚动 vintage 曲线使用。
--- 加工逻辑：借款级 Vintage 标签表（dws_vintage_loan）一行一笔放款，先按 MOB1~MOB12 展开；
---   每个 MOB 的观察日（obs_dt）= LAST_DAY(ADD_MONTHS(disburse_time, mob_no))，即放款后第 N 个月的月末；
---   按借款（listing_id）+ 观察日（stat_date）LEFT JOIN 借款日快照（stg_debt_snp），取当天逾期天数（current_overdue_days）；
---   观察日超过数据截止日（data_as_of）或没有快照时，该 MOB 标记为 NULL，不计入分母；
---   逾期天数 >= 5 记 5+，> 30 记 30+，最后按借款聚合为一行，输出 mob1_5plus ~ mob12_30plus。
--- ============================================================================
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_dws_vintage_mob;
-CREATE TABLE model.tmp_eliam_wagego_dws_vintage_mob AS
-WITH mob AS (
+),
+loan_wide AS (
+    SELECT
+         l.loan_no
+        ,l.user_id
+        ,l.listing_id
+        ,l.disburse_time
+        ,l.disburse_month
+        ,l.real_amount
+        ,l.term_unit
+        ,l.init_due_date
+        ,l.label_obs_dt
+        ,l.is_label_matured
+        ,p.obs_dt                                                  AS data_as_of
+        ,DATEDIFF(p.obs_dt, l.disburse_date)                       AS days_on_book
+        ,l.dpd_at_label_obs
+        ,l.hist_dpd_at_label_obs
+        ,l.is_current_overdue_at_label_obs
+        ,l.current_ovd_amt_at_label_obs
+        ,l.is_5plus_at_label_obs
+        ,l.is_30plus_at_label_obs
+        ,l.is_ever_30plus_in_window
+        ,l.is_fpd3_obs
+        ,l.is_fpd3_ovd
+        ,l.is_fpd7_obs
+        ,l.is_fpd7_ovd
+        ,l.is_fpd14_obs
+        ,l.is_fpd14_ovd
+        ,l.is_fpd30_obs
+        ,l.is_fpd30_ovd
+        ,l.application_rank
+        ,CASE WHEN l.application_rank = 1 THEN 'New' ELSE 'Old' END AS user_type
+        ,l.disburse_date
+    FROM loan l
+    CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
+),
+mob AS (
     SELECT EXPLODE(SEQUENCE(1, 12)) AS mob_no
 ),
-obs AS (
+mob_obs AS (
     SELECT
-         s.loan_no
-        ,s.user_id
-        ,s.listing_id
-        ,TO_DATE(s.disburse_time)                             AS disburse_date
-        ,s.disburse_month
-        ,s.real_amount
-        ,s.term_unit
-        ,s.user_type
-        ,s.application_rank
-        ,s.data_as_of
+         w.loan_no
+        ,w.listing_id
+        ,w.disburse_date
+        ,w.data_as_of
         ,m.mob_no
-        ,LAST_DAY(ADD_MONTHS(TO_DATE(s.disburse_time), m.mob_no)) AS obs_dt
-    FROM model.tmp_eliam_wagego_dws_vintage_loan s
+        ,LAST_DAY(ADD_MONTHS(w.disburse_date, m.mob_no))       AS obs_dt
+    FROM loan_wide w
     CROSS JOIN mob m
 ),
 mob_detail AS (
     SELECT
-         o.*
+         o.loan_no
+        ,o.mob_no
         ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
               THEN CASE WHEN d.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
         ,CASE WHEN o.obs_dt <= o.data_as_of AND d.current_overdue_days IS NOT NULL
               THEN CASE WHEN d.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus
-    FROM obs o
+    FROM mob_obs o
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d
       ON o.listing_id = d.listing_id
      AND o.obs_dt = d.stat_date
+),
+mob_wide AS (
+    SELECT
+         loan_no
+        ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS mob1_5plus
+        ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS mob2_5plus
+        ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS mob3_5plus
+        ,MAX(CASE WHEN mob_no = 4  THEN is_5plus END) AS mob4_5plus
+        ,MAX(CASE WHEN mob_no = 5  THEN is_5plus END) AS mob5_5plus
+        ,MAX(CASE WHEN mob_no = 6  THEN is_5plus END) AS mob6_5plus
+        ,MAX(CASE WHEN mob_no = 7  THEN is_5plus END) AS mob7_5plus
+        ,MAX(CASE WHEN mob_no = 8  THEN is_5plus END) AS mob8_5plus
+        ,MAX(CASE WHEN mob_no = 9  THEN is_5plus END) AS mob9_5plus
+        ,MAX(CASE WHEN mob_no = 10 THEN is_5plus END) AS mob10_5plus
+        ,MAX(CASE WHEN mob_no = 11 THEN is_5plus END) AS mob11_5plus
+        ,MAX(CASE WHEN mob_no = 12 THEN is_5plus END) AS mob12_5plus
+        ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS mob1_30plus
+        ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS mob2_30plus
+        ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS mob3_30plus
+        ,MAX(CASE WHEN mob_no = 4  THEN is_30plus END) AS mob4_30plus
+        ,MAX(CASE WHEN mob_no = 5  THEN is_30plus END) AS mob5_30plus
+        ,MAX(CASE WHEN mob_no = 6  THEN is_30plus END) AS mob6_30plus
+        ,MAX(CASE WHEN mob_no = 7  THEN is_30plus END) AS mob7_30plus
+        ,MAX(CASE WHEN mob_no = 8  THEN is_30plus END) AS mob8_30plus
+        ,MAX(CASE WHEN mob_no = 9  THEN is_30plus END) AS mob9_30plus
+        ,MAX(CASE WHEN mob_no = 10 THEN is_30plus END) AS mob10_30plus
+        ,MAX(CASE WHEN mob_no = 11 THEN is_30plus END) AS mob11_30plus
+        ,MAX(CASE WHEN mob_no = 12 THEN is_30plus END) AS mob12_30plus
+    FROM mob_detail
+    GROUP BY loan_no
 )
 SELECT
-     loan_no
-    ,user_id
-    ,listing_id
-    ,disburse_date
-    ,disburse_month
-    ,real_amount
-    ,term_unit
-    ,user_type
-    ,application_rank
-    ,data_as_of
-    ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS mob1_5plus
-    ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS mob2_5plus
-    ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS mob3_5plus
-    ,MAX(CASE WHEN mob_no = 4  THEN is_5plus END) AS mob4_5plus
-    ,MAX(CASE WHEN mob_no = 5  THEN is_5plus END) AS mob5_5plus
-    ,MAX(CASE WHEN mob_no = 6  THEN is_5plus END) AS mob6_5plus
-    ,MAX(CASE WHEN mob_no = 7  THEN is_5plus END) AS mob7_5plus
-    ,MAX(CASE WHEN mob_no = 8  THEN is_5plus END) AS mob8_5plus
-    ,MAX(CASE WHEN mob_no = 9  THEN is_5plus END) AS mob9_5plus
-    ,MAX(CASE WHEN mob_no = 10 THEN is_5plus END) AS mob10_5plus
-    ,MAX(CASE WHEN mob_no = 11 THEN is_5plus END) AS mob11_5plus
-    ,MAX(CASE WHEN mob_no = 12 THEN is_5plus END) AS mob12_5plus
-    ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS mob1_30plus
-    ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS mob2_30plus
-    ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS mob3_30plus
-    ,MAX(CASE WHEN mob_no = 4  THEN is_30plus END) AS mob4_30plus
-    ,MAX(CASE WHEN mob_no = 5  THEN is_30plus END) AS mob5_30plus
-    ,MAX(CASE WHEN mob_no = 6  THEN is_30plus END) AS mob6_30plus
-    ,MAX(CASE WHEN mob_no = 7  THEN is_30plus END) AS mob7_30plus
-    ,MAX(CASE WHEN mob_no = 8  THEN is_30plus END) AS mob8_30plus
-    ,MAX(CASE WHEN mob_no = 9  THEN is_30plus END) AS mob9_30plus
-    ,MAX(CASE WHEN mob_no = 10 THEN is_30plus END) AS mob10_30plus
-    ,MAX(CASE WHEN mob_no = 11 THEN is_30plus END) AS mob11_30plus
-    ,MAX(CASE WHEN mob_no = 12 THEN is_30plus END) AS mob12_30plus
-FROM mob_detail
-GROUP BY
-     loan_no
-    ,user_id
-    ,listing_id
-    ,disburse_date
-    ,disburse_month
-    ,real_amount
-    ,term_unit
-    ,user_type
-    ,application_rank
-    ,data_as_of
+     w.loan_no
+    ,w.user_id
+    ,w.listing_id
+    ,w.disburse_time
+    ,w.disburse_month
+    ,w.real_amount
+    ,w.term_unit
+    ,w.init_due_date
+    ,w.label_obs_dt
+    ,w.is_label_matured
+    ,w.data_as_of
+    ,w.days_on_book
+    ,w.dpd_at_label_obs
+    ,w.hist_dpd_at_label_obs
+    ,w.is_current_overdue_at_label_obs
+    ,w.current_ovd_amt_at_label_obs
+    ,w.is_5plus_at_label_obs
+    ,w.is_30plus_at_label_obs
+    ,w.is_ever_30plus_in_window
+    ,w.is_fpd3_obs
+    ,w.is_fpd3_ovd
+    ,w.is_fpd7_obs
+    ,w.is_fpd7_ovd
+    ,w.is_fpd14_obs
+    ,w.is_fpd14_ovd
+    ,w.is_fpd30_obs
+    ,w.is_fpd30_ovd
+    ,w.application_rank
+    ,w.user_type
+    ,m.mob1_5plus
+    ,m.mob2_5plus
+    ,m.mob3_5plus
+    ,m.mob4_5plus
+    ,m.mob5_5plus
+    ,m.mob6_5plus
+    ,m.mob7_5plus
+    ,m.mob8_5plus
+    ,m.mob9_5plus
+    ,m.mob10_5plus
+    ,m.mob11_5plus
+    ,m.mob12_5plus
+    ,m.mob1_30plus
+    ,m.mob2_30plus
+    ,m.mob3_30plus
+    ,m.mob4_30plus
+    ,m.mob5_30plus
+    ,m.mob6_30plus
+    ,m.mob7_30plus
+    ,m.mob8_30plus
+    ,m.mob9_30plus
+    ,m.mob10_30plus
+    ,m.mob11_30plus
+    ,m.mob12_30plus
+FROM loan_wide w
+LEFT JOIN mob_wide m
+  ON w.loan_no = m.loan_no
 ;
-

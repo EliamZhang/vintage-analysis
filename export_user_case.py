@@ -43,9 +43,8 @@ SHEETS = {
     "10": ("10_借款债务明细", "申请 + 债务合并，一行一笔借据"),
     "11": ("11_放款成功表", "仅放款成功的借据，含放款月与 New / Old"),
     "12": ("12_戳额表", "放款对应的额度戳额记录"),
-    "13": ("13_借款Vintage标签", "借据级 Vintage 标签：FPD / 30+ / 观察日"),
-    "14": ("14_借款MOB宽表", "借据 × MOB 观察点宽表：一笔借据一行，含 5+ / 30+ 标记"),
-    "15": ("15_放款样本表", "最终放款样本，一行一笔借据"),
+    "13": ("13_借款级Vintage宽表", "借据级 Vintage 宽表：标签 + MOB 5+ / 30+ 标记"),
+    "14": ("14_放款样本表", "最终放款样本，一行一笔借据"),
 }
 
 ILLEGAL_XML_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
@@ -164,7 +163,7 @@ def collect_tables(raw_dir, result_dir):
             if prefix in tables:
                 raise ValueError(f"文件名前缀重复：{path.name}")
             tables[prefix] = (path, kind)
-    missing = [f"{number:02d}" for number in range(1, 16) if f"{number:02d}" not in tables]
+    missing = [f"{number:02d}" for number in range(1, 15) if f"{number:02d}" not in tables]
     if missing:
         raise FileNotFoundError(f"缺少以下文件：{', '.join(missing)}")
     return [(prefix, *tables[prefix]) for prefix in sorted(tables)]

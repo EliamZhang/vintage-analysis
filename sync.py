@@ -2,7 +2,7 @@
 
 queries.sql 按段组织，每段以分号结尾，段首注释写明「N. 段名」。本脚本：
 1. 段 1–6 是底表，写入 原始数据/；
-2. 段 7–15 是《样本表准备以及Y标签表准备.sql》里的 9 张加工表，
+2. 段 7–14 是《样本表准备以及Y标签表准备.sql》里的 8 张加工表，
    因为库里没有 model.tmp_eliam_wagego_*，SQL 已把上游逻辑内联，直接把结果写入 查询结果/；
 3. 打包成 vintage_data.zip，压缩包根目录只有 原始数据/ 和 查询结果/ 两个文件夹；
 4. 运行日志、失败清单和 manifest 放在 同步日志/，不进入压缩包。
@@ -124,7 +124,7 @@ SEGMENT_SPECS = {
     },
     "13": {
         "kind": "result",
-        "file": "13_借款级Vintage标签_dws_vintage_loan",
+        "file": "13_借款级Vintage宽表_dws_vintage_loan",
         "required_columns": {
             "loan_no", "user_id", "listing_id", "disburse_time", "disburse_month",
             "real_amount", "term_unit", "init_due_date", "label_obs_dt",
@@ -133,27 +133,17 @@ SEGMENT_SPECS = {
             "current_ovd_amt_at_label_obs", "is_5plus_at_label_obs",
             "is_30plus_at_label_obs", "is_ever_30plus_in_window",
             "application_rank", "user_type",
-        } | FPD_FLAGS,
-        "unique_keys": ["loan_no"],
-        "obs_column": "data_as_of",
-    },
-    "14": {
-        "kind": "result",
-        "file": "14_借款MOB宽表_dws_vintage_mob",
-        "required_columns": {
-            "loan_no", "user_id", "listing_id", "disburse_date", "disburse_month",
-            "real_amount", "term_unit", "user_type", "application_rank",
-            "data_as_of",
-        } | {f"mob{n}_{suffix}" for n in range(1, 13) for suffix in ("5plus", "30plus")},
+        } | FPD_FLAGS
+          | {f"mob{n}_{suffix}" for n in range(1, 13) for suffix in ("5plus", "30plus")},
         "unique_keys": ["loan_no"],
         "obs_column": "data_as_of",
     },
 }
 
 # 放款样本表字段与借款 / 债务明细完全一致，直接复用同一套字段校验。
-SEGMENT_SPECS["15"] = {
+SEGMENT_SPECS["14"] = {
     "kind": "result",
-    "file": "15_放款样本表_dwd_loan_disburse_sample",
+    "file": "14_放款样本表_dwd_loan_disburse_sample",
     "required_columns": SEGMENT_SPECS["10"]["required_columns"],
     "unique_keys": ["loan_no"],
     "obs_column": "obs_dt",
