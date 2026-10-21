@@ -336,7 +336,6 @@ loan_apply AS (
         ,CASE WHEN a.apply_status = 'DISBURSE_SUCCESS' THEN a.apply_disburse_time END AS disburse_time
         ,a.apply_seq
         ,r.application_rank
-        ,CASE WHEN a.apply_seq = 1 THEN 1 ELSE 0 END              AS is_first_apply_in_window
         ,e.strategy_time
         ,e.retry_count
         ,sm.stamp_time
@@ -500,7 +499,6 @@ SELECT
     ,b.disburse_time
     ,b.apply_seq
     ,b.application_rank
-    ,b.is_first_apply_in_window
     ,b.strategy_time
     ,b.retry_count
     ,b.stamp_time
@@ -543,16 +541,12 @@ SELECT
           THEN CASE WHEN b.label_current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus_at_label_obs
     ,CASE WHEN b.is_label_matured = 1 AND b.label_hist_overdue_days IS NOT NULL
           THEN CASE WHEN b.label_hist_overdue_days > 30 THEN 1 ELSE 0 END END AS is_ever_30plus_in_window
-    ,CASE WHEN b.is_label_matured = 1 THEN 1 END AS is_fpd3_obs
     ,CASE WHEN b.is_label_matured = 1
           THEN CASE WHEN COALESCE(TO_DATE(b.repay_at_label_obs), b.label_obs_dt) > DATE_ADD(b.init_due_date, 3) THEN 1 ELSE 0 END END AS is_fpd3_ovd
-    ,CASE WHEN b.is_label_matured = 1 THEN 1 END AS is_fpd7_obs
     ,CASE WHEN b.is_label_matured = 1
           THEN CASE WHEN COALESCE(TO_DATE(b.repay_at_label_obs), b.label_obs_dt) > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS is_fpd7_ovd
-    ,CASE WHEN b.is_label_matured = 1 THEN 1 END AS is_fpd14_obs
     ,CASE WHEN b.is_label_matured = 1
           THEN CASE WHEN COALESCE(TO_DATE(b.repay_at_label_obs), b.label_obs_dt) > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END AS is_fpd14_ovd
-    ,CASE WHEN b.is_label_matured = 1 THEN 1 END AS is_fpd30_obs
     ,CASE WHEN b.is_label_matured = 1
           THEN CASE WHEN COALESCE(TO_DATE(b.repay_at_label_obs), b.label_obs_dt) > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS is_fpd30_ovd
     ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
@@ -561,7 +555,6 @@ SELECT
     ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN 1 ELSE 0 END END AS is_current_overdue
     ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS current_ovd_amt
     ,DATE_FORMAT(b.disburse_time, 'yyyy-MM')                 AS disburse_month
-    ,b.obs_dt                                                AS data_as_of
     ,DATEDIFF(b.obs_dt, TO_DATE(b.disburse_time))            AS days_on_book
     ,CASE WHEN b.application_rank = 1 THEN 'New' WHEN b.application_rank IS NOT NULL THEN 'Old' END AS user_type
     ,m.mob1_5plus

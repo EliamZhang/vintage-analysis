@@ -43,8 +43,8 @@ RESULT_DIR_NAME = "查询结果"
 
 BUSINESS_TZ = timezone(timedelta(hours=8))
 
-# FPD 标签列由 3/7/14/30 天四组组成，单独列出来避免注册表里重复抄写。
-FPD_FLAGS = {f"is_fpd{n}_{suffix}" for n in (3, 7, 14, 30) for suffix in ("obs", "ovd")}
+# FPD 标签列由 3/7/14/30 天四组组成（观察成熟标记统一用 is_label_matured，不再重复输出）。
+FPD_FLAGS = {f"is_fpd{n}_ovd" for n in (3, 7, 14, 30)}
 
 # 段号 → 输出文件与校验规则。段号必须和 queries.sql 段首注释一一对应。
 # unique_keys / required_columns / obs_column 只对结果段生效，用来防止 SQL 写错后仍产出“成功”的空表或放大表。
@@ -79,7 +79,7 @@ SEGMENT_SPECS = {
             "loan_no", "user_id", "application_id", "app_id", "listing_id",
             "apply_status", "apply_status_desc", "is_disburse_success", "is_reject",
             "is_expired", "is_disburse_failed", "apply_time", "apply_date", "apply_month",
-            "disburse_time", "apply_seq", "application_rank", "is_first_apply_in_window",
+            "disburse_time", "apply_seq", "application_rank",
             "strategy_time", "retry_count", "stamp_time",
             "real_amount", "apply_amount", "interest", "service_fee", "term_quantity",
             "term_unit", "total_period", "is_deal", "withdraw_time", "list_due_date",
@@ -94,7 +94,7 @@ SEGMENT_SPECS = {
             "is_ever_30plus_in_window",
             "loan_term_contract_days", "loan_term_actual_days", "is_early_settlement",
             "is_current_overdue", "current_ovd_amt",
-            "disburse_month", "data_as_of", "days_on_book", "user_type",
+            "disburse_month", "days_on_book", "user_type",
         } | FPD_FLAGS
           | {f"mob{n}_{suffix}" for n in range(1, 13) for suffix in ("5plus", "30plus")},
         "unique_keys": ["loan_no"],
