@@ -1,5 +1,6 @@
 *.csv
 *.parquet
+vintage_user_case_*.xlsx
 results/
 results.zip
 同步日志/
