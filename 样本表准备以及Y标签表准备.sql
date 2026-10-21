@@ -5,6 +5,7 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 -- 粒度：1 行；主键：观察日（obs_dt）
 -- 上游：edw_ewa.dwb_asset_debt_dtl_snp
 -- 目的：取最新快照日（obs_dt），统一本次分析的观察时点，供下游快照关联。
+-- 加工逻辑：从债务快照表（edw_ewa.dwb_asset_debt_dtl_snp）取 MAX(TO_DATE(dt))，输出一行观察日（obs_dt）。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_param_obs_date;
 CREATE TABLE model.tmp_eliam_wagego_param_obs_date AS
@@ -16,17 +17,17 @@ FROM edw_ewa.dwb_asset_debt_dtl_snp
 -- 第一步：债务快照子集（stg_debt_snp）
 -- 粒度：借款（listing_id）× 快照日期（stat_date），一个借款一天一行
 -- 上游：
---   edw_ewa.dwb_asset_debt_dtl_snp：债务快照表，借款 × 期次（period_no）× 日期（dt）一行，
---       含应还日（init_due_date）、状态（debt_status）、还款时间（user_actual_repay_time）、
---       逾期天数（current_overdue_days、hist_overdue_days）和金额（principal、repay_amount、owing_amount）。
---   ods_ewa.aus_ewa_loan_biz_t_loan_application：借款申请表，只用于取最早申请时间（inserttime）。
---   model.tmp_eliam_wagego_param_obs_date：观察日参数表（obs_dt），限定最新快照日。
+--   edw_ewa.dwb_asset_debt_dtl_snp
+--   ods_ewa.aus_ewa_loan_biz_t_loan_application
+--   model.tmp_eliam_wagego_param_obs_date
 -- 下游：dwd_loan_debt、dws_vintage_loan、dws_vintage_mob
 -- 日期范围：最早申请日前 1 个月 ~ 观察日（obs_dt）。
 -- 目的：把多期快照聚合成一个借款一天一行，供标签窗口（init_due_date + 31 天）和 MOB 观察点取数。
--- 说明：期数不固定，按借款 × 日期直接聚合。
---       first_repay_time 是首期（period_no = 1）还款时间，FPD 用；
---       user_actual_repay_time 是借款结清时间，全部期次结清（debt_status = 2）时才有值。
+-- 加工逻辑：从债务快照表（edw_ewa.dwb_asset_debt_dtl_snp）取借款（listing_id）、快照日期（dt）、应还日（init_due_date）、
+--   债务状态（debt_status）、还款时间（user_actual_repay_time）、逾期天数（current_overdue_days、hist_overdue_days）和金额（principal、repay_amount、owing_amount）；
+--   按借款（listing_id）× 快照日期（stat_date）聚合：应还日取 MIN、逾期天数取 MAX、金额取 SUM、债务状态取最差（4 > 1 > 2）；
+--   首期还款时间（first_repay_time）只取 period_no = 1，结清时间（user_actual_repay_time）只在全部期次结清时取值；
+--   日期下界取借款申请表（ods_ewa.aus_ewa_loan_biz_t_loan_application）最早申请时间（inserttime）前 1 个月。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_stg_debt_snp;
 CREATE TABLE model.tmp_eliam_wagego_stg_debt_snp AS
@@ -59,9 +60,9 @@ GROUP BY d.listing_id, TO_DATE(d.dt)
 -- 粒度：借款申请（loan_no），一行一个申请（含成功/拒绝/过期/放款失败）
 -- 上游：ods_ewa.aus_ewa_loan_biz_t_loan_application + ods_ewa.aus_ewa_risk_risk_event_task
 -- 下游：dwd_loan_debt
--- 说明：申请表直接内联；事件表按流水号（flow_id）去重，避免放大行数。
---       apply_seq / is_first_apply_in_window 只是样本属性，本链路不用；
---       新老客在 dws_vintage_loan 中按首笔放款（application_rank = 1）判定。
+-- 加工逻辑：以借款申请表（ods_ewa.aus_ewa_loan_biz_t_loan_application，isactive = 1）为主表；
+--   从风控事件表（ods_ewa.aus_ewa_risk_risk_event_task）筛 biz_id = 20050、flow_id 以 LN 开头的记录，并按 flow_id 取最新一条；
+--   两表 LEFT JOIN 后，按用户申请时间生成申请序号（apply_seq），补状态中文、成功/拒绝/过期/失败标记和放款时间。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_apply;
 CREATE TABLE model.tmp_eliam_wagego_dwd_loan_apply AS
@@ -138,9 +139,9 @@ LEFT JOIN event e
 -- 目的：给每笔借款申请补上放款金额（real_amount）、期限（term_quantity / term_unit）、
 --       债务状态（debt_status）、还款时间（user_actual_repay_time）、逾期天数（current_overdue_days）
 --       和统一窗口标签。
--- 说明：label_obs_dt = 首次应还日（init_due_date）+ 31 天；未到观察点的借款
---       is_label_matured = 0，标签为 NULL。FPD 以首期还款时间（first_repay_time）判定，
---       FPD3/7/15/30 共用同一观察点，只表示逾期严重度分层。
+-- 加工逻辑：以借款申请（dwd_loan_apply）为主表，LEFT JOIN 放款信息表（edw_ewa.dwb_asset_cmn_listing，listing_id）补放款金额和期限；
+--   再分别关联观察日（obs_dt）和标签观察日（label_obs_dt = init_due_date + 31）的债务快照（stg_debt_snp）；
+--   最后按快照计算逾期、FPD、30+、5+ 和结清天数，未到观察点的标签为 NULL。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_debt;
 CREATE TABLE model.tmp_eliam_wagego_dwd_loan_debt AS
@@ -319,6 +320,7 @@ FROM base b
 -- 上游：dwd_loan_debt
 -- 下游：下游分析 / 建模取数
 -- 目的：作为通用放款样本表。
+-- 加工逻辑：从借款明细（dwd_loan_debt）筛放款成功（is_disburse_success = 1），按用户放款时间生成放款序号（application_rank）。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_disbursed_loan;
 CREATE TABLE model.tmp_eliam_wagego_dwd_disbursed_loan AS
@@ -354,14 +356,14 @@ FROM disbursed
 -- ============================================================================
 -- 第五步：戳额表（dwd_loan_stamp）
 -- 粒度：借款申请（loan_no），一行一笔放款
--- 上游：dwd_disbursed_loan + aus_listing_tb_loan_limit_apply
---       + aus_ewa_risk_risk_event_task（兜底）+ aus_listing_tb_loan_user_limit_log（额度）
+-- 上游：dwd_disbursed_loan + ods_ewa.aus_listing_tb_loan_limit_apply
+--       + ods_ewa.aus_ewa_risk_risk_event_task + ods_ewa.aus_listing_tb_loan_user_limit_log
 -- 下游：下游分析 / 建模取数
 -- 目的：为每笔放款（loan_no）匹配同一用户（user_id）在放款时间（disburse_time）前
 --       最近一次戳额时点（stamp_time），并带出当时额度。
--- 说明：主源为额度申请表（biz_type = 400 戳额）；没有记录时用风控事件表（biz_id = 10000）兜底。
---       额度取对应流水（relate_id）的 event_type = 1 且 limit_category = 1 记录；
---       每个 loan_no 只保留最近一条，避免重复关联。
+-- 加工逻辑：从放款成功表（dwd_disbursed_loan）出发，为每笔放款按 user_id 取放款时间（disburse_time）之前最近一条戳额（stamp_time）；
+--   戳额优先取额度申请表（ods_ewa.aus_listing_tb_loan_limit_apply，biz_type = 400），没有时用风控事件表（ods_ewa.aus_ewa_risk_risk_event_task，biz_id = 10000）兜底；
+--   再按戳额流水（flow_no = relate_id）关联额度日志表（ods_ewa.aus_listing_tb_loan_user_limit_log，event_type = 1、limit_category = 1）带出额度。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_stamp;
 CREATE TABLE model.tmp_eliam_wagego_dwd_loan_stamp AS
@@ -473,7 +475,8 @@ LEFT JOIN limit_grant g
 -- 目的：每笔放款一行，输出统一窗口（init_due_date + 31 天）的逾期（is_current_overdue_at_label_obs）、
 --       30+（is_30plus_at_label_obs）、5+（is_5plus_at_label_obs）、FPD（is_fpd3_ovd 等）
 --       和新老客标签（user_type）；MOB 曲线（mob_no）不在本表输出。
--- 说明：未到观察点的借款 is_label_matured = 0，标签为 NULL。
+-- 加工逻辑：从借款明细（dwd_loan_debt）筛放款成功（is_disburse_success = 1）；
+--   按用户放款时间生成放款序号（application_rank）并打新老客（user_type），只输出标签和放款属性。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dws_vintage_loan;
 CREATE TABLE model.tmp_eliam_wagego_dws_vintage_loan AS
@@ -549,7 +552,8 @@ CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
 -- 上游：dws_vintage_loan + stg_debt_snp
 -- 下游：ads_vintage_curve
 -- 目的：把每笔借款展开为 MOB1~MOB12 观察点，供滚动 vintage 曲线使用。
--- 说明：仅用于曲线描述，不进入建模宽表；未到期 MOB 保留（is_matured = 0）。
+-- 加工逻辑：从借款级 Vintage 标签表（dws_vintage_loan）取每笔放款，展开为 MOB1~MOB12，观察日（obs_dt）= LAST_DAY(ADD_MONTHS(disburse_time, mob_no))；
+--   再按借款（listing_id）+ 观察日关联债务快照（stg_debt_snp），取对应天的逾期天数。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dws_vintage_mob;
 CREATE TABLE model.tmp_eliam_wagego_dws_vintage_mob AS
@@ -605,8 +609,8 @@ LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d
 -- 下游：报表
 -- 目的：按放款月汇总放款量，以及统一窗口（init_due_date + 31 天）的逾期（cur_ovd_cnt）、
 --       30+（cur_30plus_cnt）和 FPD（fpd3_ovd_cnt 等），笔数与金额双口径。
--- 说明：matured_cnt 是已到标签观察点（is_label_matured = 1）的借款数，作为 FPD 的分母；
---       obs_cnt 是其中能取到 init_due_date + 31 快照的借款数，作为 current/ever 标签的分母。
+-- 加工逻辑：从借款级 Vintage 标签表（dws_vintage_loan）按放款月（disburse_month）分组；
+--   汇总放款、逾期、30+ 和 FPD3/7/15/30 的笔数与金额，并计算占比。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_ads_vintage_month;
 CREATE TABLE model.tmp_eliam_wagego_ads_vintage_month AS
@@ -663,6 +667,8 @@ GROUP BY disburse_month
 -- 上游：dws_vintage_mob
 -- 下游：报表 / 曲线
 -- 目的：按放款月和新老客汇总每个 MOB 的逾期率，笔数与金额双口径。
+-- 加工逻辑：从借款 × MOB 长表（dws_vintage_mob）按放款月（disburse_month）× 用户类型（user_type）× MOB（mob_no）分组，
+--   汇总观测数、5+、30+ 的笔数与金额，并计算占比。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_ads_vintage_curve;
 CREATE TABLE model.tmp_eliam_wagego_ads_vintage_curve AS
