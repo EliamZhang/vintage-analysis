@@ -60,7 +60,7 @@ GROUP BY d.listing_id, TO_DATE(d.dt)
 -- 第二步：借款申请明细（dwd_loan_apply）
 -- 粒度：借款申请（loan_no），一行一个申请（含成功/拒绝/过期/放款失败）
 -- 上游：ods_ewa.aus_ewa_loan_biz_t_loan_application + ods_ewa.aus_ewa_risk_risk_event_task
--- 下游：dwd_loan_debt
+-- 下游：dwd_loan_debt、dwd_loan_stamp
 -- 加工逻辑：借款申请表（ods_ewa.aus_ewa_loan_biz_t_loan_application）是用户提交的借款申请，一行一个申请（loan_no）；
 --   风控事件表（ods_ewa.aus_ewa_risk_risk_event_task）记录风控流程流转，这里只取 biz_id = 20050、flow_id 以 LN 开头的事件，
 --   并按 flow_id 取最新一条（updatetime 优先、inserttime 兜底），避免一次流程多条事件把申请行数放大；
@@ -387,16 +387,16 @@ FROM disbursed
 
 -- ============================================================================
 -- 第五步：戳额表（dwd_loan_stamp）
--- 粒度：借款申请（loan_no），一行一笔放款
--- 上游：dwd_disbursed_loan + ods_ewa.aus_listing_tb_loan_limit_apply
+-- 粒度：借款申请（loan_no），一行一个申请
+-- 上游：dwd_loan_apply + ods_ewa.aus_listing_tb_loan_limit_apply
 --       + ods_ewa.aus_ewa_risk_risk_event_task + ods_ewa.aus_listing_tb_loan_user_limit_log
 -- 下游：下游分析 / 建模取数
--- 目的：为每笔放款（loan_no）匹配同一用户（user_id）在放款时间（disburse_time）前
---       最近一次戳额时点（stamp_time），并带出当时额度。
--- 加工逻辑：放款成功表（dwd_disbursed_loan）提供每笔放款（loan_no）的用户（user_id）和放款时间（disburse_time）；
+-- 目的：为每个借款申请（loan_no）匹配同一用户（user_id）在申请时间（apply_time）前
+--       最近一次戳额时点（stamp_time），并带出当时额度；不要求放款成功。
+-- 加工逻辑：借款申请明细（dwd_loan_apply）提供每个申请（loan_no）的用户（user_id）和申请时间（apply_time）；
 --   额度申请表（ods_ewa.aus_listing_tb_loan_limit_apply）记录用户主动戳额，biz_type = 400 为戳额动作；
 --   风控事件表（ods_ewa.aus_ewa_risk_risk_event_task）中 biz_id = 10000 的记录是历史戳额，仅在额度申请表没有匹配记录时兜底；
---   每笔放款按 user_id 取放款时间之前最近一条戳额（stamp_time），得到戳额来源（stamp_source）和戳额流水（flow_no）；
+--   每个申请按 user_id 取申请时间之前最近一条戳额（stamp_time），得到戳额来源（stamp_source）和戳额流水（flow_no）；
 --   再用 flow_no = relate_id 关联额度日志表（ods_ewa.aus_listing_tb_loan_user_limit_log），取 event_type = 1、limit_category = 1 的记录带出戳额时点额度。
 -- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_stamp;
@@ -425,43 +425,43 @@ event_stamp AS (
 ),
 primary_match AS (
     SELECT
-         d.loan_no
-        ,d.user_id
-        ,d.disburse_time
+         a.loan_no
+        ,a.user_id
+        ,a.apply_time
         ,s.stamp_time
         ,s.limit_apply_no
         ,s.flow_no
         ,'limit_apply'                                        AS stamp_source
-        ,ROW_NUMBER() OVER (PARTITION BY d.loan_no ORDER BY s.stamp_time DESC, s.stamp_id DESC) AS rn
-    FROM model.tmp_eliam_wagego_dwd_disbursed_loan d
+        ,ROW_NUMBER() OVER (PARTITION BY a.loan_no ORDER BY s.stamp_time DESC, s.stamp_id DESC) AS rn
+    FROM model.tmp_eliam_wagego_dwd_loan_apply a
     JOIN apply_stamp s
-      ON d.user_id = s.user_id
-     AND s.stamp_time <= d.disburse_time
+      ON a.user_id = s.user_id
+     AND s.stamp_time <= a.apply_time
 ),
 fallback_match AS (
     SELECT
-         d.loan_no
-        ,d.user_id
-        ,d.disburse_time
+         a.loan_no
+        ,a.user_id
+        ,a.apply_time
         ,s.stamp_time
         ,s.limit_apply_no
         ,s.flow_no
         ,'risk_event'                                         AS stamp_source
-        ,ROW_NUMBER() OVER (PARTITION BY d.loan_no ORDER BY s.stamp_time DESC, s.stamp_id DESC) AS rn
-    FROM model.tmp_eliam_wagego_dwd_disbursed_loan d
+        ,ROW_NUMBER() OVER (PARTITION BY a.loan_no ORDER BY s.stamp_time DESC, s.stamp_id DESC) AS rn
+    FROM model.tmp_eliam_wagego_dwd_loan_apply a
     LEFT JOIN (SELECT DISTINCT loan_no FROM primary_match) p
-      ON d.loan_no = p.loan_no
+      ON a.loan_no = p.loan_no
     JOIN event_stamp s
-      ON d.user_id = s.user_id
-     AND s.stamp_time <= d.disburse_time
+      ON a.user_id = s.user_id
+     AND s.stamp_time <= a.apply_time
     WHERE p.loan_no IS NULL
 ),
 matched AS (
-    SELECT loan_no, user_id, disburse_time, stamp_time, limit_apply_no, flow_no, stamp_source
+    SELECT loan_no, user_id, apply_time, stamp_time, limit_apply_no, flow_no, stamp_source
     FROM primary_match
     WHERE rn = 1
     UNION ALL
-    SELECT loan_no, user_id, disburse_time, stamp_time, limit_apply_no, flow_no, stamp_source
+    SELECT loan_no, user_id, apply_time, stamp_time, limit_apply_no, flow_no, stamp_source
     FROM fallback_match
     WHERE rn = 1
 ),
@@ -480,11 +480,11 @@ limit_grant AS (
       AND CAST(l.limit_category AS INT) = 1
 )
 SELECT
-     d.loan_no
-    ,d.user_id
-    ,d.disburse_time
+     a.loan_no
+    ,a.user_id
+    ,a.apply_time
     ,m.stamp_time
-    ,DATEDIFF(TO_DATE(d.disburse_time), TO_DATE(m.stamp_time)) AS stamp_to_disburse_days
+    ,DATEDIFF(TO_DATE(a.apply_time), TO_DATE(m.stamp_time))    AS stamp_to_apply_days
     ,m.stamp_source
     ,m.limit_apply_no
     ,m.flow_no                                               AS stamp_flow_no
@@ -493,9 +493,9 @@ SELECT
     ,g.limit_available_after
     ,g.limit_occupied_after
     ,g.limit_expire_time
-FROM model.tmp_eliam_wagego_dwd_disbursed_loan d
+FROM model.tmp_eliam_wagego_dwd_loan_apply a
 LEFT JOIN matched m
-  ON d.loan_no = m.loan_no
+  ON a.loan_no = m.loan_no
 LEFT JOIN limit_grant g
   ON m.flow_no = g.relate_id
  AND g.rn = 1

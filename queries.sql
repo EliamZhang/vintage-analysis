@@ -693,47 +693,19 @@ FROM disbursed
 ===============================================================================
 12. 戳额表（查询结果）
 对应加工表：model.tmp_eliam_wagego_dwd_loan_stamp
-粒度：借款申请（loan_no），一行一笔放款
+粒度：借款申请（loan_no），一行一个申请
 上游：
-  dwd_disbursed_loan
+  dwd_loan_apply
   ods_ewa.aus_listing_tb_loan_limit_apply
   ods_ewa.aus_ewa_risk_risk_event_task
   ods_ewa.aus_listing_tb_loan_user_limit_log
 加工逻辑：额度申请表中 biz_type = 400 为主动戳额；风控事件表中 biz_id = 10000 为历史戳额，
-  仅在额度申请表没有匹配记录时兜底；每笔放款按 user_id 取放款时间之前最近一条戳额，
+  仅在额度申请表没有匹配记录时兜底；每个申请按 user_id 取申请时间之前最近一条戳额，
   得到戳额来源（stamp_source）和戳额流水（flow_no）；
   再用 flow_no = relate_id 关联额度日志表，取 event_type = 1、limit_category = 1 的记录带出额度。
 ===============================================================================
 */
-WITH param_obs_date AS (
-    SELECT MAX(TO_DATE(dt)) AS obs_dt
-    FROM edw_ewa.dwb_asset_debt_dtl_snp
-),
-stg_debt_snp AS (
-    SELECT
-         d.listing_id
-        ,MAX(d.user_id)                                       AS user_id
-        ,TO_DATE(d.dt)                                        AS stat_date
-        ,MIN(CAST(d.init_due_date AS DATE))                   AS init_due_date
-        ,MAX(CASE WHEN CAST(d.period_no AS INT) = 1 THEN CAST(d.user_actual_repay_time AS TIMESTAMP) END) AS first_repay_time
-        ,CASE WHEN COUNT(*) = SUM(CASE WHEN CAST(d.debt_status AS INT) = 2 THEN 1 ELSE 0 END) THEN MAX(CAST(d.user_actual_repay_time AS TIMESTAMP)) END AS user_actual_repay_time
-        ,CASE MAX(CASE CAST(d.debt_status AS INT) WHEN 4 THEN 3 WHEN 1 THEN 2 WHEN 2 THEN 1 ELSE 0 END) WHEN 3 THEN 4 WHEN 2 THEN 1 WHEN 1 THEN 2 ELSE MAX(CAST(d.debt_status AS INT)) END AS debt_status
-        ,MAX(CAST(d.hist_overdue_days AS INT))                AS hist_overdue_days
-        ,MAX(CAST(d.current_overdue_days AS INT))             AS current_overdue_days
-        ,SUM(CAST(d.principal AS DOUBLE))                     AS principal
-        ,SUM(CAST(d.repay_amount AS DOUBLE))                  AS repay_amount
-        ,SUM(CAST(d.owing_amount AS DOUBLE))                  AS owing_amount
-    FROM edw_ewa.dwb_asset_debt_dtl_snp d
-    CROSS JOIN param_obs_date p
-    WHERE TO_DATE(d.dt) <= p.obs_dt
-      AND TO_DATE(d.dt) >= (
-          SELECT ADD_MONTHS(MIN(TO_DATE(a.inserttime)), -1)
-          FROM ods_ewa.aus_ewa_loan_biz_t_loan_application a
-          WHERE CAST(a.isactive AS INT) = 1
-      )
-    GROUP BY d.listing_id, TO_DATE(d.dt)
-),
-apply AS (
+WITH apply AS (
     SELECT
          a.loan_no
         ,a.user_id
@@ -744,92 +716,6 @@ apply AS (
         ,ROW_NUMBER() OVER (PARTITION BY a.user_id ORDER BY CAST(a.inserttime AS TIMESTAMP), a.loan_no) AS apply_seq
     FROM ods_ewa.aus_ewa_loan_biz_t_loan_application a
     WHERE CAST(a.isactive AS INT) = 1
-),
-event AS (
-    SELECT
-         t.flow_id                                            AS loan_no
-        ,CAST(t.application_id AS STRING)                     AS application_id
-        ,GET_JSON_OBJECT(t.params, '$.appId')                 AS app_id
-        ,CAST(t.inserttime AS TIMESTAMP)                      AS strategy_time
-        ,CAST(t.retry_count AS INT)                           AS retry_count
-    FROM (
-        SELECT
-             e.flow_id
-            ,e.application_id
-            ,e.params
-            ,e.inserttime
-            ,e.retry_count
-            ,ROW_NUMBER() OVER (PARTITION BY e.flow_id ORDER BY CAST(e.updatetime AS TIMESTAMP) DESC NULLS LAST, CAST(e.inserttime AS TIMESTAMP) DESC NULLS LAST) AS rn
-        FROM ods_ewa.aus_ewa_risk_risk_event_task e
-        WHERE CAST(e.is_active AS INT) = 1
-          AND CAST(e.biz_id AS STRING) = '20050'
-          AND e.flow_id LIKE 'LN%'
-    ) t
-    WHERE t.rn = 1
-),
-loan_apply AS (
-    SELECT
-         a.loan_no
-        ,a.user_id
-        ,e.application_id
-        ,e.app_id
-        ,a.listing_id
-        ,a.apply_status
-        ,CASE a.apply_status
-             WHEN 'DISBURSE_SUCCESS' THEN '放款成功'  WHEN 'DISBURSE'       THEN '放款中'
-             WHEN 'DISBURSE_FAILED'  THEN '放款失败'  WHEN 'AUDIT'          THEN '审核中'
-             WHEN 'AUDIT_APPROVED'   THEN '审核通过'  WHEN 'AUDIT_REJECTED' THEN '审核拒绝'
-             WHEN 'EXPIRED'          THEN '已过期'    WHEN 'INFO_CHANGED'   THEN '信息变更'
-             ELSE a.apply_status
-         END AS apply_status_desc
-        ,CASE WHEN a.apply_status = 'DISBURSE_SUCCESS' THEN 1 ELSE 0 END AS is_disburse_success
-        ,CASE WHEN a.apply_status = 'AUDIT_REJECTED'   THEN 1 ELSE 0 END AS is_reject
-        ,CASE WHEN a.apply_status = 'EXPIRED'          THEN 1 ELSE 0 END AS is_expired
-        ,CASE WHEN a.apply_status = 'DISBURSE_FAILED'  THEN 1 ELSE 0 END AS is_disburse_failed
-        ,a.apply_time
-        ,TO_DATE(a.apply_time)                                    AS apply_date
-        ,DATE_FORMAT(a.apply_time, 'yyyy-MM')                     AS apply_month
-        ,CASE WHEN a.apply_status = 'DISBURSE_SUCCESS' THEN a.apply_disburse_time END AS disburse_time
-        ,a.apply_seq
-        ,CASE WHEN a.apply_seq = 1 THEN 1 ELSE 0 END              AS is_first_apply_in_window
-        ,e.strategy_time
-        ,e.retry_count
-    FROM apply a
-    LEFT JOIN event e
-      ON a.loan_no = e.loan_no
-),
-latest AS (
-    SELECT
-         a.loan_no
-        ,a.user_id
-        ,a.listing_id
-        ,a.is_disburse_success
-        ,a.disburse_time
-        ,CAST(l.real_amount AS DOUBLE)                        AS real_amount
-        ,CAST(l.term_quantity AS INT)                         AS term_quantity
-        ,l.term_unit
-        ,s.init_due_date
-    FROM loan_apply a
-    CROSS JOIN param_obs_date p
-    LEFT JOIN edw_ewa.dwb_asset_cmn_listing l
-      ON a.listing_id = l.listing_id
-    LEFT JOIN stg_debt_snp s
-      ON a.listing_id = s.listing_id
-     AND s.stat_date = p.obs_dt
-),
-disbursed AS (
-    SELECT
-         loan_no
-        ,user_id
-        ,listing_id
-        ,disburse_time
-        ,real_amount
-        ,term_quantity
-        ,term_unit
-        ,init_due_date
-        ,ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY disburse_time, loan_no) AS application_rank
-    FROM latest
-    WHERE is_disburse_success = 1
 ),
 apply_stamp AS (
     SELECT
@@ -855,43 +741,43 @@ event_stamp AS (
 ),
 primary_match AS (
     SELECT
-         d.loan_no
-        ,d.user_id
-        ,d.disburse_time
+         a.loan_no
+        ,a.user_id
+        ,a.apply_time
         ,s.stamp_time
         ,s.limit_apply_no
         ,s.flow_no
         ,'limit_apply'                                        AS stamp_source
-        ,ROW_NUMBER() OVER (PARTITION BY d.loan_no ORDER BY s.stamp_time DESC, s.stamp_id DESC) AS rn
-    FROM disbursed d
+        ,ROW_NUMBER() OVER (PARTITION BY a.loan_no ORDER BY s.stamp_time DESC, s.stamp_id DESC) AS rn
+    FROM apply a
     JOIN apply_stamp s
-      ON d.user_id = s.user_id
-     AND s.stamp_time <= d.disburse_time
+      ON a.user_id = s.user_id
+     AND s.stamp_time <= a.apply_time
 ),
 fallback_match AS (
     SELECT
-         d.loan_no
-        ,d.user_id
-        ,d.disburse_time
+         a.loan_no
+        ,a.user_id
+        ,a.apply_time
         ,s.stamp_time
         ,s.limit_apply_no
         ,s.flow_no
         ,'risk_event'                                         AS stamp_source
-        ,ROW_NUMBER() OVER (PARTITION BY d.loan_no ORDER BY s.stamp_time DESC, s.stamp_id DESC) AS rn
-    FROM disbursed d
+        ,ROW_NUMBER() OVER (PARTITION BY a.loan_no ORDER BY s.stamp_time DESC, s.stamp_id DESC) AS rn
+    FROM apply a
     LEFT JOIN (SELECT DISTINCT loan_no FROM primary_match) p
-      ON d.loan_no = p.loan_no
+      ON a.loan_no = p.loan_no
     JOIN event_stamp s
-      ON d.user_id = s.user_id
-     AND s.stamp_time <= d.disburse_time
+      ON a.user_id = s.user_id
+     AND s.stamp_time <= a.apply_time
     WHERE p.loan_no IS NULL
 ),
 matched AS (
-    SELECT loan_no, user_id, disburse_time, stamp_time, limit_apply_no, flow_no, stamp_source
+    SELECT loan_no, user_id, apply_time, stamp_time, limit_apply_no, flow_no, stamp_source
     FROM primary_match
     WHERE rn = 1
     UNION ALL
-    SELECT loan_no, user_id, disburse_time, stamp_time, limit_apply_no, flow_no, stamp_source
+    SELECT loan_no, user_id, apply_time, stamp_time, limit_apply_no, flow_no, stamp_source
     FROM fallback_match
     WHERE rn = 1
 ),
@@ -910,11 +796,11 @@ limit_grant AS (
       AND CAST(l.limit_category AS INT) = 1
 )
 SELECT
-     d.loan_no
-    ,d.user_id
-    ,d.disburse_time
+     a.loan_no
+    ,a.user_id
+    ,a.apply_time
     ,m.stamp_time
-    ,DATEDIFF(TO_DATE(d.disburse_time), TO_DATE(m.stamp_time)) AS stamp_to_disburse_days
+    ,DATEDIFF(TO_DATE(a.apply_time), TO_DATE(m.stamp_time))    AS stamp_to_apply_days
     ,m.stamp_source
     ,m.limit_apply_no
     ,m.flow_no                                               AS stamp_flow_no
@@ -923,9 +809,9 @@ SELECT
     ,g.limit_available_after
     ,g.limit_occupied_after
     ,g.limit_expire_time
-FROM disbursed d
+FROM apply a
 LEFT JOIN matched m
-  ON d.loan_no = m.loan_no
+  ON a.loan_no = m.loan_no
 LEFT JOIN limit_grant g
   ON m.flow_no = g.relate_id
  AND g.rn = 1

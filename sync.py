@@ -115,8 +115,8 @@ SEGMENT_SPECS = {
         "kind": "result",
         "file": "12_戳额表_dwd_loan_stamp",
         "required_columns": {
-            "loan_no", "user_id", "disburse_time", "stamp_time",
-            "stamp_to_disburse_days", "stamp_source", "limit_apply_no",
+            "loan_no", "user_id", "apply_time", "stamp_time",
+            "stamp_to_apply_days", "stamp_source", "limit_apply_no",
             "stamp_flow_no", "limit_total_before", "limit_total_after",
             "limit_available_after", "limit_occupied_after", "limit_expire_time",
         },
