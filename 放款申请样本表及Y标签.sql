@@ -1,36 +1,11 @@
 SET spark.sql.session.timeZone = Australia/Sydney;
 
--- ============================================================================
--- 第零步：观察日参数表（param_obs_date）
--- 粒度：1 行；主键：观察日（obs_dt）
--- 上游：edw_ewa.dwb_asset_debt_dtl_snp
--- 目的：取最新快照日（obs_dt），统一本次分析的观察时点，供下游快照关联。
--- 加工逻辑：债务快照表（edw_ewa.dwb_asset_debt_dtl_snp）是按天记录的借款债务快照，一行是某借款某期次在某天的状态；
---   这里取全表最新快照日 MAX(TO_DATE(dt)) 作为观察日（obs_dt），下游所有快照取数都以这一天为准。
--- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_param_obs_date;
 CREATE TABLE model.tmp_eliam_wagego_param_obs_date AS
 SELECT MAX(TO_DATE(dt)) AS obs_dt
 FROM edw_ewa.dwb_asset_debt_dtl_snp
 ;
 
--- ============================================================================
--- 第一步：债务快照子集（stg_debt_snp）
--- 粒度：借款（listing_id）× 快照日期（stat_date），一个借款一天一行
--- 上游：
---   edw_ewa.dwb_asset_debt_dtl_snp
---   ods_ewa.aus_ewa_loan_biz_t_loan_application
---   model.tmp_eliam_wagego_param_obs_date
--- 下游：dwd_loan_apply_label
--- 日期范围：最早申请日前 1 个月 ~ 观察日（obs_dt）。
--- 目的：把多期快照聚合成一个借款一天一行，供标签窗口（init_due_date + 31 天）和 MOB 观察点取数。
--- 加工逻辑：债务快照表（edw_ewa.dwb_asset_debt_dtl_snp）一行是借款（listing_id）× 期次（period_no）× 日期（dt），
---   这里按借款（listing_id）× 日期（dt）聚合，把多期压成一行：应还日（init_due_date）取 MIN、逾期天数（current_overdue_days、hist_overdue_days）取 MAX、
---   金额（principal、repay_amount、owing_amount、owing_principal）取 SUM、债务状态（debt_status）取最差（4 逾期中 > 1 未结清 > 2 已结清），并输出中文描述（debt_status_desc）；
---   owing_principal 是快照中的未还本金，供第二步 MOB 账龄跟踪字段 estimate_principal_remaining_mobN 使用；
---   还款时间拆两个：首期还款时间（first_repay_time）只取 period_no = 1，供 FPD 判定；结清时间（user_actual_repay_time）只在全部期次结清时取 MAX，否则为 NULL；
---   扫描范围取放款申请表（ods_ewa.aus_ewa_loan_biz_t_loan_application）最早申请时间（inserttime）前 1 个月，到观察日参数表（param_obs_date）的 obs_dt。
--- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_stg_debt_snp;
 CREATE TABLE model.tmp_eliam_wagego_stg_debt_snp AS
 WITH src AS (
@@ -92,81 +67,8 @@ SELECT
     ,owing_amount
     ,owing_principal
 FROM agg
-;                                                                 -- 日快照（stat_date），支持任意 init_due_date + 31 标签观察点
+;
 
--- ============================================================================
--- 第二步：放款申请明细与Y标签（dwd_loan_apply_label）
--- 粒度：放款申请（loan_no），一行一个申请（含成功/拒绝/过期/放款失败）
--- 上游：ods_ewa.aus_ewa_loan_biz_t_loan_application + ods_ewa.aus_ewa_risk_risk_event_task
---       + ods_ewa.aus_listing_tb_loan_limit_apply + edw_ewa.dwb_asset_cmn_listing
---       + stg_debt_snp + param_obs_date
--- 下游：下游分析 / 建模取数
--- 目的：一行一个申请，包含申请状态、放款属性、观察日债务状态、FPD3/7/14/30 标签、
---       MOB1~MOB3 的 5+ / 30+ 当期与 ever 标记，
---       以及 MOB0~MOB4 的剩余本金、当期逾期天数、历史最大逾期天数账龄跟踪字段；
---       后续分析按 is_disburse_success = 1 筛放款成功样本。
--- 阅读前先认识几个名词：
---   loan_no      一次放款申请的编号，本表一行一个申请，loan_no 唯一；
---   listing_id   借款（标的）编号，申请放款成功后生成，一笔借款对应一个 listing_id；
---   period_no    期次，一笔借款可能分多期还款，period_no = 1 表示首期；
---   init_due_date 首期应还日，用来判断首期是否逾期（FPD）；
---   obs_dt       观察日，取债务快照表的最新一天，"当前状态"都以这一天为准；
---   label_obs_dt 标签观察日 = 首期应还日 + 31 天，用来观察首期到期一个月后的表现；
---   MOB n        放款后的第 n 个表现观察点，取放款日往后推 n 个月所在月的月末（MOB0 即放款当月月末）；
---   principal    放款本金，仅放款成功样本有值，取借款信息表 real_amount（0/空时回退债务快照 principal）；
---   成熟         标签观察日已经真实发生（不早于放款日、且不晚于观察日），否则标签无法判断。
---
--- Y 标签命名规范：
---   统一以 y_ 开头；_cnt 为笔数口径（0/1 标记，SUM 得到逾期笔数、AVG 得到逾期率），
---   _amt 为金额口径，_dpd 为逾期天数；观察点用 obs（观察日）、label（标签日）、fpdN（首期）、mobN（第 N 月）。
---   ever 规则：带 ever 的标签表示"截至该观察点曾经达到"（用 hist_overdue_days 判断）；
---   不带 ever 的标签表示该观察点的当期状态（用 current_overdue_days 判断）。
---   FPD 标签（y_fpdN_ovd_cnt）是首期的一次性最终结果：已还按实际还款日、未还按标签日判断，
---   等价于"截至标签日首期是否曾逾期 N 天"，本身就是 ever 口径，不另设非 ever 版本。
---   账龄跟踪字段（principal、estimate_principal_remaining_mobN、dpd_days_mobN、dpd_days_ever_mobN）
---   是连续值而不是 0/1 标签，因此不强制加 y_ 前缀。
---
--- 加工逻辑（与下面 CTE 一一对应）：
---   1) apply：从放款申请表取有效申请（isactive = 1），一行一个申请，保留用户、借款、申请状态、
---      申请时间、放款时间，并按用户申请时间排序生成申请序号 apply_seq（该用户的第几次申请）。
---   2) event：从风控事件表取申请环节的策略事件（biz_id = 20050，flow_id 以 LN 开头）。
---      同一笔申请可能有多条事件，只保留更新时间最新的一条，补充策略时间、重试次数和 app_id。
---   3) stamp / stamp_matched：戳额（额度审批或刷新）有两个来源——额度申请表（biz_type = 400，优先）
---      和风控事件（biz_id = 10000）。对每笔申请，在同一用户、申请时间之前（含）的戳额记录中，
---      先按来源优先级、再按时间倒序取第一条，得到申请前的额度时点 stamp_time 和这次戳额的流水号 stamp_flow_id。
---   4) ranked：只看放款成功的申请，按放款时间排序生成 application_rank；
---      application_rank = 1 表示该用户第一笔成功放款（New），其余为复借（Old）。
---      注意 New/Old 以"首笔成功放款"为准，而不是以首次申请为准。
---   5) loan_apply：把申请、策略事件、放款序号、戳额时点按 loan_no 拼成申请主表，
---      把申请状态翻译成中文，并打上放款成功、拒绝、过期、放款失败等标记。
---   6) latest：按 listing_id 关联借款信息表（dwb_asset_cmn_listing），补充放款金额、利息、服务费、
---      期限、是否成交、合同应还日等放款属性，并计算放款本金 principal（取 real_amount，0/空时回退债务快照 principal）；
---      同时关联观察日 obs_dt 的债务快照，得到截至观察日的首期应还日、首期还款时间、结清时间、
---      债务状态、逾期天数和应还/已还金额。
---   7) base：再以"首期应还日 + 31 天"作为标签观察日，关联同一张债务快照，得到标签日的债务状态；
---      并判断样本是否成熟 is_label_matured（放款成功 + 已成交 + 有债务快照 + 标签观察日在放款日和观察日之间）；
---      同时算出标签日实际还款日 label_obs_day：优先取标签日快照里的首期还款时间，其次取观察日快照里
---      不晚于标签日的首期还款时间，两者都没有则取标签日本身（表示"截至标签日仍未还款"）。
---   8) mob_obs：对放款成功的借款，按放款日期展开 MOB0~MOB4 共 5 个观察点，观察点 = 放款月往后第 N 个月的月末；
---      只保留不晚于 obs_dt 的观察点，观察期不足的 MOB 不展开，最终对应字段为 NULL。
---   9) mob_detail / mob_wide：在 MOB1~MOB3 观察点关联当天债务快照，分别用 current_overdue_days 计算当期口径、
---      用 hist_overdue_days 计算历史累计（ever）口径的 5+（逾期天数 >= 5）和 30+（逾期天数 > 30），
---      按借款透视为 y_mobN_5plus_cnt / y_mobN_ever5plus_cnt、y_mobN_30plus_cnt / y_mobN_ever30plus_cnt。
---      观察点还没到或当天没有快照时，对应标记为 NULL（保持原标签口径不变）。
---  10) mob_track / mob_track_wide：在每个 MOB 观察点取"当天或之前最近一天"的债务快照（MOB0 月末当天及之前
---      没有快照时，取月末后 7 天内最早一天），透视出：
---      estimate_principal_remaining_mobN（未还本金 owing_principal，下限 0）、
---      dpd_days_mobN（当期逾期天数 current_overdue_days）、
---      dpd_days_ever_mobN（历史最大逾期天数 hist_overdue_days）；
---      观察点无快照或观察期不足时为 NULL，快照存在但字段为空时按 0 处理。
---  11) 最终 SELECT：标签日按当期（label_dpd）和历史累计（label_hist_dpd）分别输出是否逾期、5+ / 30+ 和逾期金额；
---      观察日按当期（current_overdue_days）和历史累计（hist_overdue_days）分别输出是否逾期和逾期金额。
---      再计算 FPD3/7/14/30：
---      用标签日实际还款日 label_obs_day 与首期应还日比较，晚于"首期应还日 + N 天"记为 FPD_N 逾期 = 1，否则 0；
---      到标签日仍未还款时用标签日参与比较，等价于"截至标签日仍未还清"；FPD 是首期的一次性最终结果，
---      只有 ever 口径，不另设当期版本。最后补充合同期限、实际期限、
---      是否早结清、观察日是否逾期、在贷天数和 New/Old 等派生指标。
--- ============================================================================
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_apply_label;
 CREATE TABLE model.tmp_eliam_wagego_dwd_loan_apply_label AS
 WITH apply AS (
@@ -191,7 +93,7 @@ ranked AS (
 event AS (
     SELECT
          t.flow_id                                            AS loan_no
-        ,CAST(t.application_id AS STRING)                     AS application_id  -- 仅展示，不参与关联
+        ,CAST(t.application_id AS STRING)                     AS application_id
         ,GET_JSON_OBJECT(t.params, '$.appId')                 AS app_id
         ,CAST(t.inserttime AS TIMESTAMP)                      AS strategy_time
         ,CAST(t.retry_count AS INT)                           AS retry_count
@@ -335,7 +237,7 @@ base AS (
         ,x.owing_amount                                       AS label_owing_amount
         ,CASE WHEN l.is_label_matured = 1 THEN x.current_overdue_days END AS label_dpd
         ,CASE WHEN l.is_label_matured = 1 THEN x.hist_overdue_days END    AS label_hist_dpd
-        -- 标签日实际还款日：优先标签日快照的首期还款时间，其次观察日快照中不晚于标签日的首期还款时间，最后取标签日
+
         ,COALESCE(
              TO_DATE(x.first_repay_time)
             ,CASE WHEN l.first_repay_time IS NOT NULL AND TO_DATE(l.first_repay_time) <= l.label_obs_dt
@@ -394,18 +296,7 @@ mob_wide AS (
     FROM mob_detail
     GROUP BY loan_no
 ),
--- MOB 账龄跟踪字段口径：
---   适用范围：仅放款成功（is_disburse_success = 1）的申请；其余申请三个字段为 NULL。
---   观察点：MOB N = 放款当月往后第 N 个月的月末（MOB0 = 放款当月月末），当前 N = 4；
---     扩展期数时同步修改 mob_obs 的 SEQUENCE、mob_track_wide 和最终 SELECT。
---   快照选取：每个观察点只取一条债务快照——优先观察点当天，当天没有则取观察点之前最近一天（as-of）；
---     MOB0 特例：若月末当天及之前都没有快照（常见于月末最后一天放款、快照从次日起），
---     取月末后 7 天内最早一天；仍没有则视为缺失。
---   观察期不足：观察点晚于 obs_dt 的 MOB 不展开，三个字段均为 NULL。
---   estimate_principal_remaining_mobN：快照中的未还本金 SUM(owing_principal)，下限 0；
---     直接用系统未还本金，不按还款比例做摊销估算。
---   dpd_days_mobN：快照中的当期逾期天数 current_overdue_days，空值按 0。
---   dpd_days_ever_mobN：快照中的历史最大逾期天数 hist_overdue_days，空值按 0。
+
 mob_track AS (
     SELECT
          t.loan_no
