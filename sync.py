@@ -1,7 +1,7 @@
-"""执行 queries.sql，把《放款申请样本表及Y标签.sql》依赖的原始表打包成 vintage_data.zip。
+"""执行 queries.sql，把《放款申请样本表及Y标签.sql》依赖的原始表和产出表打包成 vintage_data.zip。
 
-queries.sql 只包含该项目 SQL 实际引用的 5 张原始表，每段以分号结尾，
-段首注释写明「N. 段名」。本脚本：
+queries.sql 按「N. 段名」注释分段，段号从 1 连续排列。每段可以包含多条以分号结尾的
+语句：前面的语句是建表等准备工作，最后一条语句的结果写入 原始数据/ 下的 CSV。本脚本：
 1. 按段号顺序执行，每段结果写入 原始数据/ 下的 CSV；
 2. 打包成 vintage_data.zip，压缩包根目录只有 原始数据/ 文件夹；
 3. 运行日志、失败清单和 manifest 放在 同步日志/，不进入压缩包。
@@ -47,9 +47,12 @@ SEGMENT_SPECS = {
     "3": {"file": "03_dwb_asset_debt_dtl_snp"},
     "4": {"file": "04_aus_ewa_risk_risk_event_task"},
     "5": {"file": "05_aus_listing_tb_loan_limit_apply"},
+    "6": {"file": "06_tmp_eliam_wagego_param_obs_date"},
+    "7": {"file": "07_tmp_eliam_wagego_stg_debt_snp"},
+    "8": {"file": "08_tmp_eliam_wagego_dwd_loan_apply_label"},
 }
 
-_TITLE_RE = re.compile(r"^\s*(\d+)\.\s+(.+?)\s*$", flags=re.M)
+_HEADER_RE = re.compile(r"/\*\s*\r?\n\s*=+\s*\r?\n\s*(\d+)\.\s+([^\r\n]+)")
 _BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", flags=re.S)
 _LINE_COMMENT_RE = re.compile(r"--[^\n]*")
 
@@ -71,32 +74,42 @@ def file_digest(path, chunk_size=1024 * 1024):
 
 
 def split_statements(sql_text):
-    """按分号切段，从每段最后一个注释块里读「N. 段名」。
+    """按段首「N. 段名」注释分块，每块再按分号拆成多条语句。
 
-    一段一条语句。切分前先去掉注释再判断是否为空，避免只有注释的尾块被当成查询。
+    只有以「/* + 等号行 + 标题行」开头的注释块才算段首。段内最后一条语句视为查询，
+    其余语句作为建表等准备语句依次执行。
     """
+    headers = []
+    for block in _BLOCK_COMMENT_RE.finditer(sql_text):
+        match = _HEADER_RE.match(block.group(0))
+        if match:
+            headers.append((block.start(), block.end(), match.group(1), match.group(2).strip()))
+    if not headers:
+        raise ValueError("queries.sql 中没有找到「N. 段名」注释")
+
     statements = []
     seen = set()
-    for chunk in sql_text.split(";"):
-        blocks = _BLOCK_COMMENT_RE.findall(chunk)
-        number = title = None
-        for block in reversed(blocks):
-            match = _TITLE_RE.search(block)
-            if match:
-                number, title = match.group(1), match.group(2).strip()
-                break
+    for index, (_, header_end, number, title) in enumerate(headers):
+        end = headers[index + 1][0] if index + 1 < len(headers) else len(sql_text)
+        chunk = sql_text[header_end:end]
 
         body = _BLOCK_COMMENT_RE.sub(" ", chunk)
-        body = _LINE_COMMENT_RE.sub(" ", body).strip()
-        if not body:
-            continue
+        body = _LINE_COMMENT_RE.sub(" ", body)
+        parts = [part.strip() for part in body.split(";") if part.strip()]
 
-        if number is None:
-            raise ValueError(f"第 {len(statements) + 1} 条语句缺少「N. 段名」注释")
+        if not parts:
+            raise ValueError(f"段 {number} 没有可执行语句")
         if number in seen:
             raise ValueError(f"段号重复：{number}")
         seen.add(number)
-        statements.append({"number": number, "title": title or "", "sql": body})
+        statements.append(
+            {
+                "number": number,
+                "title": title,
+                "setup": parts[:-1],
+                "sql": parts[-1],
+            }
+        )
     return statements
 
 
@@ -145,7 +158,10 @@ def run_sync(statements, query_fn):
     manifest = load_manifest()
     manifest["schema_version"] = 1
     entries = manifest.setdefault("segments", {})
-    current_digests = {item["number"]: query_digest(item["sql"]) for item in statements}
+    current_digests = {
+        item["number"]: query_digest(";\n".join([*item["setup"], item["sql"]]))
+        for item in statements
+    }
     success_tables = []
     failed_tables = []
 
@@ -171,6 +187,11 @@ def run_sync(statements, query_fn):
             path.unlink()
 
         try:
+            if statement["setup"]:
+                print(f"准备 | 先执行 {len(statement['setup'])} 条建表/准备语句")
+            for setup_sql in statement["setup"]:
+                query_fn(setup_sql)
+
             df = query_fn(statement["sql"])
 
             if not isinstance(df, pd.DataFrame):
@@ -272,7 +293,8 @@ def main(argv=None):
     if args.dry_run:
         for statement in statements:
             spec = SEGMENT_SPECS[statement["number"]]
-            print(f"- {statement['number']}. {statement['title']} → {relative_path(spec)}")
+            setup_note = f"（前置 {len(statement['setup'])} 条）" if statement["setup"] else ""
+            print(f"- {statement['number']}. {statement['title']}{setup_note} → {relative_path(spec)}")
         return 0
 
     try:
