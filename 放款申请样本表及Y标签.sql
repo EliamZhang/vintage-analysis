@@ -70,10 +70,6 @@ FROM agg
 ;
 
 
-
-
-
-
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_apply_label;
 CREATE TABLE model.tmp_eliam_wagego_dwd_loan_apply_label AS
 WITH apply AS (
