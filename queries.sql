@@ -22,6 +22,7 @@ WageGo Vintage 数据同步 SQL
 - 1~3 段需按顺序执行：第 2 段使用第 1 段建的观察日参数表，第 3 段使用第 2 段的宽表。
 - 4~9 段只读取第 3 段建的主表，样本之间互不依赖；样本时间窗为 2026-08-01 至 2026-10-23，
   与表名后缀 _20260801_20261023 一致。戳额样本按戳额时间筛选，发标类样本按申请时间筛选。
+- 4~9 段每个样本表末尾附带笔数口径的 y 标签（*_cnt），取自主表同名字段。
 - 源脚本开头的 SET spark.sql.session.timeZone = Australia/Sydney 由执行环境负责；
   请保持同一时区执行，避免 TO_DATE / DATE_FORMAT 在跨时区会话下产生日期偏移。
 ===============================================================================
@@ -701,6 +702,39 @@ SELECT
     ,last_limit_time                                      AS sample_datetime
     ,last_limit_flow_id                                   AS flow_id
     ,first_disburse_time
+    ,y_due_ovd_cnt
+    ,y_due_5plus_cnt
+    ,y_due_30plus_cnt
+    ,y_due_ever_ovd_cnt
+    ,y_due_ever_5plus_cnt
+    ,y_due_ever_30plus_cnt
+    ,y_fpd3_obs_cnt
+    ,y_fpd3_ovd_cnt
+    ,y_fpd7_obs_cnt
+    ,y_fpd7_ovd_cnt
+    ,y_fpd14_obs_cnt
+    ,y_fpd14_ovd_cnt
+    ,y_fpd15_obs_cnt
+    ,y_fpd15_ovd_cnt
+    ,y_fpd30_obs_cnt
+    ,y_fpd30_ovd_cnt
+    ,y_obs_ovd_cnt
+    ,y_obs_ever_ovd_cnt
+    ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_ever_5plus_cnt
+    ,y_mob1_30plus_cnt
+    ,y_mob1_ever_30plus_cnt
+    ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_ever_5plus_cnt
+    ,y_mob2_30plus_cnt
+    ,y_mob2_ever_30plus_cnt
+    ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_ever_5plus_cnt
+    ,y_mob3_30plus_cnt
+    ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE apply_seq = 1
   AND last_limit_time >= TO_DATE('2026-08-01')
@@ -732,6 +766,39 @@ SELECT
     ,last_limit_flow_id                                   AS flow_id
     ,DATEDIFF(TO_DATE(disburse_time), TO_DATE(last_limit_time)) AS days_credit_to_disburse
     ,first_disburse_time
+    ,y_due_ovd_cnt
+    ,y_due_5plus_cnt
+    ,y_due_30plus_cnt
+    ,y_due_ever_ovd_cnt
+    ,y_due_ever_5plus_cnt
+    ,y_due_ever_30plus_cnt
+    ,y_fpd3_obs_cnt
+    ,y_fpd3_ovd_cnt
+    ,y_fpd7_obs_cnt
+    ,y_fpd7_ovd_cnt
+    ,y_fpd14_obs_cnt
+    ,y_fpd14_ovd_cnt
+    ,y_fpd15_obs_cnt
+    ,y_fpd15_ovd_cnt
+    ,y_fpd30_obs_cnt
+    ,y_fpd30_ovd_cnt
+    ,y_obs_ovd_cnt
+    ,y_obs_ever_ovd_cnt
+    ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_ever_5plus_cnt
+    ,y_mob1_30plus_cnt
+    ,y_mob1_ever_30plus_cnt
+    ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_ever_5plus_cnt
+    ,y_mob2_30plus_cnt
+    ,y_mob2_ever_30plus_cnt
+    ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_ever_5plus_cnt
+    ,y_mob3_30plus_cnt
+    ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE application_rank = 1
   AND last_limit_time >= TO_DATE('2026-08-01')
@@ -778,6 +845,39 @@ SELECT
     ,list_due_date
     ,user_type
     ,first_disburse_time
+    ,y_due_ovd_cnt
+    ,y_due_5plus_cnt
+    ,y_due_30plus_cnt
+    ,y_due_ever_ovd_cnt
+    ,y_due_ever_5plus_cnt
+    ,y_due_ever_30plus_cnt
+    ,y_fpd3_obs_cnt
+    ,y_fpd3_ovd_cnt
+    ,y_fpd7_obs_cnt
+    ,y_fpd7_ovd_cnt
+    ,y_fpd14_obs_cnt
+    ,y_fpd14_ovd_cnt
+    ,y_fpd15_obs_cnt
+    ,y_fpd15_ovd_cnt
+    ,y_fpd30_obs_cnt
+    ,y_fpd30_ovd_cnt
+    ,y_obs_ovd_cnt
+    ,y_obs_ever_ovd_cnt
+    ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_ever_5plus_cnt
+    ,y_mob1_30plus_cnt
+    ,y_mob1_ever_30plus_cnt
+    ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_ever_5plus_cnt
+    ,y_mob2_30plus_cnt
+    ,y_mob2_ever_30plus_cnt
+    ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_ever_5plus_cnt
+    ,y_mob3_30plus_cnt
+    ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'New'
   AND apply_date >= TO_DATE('2026-08-01')
@@ -824,6 +924,39 @@ SELECT
     ,list_due_date
     ,user_type
     ,first_disburse_time
+    ,y_due_ovd_cnt
+    ,y_due_5plus_cnt
+    ,y_due_30plus_cnt
+    ,y_due_ever_ovd_cnt
+    ,y_due_ever_5plus_cnt
+    ,y_due_ever_30plus_cnt
+    ,y_fpd3_obs_cnt
+    ,y_fpd3_ovd_cnt
+    ,y_fpd7_obs_cnt
+    ,y_fpd7_ovd_cnt
+    ,y_fpd14_obs_cnt
+    ,y_fpd14_ovd_cnt
+    ,y_fpd15_obs_cnt
+    ,y_fpd15_ovd_cnt
+    ,y_fpd30_obs_cnt
+    ,y_fpd30_ovd_cnt
+    ,y_obs_ovd_cnt
+    ,y_obs_ever_ovd_cnt
+    ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_ever_5plus_cnt
+    ,y_mob1_30plus_cnt
+    ,y_mob1_ever_30plus_cnt
+    ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_ever_5plus_cnt
+    ,y_mob2_30plus_cnt
+    ,y_mob2_ever_30plus_cnt
+    ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_ever_5plus_cnt
+    ,y_mob3_30plus_cnt
+    ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'New'
   AND is_disburse_success = 1
@@ -871,6 +1004,39 @@ SELECT
     ,list_due_date
     ,user_type
     ,first_disburse_time
+    ,y_due_ovd_cnt
+    ,y_due_5plus_cnt
+    ,y_due_30plus_cnt
+    ,y_due_ever_ovd_cnt
+    ,y_due_ever_5plus_cnt
+    ,y_due_ever_30plus_cnt
+    ,y_fpd3_obs_cnt
+    ,y_fpd3_ovd_cnt
+    ,y_fpd7_obs_cnt
+    ,y_fpd7_ovd_cnt
+    ,y_fpd14_obs_cnt
+    ,y_fpd14_ovd_cnt
+    ,y_fpd15_obs_cnt
+    ,y_fpd15_ovd_cnt
+    ,y_fpd30_obs_cnt
+    ,y_fpd30_ovd_cnt
+    ,y_obs_ovd_cnt
+    ,y_obs_ever_ovd_cnt
+    ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_ever_5plus_cnt
+    ,y_mob1_30plus_cnt
+    ,y_mob1_ever_30plus_cnt
+    ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_ever_5plus_cnt
+    ,y_mob2_30plus_cnt
+    ,y_mob2_ever_30plus_cnt
+    ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_ever_5plus_cnt
+    ,y_mob3_30plus_cnt
+    ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'Old'
   AND apply_date >= TO_DATE('2026-08-01')
@@ -917,6 +1083,39 @@ SELECT
     ,list_due_date
     ,user_type
     ,first_disburse_time
+    ,y_due_ovd_cnt
+    ,y_due_5plus_cnt
+    ,y_due_30plus_cnt
+    ,y_due_ever_ovd_cnt
+    ,y_due_ever_5plus_cnt
+    ,y_due_ever_30plus_cnt
+    ,y_fpd3_obs_cnt
+    ,y_fpd3_ovd_cnt
+    ,y_fpd7_obs_cnt
+    ,y_fpd7_ovd_cnt
+    ,y_fpd14_obs_cnt
+    ,y_fpd14_ovd_cnt
+    ,y_fpd15_obs_cnt
+    ,y_fpd15_ovd_cnt
+    ,y_fpd30_obs_cnt
+    ,y_fpd30_ovd_cnt
+    ,y_obs_ovd_cnt
+    ,y_obs_ever_ovd_cnt
+    ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_ever_5plus_cnt
+    ,y_mob1_30plus_cnt
+    ,y_mob1_ever_30plus_cnt
+    ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_ever_5plus_cnt
+    ,y_mob2_30plus_cnt
+    ,y_mob2_ever_30plus_cnt
+    ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_ever_5plus_cnt
+    ,y_mob3_30plus_cnt
+    ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'Old'
   AND is_disburse_success = 1
