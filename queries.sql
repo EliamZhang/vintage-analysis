@@ -261,12 +261,12 @@ event AS (
     ) t
     WHERE t.rn = 1
 ),
-stamp AS (
+credit AS (
     SELECT
          a.borrower_id                                        AS user_id
-        ,CAST(a.inserttime AS TIMESTAMP)                      AS stamp_time
-        ,a.flow_no                                            AS stamp_flow_id
-        ,CAST(a.id AS BIGINT)                                 AS stamp_id
+        ,CAST(a.inserttime AS TIMESTAMP)                      AS credit_time
+        ,a.flow_no                                            AS credit_flow_id
+        ,CAST(a.id AS BIGINT)                                 AS credit_id
         ,1                                                    AS source_priority
     FROM ods_ewa.aus_listing_tb_loan_limit_apply a
     WHERE CAST(a.isactive AS INT) = 1
@@ -282,21 +282,21 @@ stamp AS (
     WHERE CAST(e.is_active AS INT) = 1
       AND CAST(e.biz_id AS STRING) = '10000'
 ),
-stamp_matched AS (
+credit_matched AS (
     SELECT
          t.loan_no
-        ,t.stamp_time
-        ,t.stamp_flow_id
+        ,t.credit_time
+        ,t.credit_flow_id
     FROM (
         SELECT
              a.loan_no
-            ,s.stamp_time
-            ,s.stamp_flow_id
-            ,ROW_NUMBER() OVER (PARTITION BY a.loan_no ORDER BY s.source_priority, s.stamp_time DESC, s.stamp_id DESC) AS rn
+            ,s.credit_time
+            ,s.credit_flow_id
+            ,ROW_NUMBER() OVER (PARTITION BY a.loan_no ORDER BY s.source_priority, s.credit_time DESC, s.credit_id DESC) AS rn
         FROM apply a
-        JOIN stamp s
+        JOIN credit s
           ON a.user_id = s.user_id
-         AND s.stamp_time <= a.apply_time
+         AND s.credit_time <= a.apply_time
     ) t
     WHERE t.rn = 1
 ),
@@ -327,14 +327,14 @@ loan_apply AS (
         ,r.application_rank
         ,e.strategy_time
         ,e.retry_count
-        ,sm.stamp_time
-        ,sm.stamp_flow_id
+        ,sm.credit_time
+        ,sm.credit_flow_id
     FROM apply a
     LEFT JOIN event e
       ON a.loan_no = e.loan_no
     LEFT JOIN ranked r
       ON a.loan_no = r.loan_no
-    LEFT JOIN stamp_matched sm
+    LEFT JOIN credit_matched sm
       ON a.loan_no = sm.loan_no
 ),
 latest AS (
@@ -366,7 +366,7 @@ latest AS (
         ,p.obs_dt
         ,CASE WHEN a.is_disburse_success = 1 AND CAST(l.is_deal AS INT) = 1 AND s.listing_id IS NOT NULL
                AND DATE_ADD(s.init_due_date, 31) BETWEEN TO_DATE(a.disburse_time) AND p.obs_dt
-              THEN 1 ELSE 0 END                               AS is_label_matured
+              THEN 1 ELSE 0 END                               AS is_due_matured
     FROM loan_apply a
     CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
     LEFT JOIN edw_ewa.dwb_asset_cmn_listing l
@@ -384,14 +384,38 @@ base AS (
         ,x.hist_overdue_days                                  AS label_hist_overdue_days
         ,x.current_overdue_days                               AS label_current_overdue_days
         ,x.owing_amount                                       AS label_owing_amount
-        ,CASE WHEN l.is_label_matured = 1 THEN x.current_overdue_days END AS label_dpd
-        ,CASE WHEN l.is_label_matured = 1 THEN x.hist_overdue_days END    AS label_hist_dpd
+        ,CASE WHEN l.is_due_matured = 1 THEN x.current_overdue_days END AS label_dpd
+        ,CASE WHEN l.is_due_matured = 1 THEN x.hist_overdue_days END    AS label_hist_dpd
         ,COALESCE(
              TO_DATE(x.first_repay_time)
             ,CASE WHEN l.first_repay_time IS NOT NULL AND TO_DATE(l.first_repay_time) <= l.label_obs_dt
                   THEN TO_DATE(l.first_repay_time) END
             ,l.label_obs_dt
          )                                                    AS label_obs_day
+        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
+               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 3)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd3_obs_cnt
+        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
+               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 7)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd7_obs_cnt
+        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
+               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 14)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd14_obs_cnt
+        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
+               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 15)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd15_obs_cnt
+        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
+               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 30)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd30_obs_cnt
+        ,CASE WHEN l.is_disburse_success = 1
+              THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 1)) <= l.obs_dt THEN 1 ELSE 0 END
+         END                                                  AS y_mob1_obs_cnt
+        ,CASE WHEN l.is_disburse_success = 1
+              THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 2)) <= l.obs_dt THEN 1 ELSE 0 END
+         END                                                  AS y_mob2_obs_cnt
+        ,CASE WHEN l.is_disburse_success = 1
+              THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 3)) <= l.obs_dt THEN 1 ELSE 0 END
+         END                                                  AS y_mob3_obs_cnt
     FROM latest l
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp x
       ON l.listing_id = x.listing_id
@@ -520,10 +544,11 @@ labeled AS (
         ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_due_ever_ovd_amt
         ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd >= 5 THEN 1 ELSE 0 END END AS y_due_ever_5plus_cnt
         ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 30 THEN 1 ELSE 0 END END AS y_due_ever_30plus_cnt
-        ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3) THEN 1 ELSE 0 END END AS y_fpd3_ovd_cnt
-        ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd_cnt
-        ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END AS y_fpd14_ovd_cnt
-        ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS y_fpd30_ovd_cnt
+        ,CASE WHEN b.y_fpd3_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3) THEN 1 ELSE 0 END END AS y_fpd3_ovd_cnt
+        ,CASE WHEN b.y_fpd7_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd_cnt
+        ,CASE WHEN b.y_fpd14_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END AS y_fpd14_ovd_cnt
+        ,CASE WHEN b.y_fpd15_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END END AS y_fpd15_ovd_cnt
+        ,CASE WHEN b.y_fpd30_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS y_fpd30_ovd_cnt
         ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN DATEDIFF(TO_DATE(b.user_actual_repay_time), TO_DATE(b.disburse_time)) END AS loan_term_actual_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN CASE WHEN TO_DATE(b.user_actual_repay_time) < b.init_due_date THEN 1 ELSE 0 END END AS is_early_settlement
@@ -546,6 +571,21 @@ labeled AS (
         ,m.y_mob2_ever_30plus_cnt
         ,m.y_mob3_30plus_cnt
         ,m.y_mob3_ever_30plus_cnt
+        ,CASE WHEN b.y_mob1_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob1_obs_cnt = 0 THEN 0 END AS y_mob1_obs_amt
+        ,CASE WHEN b.y_mob2_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob2_obs_cnt = 0 THEN 0 END AS y_mob2_obs_amt
+        ,CASE WHEN b.y_mob3_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob3_obs_cnt = 0 THEN 0 END AS y_mob3_obs_amt
+        ,CASE WHEN m.y_mob1_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_5plus_cnt = 0 THEN 0 END AS y_mob1_5plus_amt
+        ,CASE WHEN m.y_mob1_ever_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_ever_5plus_cnt = 0 THEN 0 END AS y_mob1_ever_5plus_amt
+        ,CASE WHEN m.y_mob2_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_5plus_cnt = 0 THEN 0 END AS y_mob2_5plus_amt
+        ,CASE WHEN m.y_mob2_ever_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_ever_5plus_cnt = 0 THEN 0 END AS y_mob2_ever_5plus_amt
+        ,CASE WHEN m.y_mob3_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_5plus_cnt = 0 THEN 0 END AS y_mob3_5plus_amt
+        ,CASE WHEN m.y_mob3_ever_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_ever_5plus_cnt = 0 THEN 0 END AS y_mob3_ever_5plus_amt
+        ,CASE WHEN m.y_mob1_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_30plus_cnt = 0 THEN 0 END AS y_mob1_30plus_amt
+        ,CASE WHEN m.y_mob1_ever_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_ever_30plus_cnt = 0 THEN 0 END AS y_mob1_ever_30plus_amt
+        ,CASE WHEN m.y_mob2_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_30plus_cnt = 0 THEN 0 END AS y_mob2_30plus_amt
+        ,CASE WHEN m.y_mob2_ever_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_ever_30plus_cnt = 0 THEN 0 END AS y_mob2_ever_30plus_amt
+        ,CASE WHEN m.y_mob3_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_30plus_cnt = 0 THEN 0 END AS y_mob3_30plus_amt
+        ,CASE WHEN m.y_mob3_ever_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_ever_30plus_cnt = 0 THEN 0 END AS y_mob3_ever_30plus_amt
         ,t.estimate_principal_remaining_mob0
         ,t.dpd_days_mob0
         ,t.dpd_days_ever_mob0
@@ -590,8 +630,8 @@ SELECT
     ,application_rank
     ,strategy_time
     ,retry_count
-    ,stamp_time
-    ,stamp_flow_id
+    ,credit_time AS last_limit_time
+    ,credit_flow_id AS last_limit_flow_id
     ,real_amount
     ,apply_amount
     ,interest
@@ -613,7 +653,6 @@ SELECT
     ,owing_amount
     ,obs_dt
     ,label_obs_dt
-    ,is_label_matured
     ,label_user_actual_repay_time
     ,label_debt_status
     ,label_current_overdue_days
@@ -629,9 +668,15 @@ SELECT
     ,y_due_ever_ovd_amt
     ,y_due_ever_5plus_cnt
     ,y_due_ever_30plus_cnt
+    ,y_fpd3_obs_cnt
     ,y_fpd3_ovd_cnt
+    ,y_fpd7_obs_cnt
     ,y_fpd7_ovd_cnt
+    ,y_fpd14_obs_cnt
     ,y_fpd14_ovd_cnt
+    ,y_fpd15_obs_cnt
+    ,y_fpd15_ovd_cnt
+    ,y_fpd30_obs_cnt
     ,y_fpd30_ovd_cnt
     ,loan_term_contract_days
     ,loan_term_actual_days
@@ -643,18 +688,36 @@ SELECT
     ,disburse_month
     ,days_on_book
     ,user_type
+    ,y_mob1_obs_cnt
+    ,y_mob1_obs_amt
     ,y_mob1_5plus_cnt
+    ,y_mob1_5plus_amt
     ,y_mob1_ever_5plus_cnt
-    ,y_mob2_5plus_cnt
-    ,y_mob2_ever_5plus_cnt
-    ,y_mob3_5plus_cnt
-    ,y_mob3_ever_5plus_cnt
+    ,y_mob1_ever_5plus_amt
     ,y_mob1_30plus_cnt
+    ,y_mob1_30plus_amt
     ,y_mob1_ever_30plus_cnt
+    ,y_mob1_ever_30plus_amt
+    ,y_mob2_obs_cnt
+    ,y_mob2_obs_amt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_5plus_amt
+    ,y_mob2_ever_5plus_cnt
+    ,y_mob2_ever_5plus_amt
     ,y_mob2_30plus_cnt
+    ,y_mob2_30plus_amt
     ,y_mob2_ever_30plus_cnt
+    ,y_mob2_ever_30plus_amt
+    ,y_mob3_obs_cnt
+    ,y_mob3_obs_amt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_5plus_amt
+    ,y_mob3_ever_5plus_cnt
+    ,y_mob3_ever_5plus_amt
     ,y_mob3_30plus_cnt
+    ,y_mob3_30plus_amt
     ,y_mob3_ever_30plus_cnt
+    ,y_mob3_ever_30plus_amt
     ,estimate_principal_remaining_mob0
     ,dpd_days_mob0
     ,dpd_days_ever_mob0
