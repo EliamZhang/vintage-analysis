@@ -4,6 +4,7 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 -- 新客戳额样本按戳额时间筛选，发标及发标成交样本按申请时间筛选
 -- 事件时间列统一命名为 sample_datetime
 -- 每个样本表末尾附带笔数口径的 y 标签（*_cnt），直接取自主表同名字段
+-- 新老客标签 user_type 也直接取自主表
 
 -- 新客戳额首笔申请样本：每个用户的第一条借款申请（无论成败）及其申请前最近一次戳额
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples;
@@ -19,6 +20,9 @@ SELECT
     ,disburse_time
     ,last_limit_time                                      AS sample_datetime
     ,last_limit_flow_id                                   AS flow_id
+    ,disburse_month
+    ,disburse_quarter
+    ,user_type
     ,first_disburse_time
     ,y_due_ovd_cnt
     ,y_due_5plus_cnt
@@ -72,6 +76,9 @@ SELECT
     ,last_limit_time                                      AS sample_datetime
     ,last_limit_flow_id                                   AS flow_id
     ,DATEDIFF(TO_DATE(disburse_time), TO_DATE(last_limit_time)) AS days_credit_to_disburse
+    ,disburse_month
+    ,disburse_quarter
+    ,user_type
     ,first_disburse_time
     ,y_due_ovd_cnt
     ,y_due_5plus_cnt
@@ -139,6 +146,8 @@ SELECT
     ,fail_bid_time
     ,withdraw_time
     ,list_due_date
+    ,disburse_month
+    ,disburse_quarter
     ,user_type
     ,first_disburse_time
     ,y_due_ovd_cnt
@@ -207,6 +216,8 @@ SELECT
     ,fail_bid_time
     ,withdraw_time
     ,list_due_date
+    ,disburse_month
+    ,disburse_quarter
     ,user_type
     ,first_disburse_time
     ,y_due_ovd_cnt
@@ -276,6 +287,8 @@ SELECT
     ,fail_bid_time
     ,withdraw_time
     ,list_due_date
+    ,disburse_month
+    ,disburse_quarter
     ,user_type
     ,first_disburse_time
     ,y_due_ovd_cnt
@@ -344,6 +357,8 @@ SELECT
     ,fail_bid_time
     ,withdraw_time
     ,list_due_date
+    ,disburse_month
+    ,disburse_quarter
     ,user_type
     ,first_disburse_time
     ,y_due_ovd_cnt

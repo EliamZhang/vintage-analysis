@@ -428,6 +428,7 @@ labeled AS (
         ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN 1 ELSE 0 END END AS y_obs_ever_ovd_cnt
         ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ever_ovd_amt
         ,DATE_FORMAT(b.disburse_time, 'yyyy-MM')                 AS disburse_month
+        ,CONCAT(CAST(YEAR(b.disburse_time) AS STRING), '-Q', CAST(QUARTER(b.disburse_time) AS STRING)) AS disburse_quarter
         ,DATEDIFF(b.obs_dt, TO_DATE(b.disburse_time))            AS days_on_book
         ,CASE WHEN b.first_disburse_time IS NULL THEN 'New'
               WHEN COALESCE(b.disburse_time, b.apply_time) <= b.first_disburse_time THEN 'New'
@@ -564,6 +565,7 @@ SELECT
     ,y_obs_ever_ovd_cnt
     ,y_obs_ever_ovd_amt
     ,disburse_month
+    ,disburse_quarter
     ,days_on_book
     ,user_type
     ,first_disburse_time
