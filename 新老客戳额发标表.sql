@@ -17,7 +17,7 @@ SELECT
     ,apply_time
     ,disburse_time
     ,last_limit_time                                      AS sample_datetime
-    ,last_limit_flow_id                                   AS credit_flow_id
+    ,last_limit_flow_id                                   AS flow_id
     ,first_disburse_time
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE apply_seq = 1
@@ -36,7 +36,7 @@ SELECT
     ,disburse_time
     ,real_amount
     ,last_limit_time                                      AS sample_datetime
-    ,last_limit_flow_id                                   AS credit_flow_id
+    ,last_limit_flow_id                                   AS flow_id
     ,DATEDIFF(TO_DATE(disburse_time), TO_DATE(last_limit_time)) AS days_credit_to_disburse
     ,first_disburse_time
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
@@ -50,7 +50,7 @@ WHERE application_rank = 1
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_bid_20260801_20261023_samples;
 CREATE TABLE model.tmp_eliam_wagego_new_user_bid_20260801_20261023_samples AS
 SELECT
-     loan_no
+     loan_no                                              AS flow_id
     ,user_id
     ,listing_id
     ,apply_status
@@ -84,9 +84,36 @@ WHERE user_type = 'New'
 -- 新客发标成交样本：新客发标中放款成功的申请（按申请时间筛选）
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_bid_success_20260801_20261023_samples;
 CREATE TABLE model.tmp_eliam_wagego_new_user_bid_success_20260801_20261023_samples AS
-SELECT *
-FROM model.tmp_eliam_wagego_new_user_bid_20260801_20261023_samples
-WHERE is_disburse_success = 1
+SELECT
+     loan_no                                              AS flow_id
+    ,user_id
+    ,listing_id
+    ,apply_status
+    ,apply_status_desc
+    ,is_disburse_success
+    ,apply_time                                           AS sample_datetime
+    ,apply_date
+    ,apply_month
+    ,disburse_time
+    ,apply_amount
+    ,real_amount
+    ,term_quantity
+    ,term_unit
+    ,total_period
+    ,bid_time
+    ,bid_status
+    ,is_deal
+    ,full_bid_time
+    ,fail_bid_time
+    ,withdraw_time
+    ,list_due_date
+    ,user_type
+    ,first_disburse_time
+FROM model.tmp_eliam_wagego_dwd_loan_apply_label
+WHERE user_type = 'New'
+  AND is_disburse_success = 1
+  AND apply_date >= TO_DATE('2026-08-01')
+  AND apply_date <  TO_DATE('2026-10-24')
 ;
 
 
@@ -94,7 +121,7 @@ WHERE is_disburse_success = 1
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_old_user_bid_20260801_20261023_samples;
 CREATE TABLE model.tmp_eliam_wagego_old_user_bid_20260801_20261023_samples AS
 SELECT
-     loan_no
+     loan_no                                              AS flow_id
     ,user_id
     ,listing_id
     ,apply_status
@@ -128,7 +155,34 @@ WHERE user_type = 'Old'
 -- 老客发标成交样本：老客发标中放款成功的申请（按申请时间筛选）
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_old_user_bid_success_20260801_20261023_samples;
 CREATE TABLE model.tmp_eliam_wagego_old_user_bid_success_20260801_20261023_samples AS
-SELECT *
-FROM model.tmp_eliam_wagego_old_user_bid_20260801_20261023_samples
-WHERE is_disburse_success = 1
+SELECT
+     loan_no                                              AS flow_id
+    ,user_id
+    ,listing_id
+    ,apply_status
+    ,apply_status_desc
+    ,is_disburse_success
+    ,apply_time                                           AS sample_datetime
+    ,apply_date
+    ,apply_month
+    ,disburse_time
+    ,apply_amount
+    ,real_amount
+    ,term_quantity
+    ,term_unit
+    ,total_period
+    ,bid_time
+    ,bid_status
+    ,is_deal
+    ,full_bid_time
+    ,fail_bid_time
+    ,withdraw_time
+    ,list_due_date
+    ,user_type
+    ,first_disburse_time
+FROM model.tmp_eliam_wagego_dwd_loan_apply_label
+WHERE user_type = 'Old'
+  AND is_disburse_success = 1
+  AND apply_date >= TO_DATE('2026-08-01')
+  AND apply_date <  TO_DATE('2026-10-24')
 ;
