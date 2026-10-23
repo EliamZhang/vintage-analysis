@@ -69,6 +69,11 @@ SELECT
 FROM agg
 ;
 
+
+
+
+
+
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_apply_label;
 CREATE TABLE model.tmp_eliam_wagego_dwd_loan_apply_label AS
 WITH apply AS (
@@ -260,7 +265,7 @@ mob_obs AS (
     WHERE b.is_disburse_success = 1
       AND LAST_DAY(ADD_MONTHS(TO_DATE(b.disburse_time), m.mob_no)) <= b.obs_dt
 ),
-mob_detail AS (
+mob_label_detail AS (
     SELECT
          o.loan_no
         ,o.mob_no
@@ -277,7 +282,7 @@ mob_detail AS (
       ON o.listing_id = d.listing_id
      AND o.mob_obs_dt = d.stat_date
 ),
-mob_wide AS (
+mob_label_wide AS (
     SELECT
          loan_no
         ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS y_mob1_5plus_cnt
@@ -292,10 +297,10 @@ mob_wide AS (
         ,MAX(CASE WHEN mob_no = 2  THEN is_ever_30plus END) AS y_mob2_ever_30plus_cnt
         ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS y_mob3_30plus_cnt
         ,MAX(CASE WHEN mob_no = 3  THEN is_ever_30plus END) AS y_mob3_ever_30plus_cnt
-    FROM mob_detail
+    FROM mob_label_detail
     GROUP BY loan_no
 ),
-mob_track AS (
+mob_track_detail AS (
     SELECT
          t.loan_no
         ,t.mob_no
@@ -341,112 +346,168 @@ mob_track_wide AS (
         ,MAX(CASE WHEN mob_no = 4 THEN estimate_principal_remaining END) AS estimate_principal_remaining_mob4
         ,MAX(CASE WHEN mob_no = 4 THEN dpd_days END)                     AS dpd_days_mob4
         ,MAX(CASE WHEN mob_no = 4 THEN dpd_days_ever END)                AS dpd_days_ever_mob4
-    FROM mob_track
+    FROM mob_track_detail
     GROUP BY loan_no
+),
+labeled AS (
+    SELECT
+         b.*
+        ,b.label_dpd                                           AS y_due_dpd
+        ,b.label_hist_dpd                                      AS y_due_ever_dpd
+        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN 1 ELSE 0 END END AS y_due_ovd_cnt
+        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_due_ovd_amt
+        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd >= 5 THEN 1 ELSE 0 END END AS y_due_5plus_cnt
+        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 30 THEN 1 ELSE 0 END END AS y_due_30plus_cnt
+        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 0 THEN 1 ELSE 0 END END AS y_due_ever_ovd_cnt
+        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_due_ever_ovd_amt
+        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd >= 5 THEN 1 ELSE 0 END END AS y_due_ever_5plus_cnt
+        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 30 THEN 1 ELSE 0 END END AS y_due_ever_30plus_cnt
+        ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3) THEN 1 ELSE 0 END END AS y_fpd3_ovd_cnt
+        ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd_cnt
+        ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END AS y_fpd14_ovd_cnt
+        ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS y_fpd30_ovd_cnt
+        ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
+        ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN DATEDIFF(TO_DATE(b.user_actual_repay_time), TO_DATE(b.disburse_time)) END AS loan_term_actual_days
+        ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN CASE WHEN TO_DATE(b.user_actual_repay_time) < b.init_due_date THEN 1 ELSE 0 END END AS is_early_settlement
+        ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN 1 ELSE 0 END END AS y_obs_ovd_cnt
+        ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ovd_amt
+        ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN 1 ELSE 0 END END AS y_obs_ever_ovd_cnt
+        ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ever_ovd_amt
+        ,DATE_FORMAT(b.disburse_time, 'yyyy-MM')                 AS disburse_month
+        ,DATEDIFF(b.obs_dt, TO_DATE(b.disburse_time))            AS days_on_book
+        ,CASE WHEN b.application_rank = 1 THEN 'New' WHEN b.application_rank IS NOT NULL THEN 'Old' END AS user_type
+        ,m.y_mob1_5plus_cnt
+        ,m.y_mob1_ever_5plus_cnt
+        ,m.y_mob2_5plus_cnt
+        ,m.y_mob2_ever_5plus_cnt
+        ,m.y_mob3_5plus_cnt
+        ,m.y_mob3_ever_5plus_cnt
+        ,m.y_mob1_30plus_cnt
+        ,m.y_mob1_ever_30plus_cnt
+        ,m.y_mob2_30plus_cnt
+        ,m.y_mob2_ever_30plus_cnt
+        ,m.y_mob3_30plus_cnt
+        ,m.y_mob3_ever_30plus_cnt
+        ,t.estimate_principal_remaining_mob0
+        ,t.dpd_days_mob0
+        ,t.dpd_days_ever_mob0
+        ,t.estimate_principal_remaining_mob1
+        ,t.dpd_days_mob1
+        ,t.dpd_days_ever_mob1
+        ,t.estimate_principal_remaining_mob2
+        ,t.dpd_days_mob2
+        ,t.dpd_days_ever_mob2
+        ,t.estimate_principal_remaining_mob3
+        ,t.dpd_days_mob3
+        ,t.dpd_days_ever_mob3
+        ,t.estimate_principal_remaining_mob4
+        ,t.dpd_days_mob4
+        ,t.dpd_days_ever_mob4
+    FROM base b
+    LEFT JOIN mob_label_wide m
+      ON b.loan_no = m.loan_no
+    LEFT JOIN mob_track_wide t
+      ON b.loan_no = t.loan_no
 )
 SELECT
-     b.loan_no
-    ,b.user_id
-    ,b.application_id
-    ,b.app_id
-    ,b.listing_id
-    ,b.apply_status
-    ,b.apply_status_desc
-    ,b.is_disburse_success
-    ,b.is_reject
-    ,b.is_expired
-    ,b.is_disburse_failed
-    ,b.apply_time
-    ,b.apply_date
-    ,b.apply_month
-    ,b.disburse_time
-    ,b.apply_seq
-    ,b.application_rank
-    ,b.strategy_time
-    ,b.retry_count
-    ,b.stamp_time
-    ,b.stamp_flow_id
-    ,b.real_amount
-    ,b.apply_amount
-    ,b.interest
-    ,b.service_fee
-    ,b.term_quantity
-    ,b.term_unit
-    ,b.total_period
-    ,b.is_deal
-    ,b.withdraw_time
-    ,b.list_due_date
-    ,b.init_due_date
-    ,b.user_actual_repay_time
-    ,b.debt_status
-    ,b.debt_status_desc
-    ,b.hist_overdue_days
-    ,b.current_overdue_days
-    ,b.principal
-    ,b.repay_amount
-    ,b.owing_amount
-    ,b.obs_dt
-    ,b.label_obs_dt
-    ,b.is_label_matured
-    ,b.label_user_actual_repay_time
-    ,b.label_debt_status
-    ,b.label_current_overdue_days
-    ,b.label_hist_overdue_days
-    ,b.label_owing_amount
-    ,b.label_dpd                                           AS y_due_dpd
-    ,b.label_hist_dpd                                      AS y_due_ever_dpd
-    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN 1 ELSE 0 END END AS y_due_ovd_cnt
-    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_due_ovd_amt
-    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd >= 5 THEN 1 ELSE 0 END END AS y_due_5plus_cnt
-    ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 30 THEN 1 ELSE 0 END END AS y_due_30plus_cnt
-    ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 0 THEN 1 ELSE 0 END END AS y_due_ever_ovd_cnt
-    ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_due_ever_ovd_amt
-    ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd >= 5 THEN 1 ELSE 0 END END AS y_due_ever_5plus_cnt
-    ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 30 THEN 1 ELSE 0 END END AS y_due_ever_30plus_cnt
-    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3) THEN 1 ELSE 0 END END AS y_fpd3_ovd_cnt
-    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd_cnt
-    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END AS y_fpd14_ovd_cnt
-    ,CASE WHEN b.is_label_matured = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS y_fpd30_ovd_cnt
-    ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
-    ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN DATEDIFF(TO_DATE(b.user_actual_repay_time), TO_DATE(b.disburse_time)) END AS loan_term_actual_days
-    ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN CASE WHEN TO_DATE(b.user_actual_repay_time) < b.init_due_date THEN 1 ELSE 0 END END AS is_early_settlement
-    ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN 1 ELSE 0 END END AS y_obs_ovd_cnt
-    ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ovd_amt
-    ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN 1 ELSE 0 END END AS y_obs_ever_ovd_cnt
-    ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ever_ovd_amt
-    ,DATE_FORMAT(b.disburse_time, 'yyyy-MM')                 AS disburse_month
-    ,DATEDIFF(b.obs_dt, TO_DATE(b.disburse_time))            AS days_on_book
-    ,CASE WHEN b.application_rank = 1 THEN 'New' WHEN b.application_rank IS NOT NULL THEN 'Old' END AS user_type
-    ,m.y_mob1_5plus_cnt
-    ,m.y_mob1_ever_5plus_cnt
-    ,m.y_mob2_5plus_cnt
-    ,m.y_mob2_ever_5plus_cnt
-    ,m.y_mob3_5plus_cnt
-    ,m.y_mob3_ever_5plus_cnt
-    ,m.y_mob1_30plus_cnt
-    ,m.y_mob1_ever_30plus_cnt
-    ,m.y_mob2_30plus_cnt
-    ,m.y_mob2_ever_30plus_cnt
-    ,m.y_mob3_30plus_cnt
-    ,m.y_mob3_ever_30plus_cnt
-    ,t.estimate_principal_remaining_mob0
-    ,t.dpd_days_mob0
-    ,t.dpd_days_ever_mob0
-    ,t.estimate_principal_remaining_mob1
-    ,t.dpd_days_mob1
-    ,t.dpd_days_ever_mob1
-    ,t.estimate_principal_remaining_mob2
-    ,t.dpd_days_mob2
-    ,t.dpd_days_ever_mob2
-    ,t.estimate_principal_remaining_mob3
-    ,t.dpd_days_mob3
-    ,t.dpd_days_ever_mob3
-    ,t.estimate_principal_remaining_mob4
-    ,t.dpd_days_mob4
-    ,t.dpd_days_ever_mob4
-FROM base b
-LEFT JOIN mob_wide m
-  ON b.loan_no = m.loan_no
-LEFT JOIN mob_track_wide t
-  ON b.loan_no = t.loan_no
+     loan_no
+    ,user_id
+    ,application_id
+    ,app_id
+    ,listing_id
+    ,apply_status
+    ,apply_status_desc
+    ,is_disburse_success
+    ,is_reject
+    ,is_expired
+    ,is_disburse_failed
+    ,apply_time
+    ,apply_date
+    ,apply_month
+    ,disburse_time
+    ,apply_seq
+    ,application_rank
+    ,strategy_time
+    ,retry_count
+    ,stamp_time
+    ,stamp_flow_id
+    ,real_amount
+    ,apply_amount
+    ,interest
+    ,service_fee
+    ,term_quantity
+    ,term_unit
+    ,total_period
+    ,is_deal
+    ,withdraw_time
+    ,list_due_date
+    ,init_due_date
+    ,user_actual_repay_time
+    ,debt_status
+    ,debt_status_desc
+    ,hist_overdue_days
+    ,current_overdue_days
+    ,principal
+    ,repay_amount
+    ,owing_amount
+    ,obs_dt
+    ,label_obs_dt
+    ,is_label_matured
+    ,label_user_actual_repay_time
+    ,label_debt_status
+    ,label_current_overdue_days
+    ,label_hist_overdue_days
+    ,label_owing_amount
+    ,y_due_dpd
+    ,y_due_ever_dpd
+    ,y_due_ovd_cnt
+    ,y_due_ovd_amt
+    ,y_due_5plus_cnt
+    ,y_due_30plus_cnt
+    ,y_due_ever_ovd_cnt
+    ,y_due_ever_ovd_amt
+    ,y_due_ever_5plus_cnt
+    ,y_due_ever_30plus_cnt
+    ,y_fpd3_ovd_cnt
+    ,y_fpd7_ovd_cnt
+    ,y_fpd14_ovd_cnt
+    ,y_fpd30_ovd_cnt
+    ,loan_term_contract_days
+    ,loan_term_actual_days
+    ,is_early_settlement
+    ,y_obs_ovd_cnt
+    ,y_obs_ovd_amt
+    ,y_obs_ever_ovd_cnt
+    ,y_obs_ever_ovd_amt
+    ,disburse_month
+    ,days_on_book
+    ,user_type
+    ,y_mob1_5plus_cnt
+    ,y_mob1_ever_5plus_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_ever_5plus_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_ever_5plus_cnt
+    ,y_mob1_30plus_cnt
+    ,y_mob1_ever_30plus_cnt
+    ,y_mob2_30plus_cnt
+    ,y_mob2_ever_30plus_cnt
+    ,y_mob3_30plus_cnt
+    ,y_mob3_ever_30plus_cnt
+    ,estimate_principal_remaining_mob0
+    ,dpd_days_mob0
+    ,dpd_days_ever_mob0
+    ,estimate_principal_remaining_mob1
+    ,dpd_days_mob1
+    ,dpd_days_ever_mob1
+    ,estimate_principal_remaining_mob2
+    ,dpd_days_mob2
+    ,dpd_days_ever_mob2
+    ,estimate_principal_remaining_mob3
+    ,dpd_days_mob3
+    ,dpd_days_ever_mob3
+    ,estimate_principal_remaining_mob4
+    ,dpd_days_mob4
+    ,dpd_days_ever_mob4
+FROM labeled
 ;
