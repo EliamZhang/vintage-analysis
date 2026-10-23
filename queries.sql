@@ -4,25 +4,24 @@ WageGo Vintage 数据同步 SQL
 适用语法：Spark SQL / Hive 风格（与《放款申请样本表及Y标签.sql》一致）
 
 本文件按段号顺序执行，结果落到 原始数据/：
-  1~6  原始表（《放款申请样本表及Y标签.sql》直接依赖）
-    1. ods_ewa.aus_ewa_loan_biz_t_loan_application          借款申请
-    2. edw_ewa.dwb_asset_cmn_listing                        放款信息
-    3. edw_ewa.dwb_asset_debt_dtl_snp                       债务快照
-    4. ods_ewa.aus_ewa_risk_risk_event_task                 风控事件（按 biz_id 裁剪）
-    5. ods_ewa.aus_listing_tb_loan_limit_apply              额度申请（戳额）
-    6. ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log     模型调用日志（按 model_code 裁剪）
-  7~9  加工表（库中原本没有，由本文件建表后导出）
-    7. model.tmp_eliam_wagego_param_obs_date                观察日参数
-    8. model.tmp_eliam_wagego_stg_debt_snp                  借据日快照宽表
-    9. model.tmp_eliam_wagego_dwd_loan_apply_label          放款申请样本表及Y标签
+  1~3  主流程加工表
+    1. model.tmp_eliam_wagego_param_obs_date                观察日参数
+    2. model.tmp_eliam_wagego_stg_debt_snp                  借据日快照宽表
+    3. model.tmp_eliam_wagego_dwd_loan_apply_label          放款申请样本表及Y标签
+  4~9  新老客戳额/发标样本表（均从第 3 段的主表派生）
+    4. model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples
+    5. model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples
+    6. model.tmp_eliam_wagego_new_user_bid_20260801_20261023_samples
+    7. model.tmp_eliam_wagego_new_user_bid_success_20260801_20261023_samples
+    8. model.tmp_eliam_wagego_old_user_bid_20260801_20261023_samples
+    9. model.tmp_eliam_wagego_old_user_bid_success_20260801_20261023_samples
 
 说明：
 - 段首用注释块标注「N. 段名」，段号从 1 连续排列，并与 sync.py 的 SEGMENT_SPECS 对应。
 - 每段可包含多条以分号分隔的语句：前面的语句是建表等准备动作，最后一条语句的结果写入 CSV。
-- 7~9 段需按顺序执行：第 8 段使用第 7 段建的观察日参数表，第 9 段使用第 8 段的宽表。
-- 底表按原表全量取数；风控事件表只保留本流程用到的 biz_id = 20050（借款申请事件）
-  和 biz_id = 10000（历史戳额事件）；模型调用日志只保留本流程用到的
-  model_code = aus_wagego_new_risk_3rd_v1_0（放款阶段三方模型分），避免把无关记录打进数据包。
+- 1~3 段需按顺序执行：第 2 段使用第 1 段建的观察日参数表，第 3 段使用第 2 段的宽表。
+- 4~9 段只读取第 3 段建的主表，样本之间互不依赖；样本时间窗为 2026-08-01 至 2026-10-23，
+  与表名后缀 _20260801_20261023 一致。戳额样本按戳额时间筛选，发标类样本按申请时间筛选。
 - 源脚本开头的 SET spark.sql.session.timeZone = Australia/Sydney 由执行环境负责；
   请保持同一时区执行，避免 TO_DATE / DATE_FORMAT 在跨时区会话下产生日期偏移。
 ===============================================================================
@@ -31,92 +30,7 @@ WageGo Vintage 数据同步 SQL
 
 /*
 ===============================================================================
-1. 借款申请表（原始数据）
-源表：ods_ewa.aus_ewa_loan_biz_t_loan_application
-粒度：一行一个借款申请（loan_no）
-用途：样本表的主表，提供申请状态、用户、listing 和申请时间。
-===============================================================================
-*/
-SELECT *
-FROM ods_ewa.aus_ewa_loan_biz_t_loan_application
-;
-
-
-/*
-===============================================================================
-2. 放款信息表（原始数据）
-源表：edw_ewa.dwb_asset_cmn_listing
-粒度：一行一笔放款（listing_id）
-用途：补放款金额、期限、是否成交、放款时间和合同应还日。
-===============================================================================
-*/
-SELECT *
-FROM edw_ewa.dwb_asset_cmn_listing
-;
-
-
-/*
-===============================================================================
-3. 债务快照表（原始数据）
-源表：edw_ewa.dwb_asset_debt_dtl_snp
-粒度：借款（listing_id）× 期次（period_no）× 快照日期（dt）
-用途：提供每日债务状态、应还日、还款时间、逾期天数和金额。
-===============================================================================
-*/
-SELECT *
-FROM edw_ewa.dwb_asset_debt_dtl_snp
-;
-
-
-/*
-===============================================================================
-4. 风控事件表（原始数据，按流程裁剪）
-源表：ods_ewa.aus_ewa_risk_risk_event_task
-粒度：一行一条风控事件
-用途：biz_id = 20050 的记录用于补借款申请的策略时间等信息；
-      biz_id = 10000 的记录作为历史戳额兜底来源。
-说明：只取有效记录（is_active = 1）和本流程用到的两类 biz_id。
-===============================================================================
-*/
-SELECT *
-FROM ods_ewa.aus_ewa_risk_risk_event_task
-WHERE CAST(is_active AS INT) = 1
-  AND CAST(biz_id AS STRING) IN ('20050', '10000')
-;
-
-
-/*
-===============================================================================
-5. 额度申请表（原始数据）
-源表：ods_ewa.aus_listing_tb_loan_limit_apply
-粒度：一行一次额度申请（limit_apply_no）
-用途：biz_type = 400 的记录是用户主动戳额，用于匹配放款前最近一次戳额时点。
-===============================================================================
-*/
-SELECT *
-FROM ods_ewa.aus_listing_tb_loan_limit_apply
-;
-
-
-/*
-===============================================================================
-6. 模型调用日志表（原始数据，按 model_code 裁剪）
-源表：ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log
-粒度：一行一次模型调用
-用途：scene_id 为放款号时提供放款阶段三方模型分，分值在 model_output 的
-      $.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626 字段。
-说明：只保留本流程用到的 model_code，避免把无关模型日志打进数据包。
-===============================================================================
-*/
-SELECT *
-FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log
-WHERE model_code = 'aus_wagego_new_risk_3rd_v1_0'
-;
-
-
-/*
-===============================================================================
-7. 观察日参数表（加工表）
+1. 观察日参数表
 目标表：model.tmp_eliam_wagego_param_obs_date
 粒度：一行一个全局观察日 obs_dt
 用途：取债务快照表的最新快照日，作为后续加工步骤统一的“当前时点”。
@@ -135,11 +49,11 @@ FROM model.tmp_eliam_wagego_param_obs_date
 
 /*
 ===============================================================================
-8. 借据日快照宽表（加工表）
+2. 借据日快照宽表
 目标表：model.tmp_eliam_wagego_stg_debt_snp
 粒度：一行一个借据（listing_id）× 快照日期（stat_date）
 用途：把“借据 × 期数 × 快照日”的债务明细汇总成借据级日状态。
-说明：库里没有这张表，本段包含建表语句；依赖第 7 段的观察日参数表。
+说明：库里没有这张表，本段包含建表语句；依赖第 1 段的观察日参数表。
 ===============================================================================
 */
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_stg_debt_snp;
@@ -211,11 +125,11 @@ FROM model.tmp_eliam_wagego_stg_debt_snp
 
 /*
 ===============================================================================
-9. 放款申请样本表及Y标签（加工表）
+3. 放款申请样本表及Y标签
 目标表：model.tmp_eliam_wagego_dwd_loan_apply_label
 粒度：一行一条有效贷款申请（loan_no）
 用途：以申请为一行，关联放款信息、观察日状态、标签时点状态和各类 Y 标签。
-说明：库里没有这张表，本段包含建表语句；依赖第 7 段的观察日参数表和第 8 段的宽表。
+说明：库里没有这张表，本段包含建表语句；依赖第 1 段的观察日参数表和第 2 段的宽表。
 ===============================================================================
 */
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_apply_label;
@@ -761,4 +675,254 @@ FROM labeled
 ;
 SELECT *
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
+;
+
+
+/*
+===============================================================================
+4. 新客戳额首笔申请样本
+目标表：model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples
+粒度：一行一个用户的首笔借款申请（无论成败）
+用途：每个用户的第一条借款申请及申请前最近一次戳额，按戳额时间筛选样本窗口。
+说明：依赖第 3 段的主表；本段包含建表语句，建表后立即导出结果。
+===============================================================================
+*/
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples;
+CREATE TABLE model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples AS
+SELECT
+     loan_no
+    ,user_id
+    ,listing_id
+    ,apply_status
+    ,apply_status_desc
+    ,is_disburse_success
+    ,apply_time
+    ,disburse_time
+    ,last_limit_time                                      AS sample_datetime
+    ,last_limit_flow_id                                   AS flow_id
+    ,first_disburse_time
+FROM model.tmp_eliam_wagego_dwd_loan_apply_label
+WHERE apply_seq = 1
+  AND last_limit_time >= TO_DATE('2026-08-01')
+  AND last_limit_time <  TO_DATE('2026-10-24')
+;
+SELECT *
+FROM model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples
+;
+
+
+/*
+===============================================================================
+5. 新客戳额首笔成交样本
+目标表：model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples
+粒度：一行一个用户第一次放款成功的记录
+用途：第一次放款成功的借据及其之前最近一次戳额，按戳额时间筛选样本窗口。
+说明：依赖第 3 段的主表；本段包含建表语句，建表后立即导出结果。
+===============================================================================
+*/
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples;
+CREATE TABLE model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples AS
+SELECT
+     loan_no                                              AS deal_loan_no
+    ,user_id
+    ,listing_id
+    ,disburse_time
+    ,real_amount
+    ,last_limit_time                                      AS sample_datetime
+    ,last_limit_flow_id                                   AS flow_id
+    ,DATEDIFF(TO_DATE(disburse_time), TO_DATE(last_limit_time)) AS days_credit_to_disburse
+    ,first_disburse_time
+FROM model.tmp_eliam_wagego_dwd_loan_apply_label
+WHERE application_rank = 1
+  AND last_limit_time >= TO_DATE('2026-08-01')
+  AND last_limit_time <  TO_DATE('2026-10-24')
+;
+SELECT *
+FROM model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples
+;
+
+
+/*
+===============================================================================
+6. 新客发标样本
+目标表：model.tmp_eliam_wagego_new_user_bid_20260801_20261023_samples
+粒度：一行一条新客借款申请（首笔放款及之前，含从未放款用户）
+用途：新客的全部发标申请，按申请时间筛选样本窗口。
+说明：依赖第 3 段的主表；本段包含建表语句，建表后立即导出结果。
+===============================================================================
+*/
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_bid_20260801_20261023_samples;
+CREATE TABLE model.tmp_eliam_wagego_new_user_bid_20260801_20261023_samples AS
+SELECT
+     loan_no                                              AS flow_id
+    ,user_id
+    ,listing_id
+    ,apply_status
+    ,apply_status_desc
+    ,is_disburse_success
+    ,apply_time                                           AS sample_datetime
+    ,apply_date
+    ,apply_month
+    ,disburse_time
+    ,apply_amount
+    ,real_amount
+    ,term_quantity
+    ,term_unit
+    ,total_period
+    ,bid_time
+    ,bid_status
+    ,is_deal
+    ,full_bid_time
+    ,fail_bid_time
+    ,withdraw_time
+    ,list_due_date
+    ,user_type
+    ,first_disburse_time
+FROM model.tmp_eliam_wagego_dwd_loan_apply_label
+WHERE user_type = 'New'
+  AND apply_date >= TO_DATE('2026-08-01')
+  AND apply_date <  TO_DATE('2026-10-24')
+;
+SELECT *
+FROM model.tmp_eliam_wagego_new_user_bid_20260801_20261023_samples
+;
+
+
+/*
+===============================================================================
+7. 新客发标成交样本
+目标表：model.tmp_eliam_wagego_new_user_bid_success_20260801_20261023_samples
+粒度：一行一条新客放款成功的借款申请
+用途：新客发标中放款成功的申请，按申请时间筛选样本窗口。
+说明：依赖第 3 段的主表；本段包含建表语句，建表后立即导出结果。
+===============================================================================
+*/
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_bid_success_20260801_20261023_samples;
+CREATE TABLE model.tmp_eliam_wagego_new_user_bid_success_20260801_20261023_samples AS
+SELECT
+     loan_no                                              AS flow_id
+    ,user_id
+    ,listing_id
+    ,apply_status
+    ,apply_status_desc
+    ,is_disburse_success
+    ,apply_time                                           AS sample_datetime
+    ,apply_date
+    ,apply_month
+    ,disburse_time
+    ,apply_amount
+    ,real_amount
+    ,term_quantity
+    ,term_unit
+    ,total_period
+    ,bid_time
+    ,bid_status
+    ,is_deal
+    ,full_bid_time
+    ,fail_bid_time
+    ,withdraw_time
+    ,list_due_date
+    ,user_type
+    ,first_disburse_time
+FROM model.tmp_eliam_wagego_dwd_loan_apply_label
+WHERE user_type = 'New'
+  AND is_disburse_success = 1
+  AND apply_date >= TO_DATE('2026-08-01')
+  AND apply_date <  TO_DATE('2026-10-24')
+;
+SELECT *
+FROM model.tmp_eliam_wagego_new_user_bid_success_20260801_20261023_samples
+;
+
+
+/*
+===============================================================================
+8. 老客发标样本
+目标表：model.tmp_eliam_wagego_old_user_bid_20260801_20261023_samples
+粒度：一行一条老客借款申请（首笔放款之后）
+用途：老客的全部发标申请，按申请时间筛选样本窗口。
+说明：依赖第 3 段的主表；本段包含建表语句，建表后立即导出结果。
+===============================================================================
+*/
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_old_user_bid_20260801_20261023_samples;
+CREATE TABLE model.tmp_eliam_wagego_old_user_bid_20260801_20261023_samples AS
+SELECT
+     loan_no                                              AS flow_id
+    ,user_id
+    ,listing_id
+    ,apply_status
+    ,apply_status_desc
+    ,is_disburse_success
+    ,apply_time                                           AS sample_datetime
+    ,apply_date
+    ,apply_month
+    ,disburse_time
+    ,apply_amount
+    ,real_amount
+    ,term_quantity
+    ,term_unit
+    ,total_period
+    ,bid_time
+    ,bid_status
+    ,is_deal
+    ,full_bid_time
+    ,fail_bid_time
+    ,withdraw_time
+    ,list_due_date
+    ,user_type
+    ,first_disburse_time
+FROM model.tmp_eliam_wagego_dwd_loan_apply_label
+WHERE user_type = 'Old'
+  AND apply_date >= TO_DATE('2026-08-01')
+  AND apply_date <  TO_DATE('2026-10-24')
+;
+SELECT *
+FROM model.tmp_eliam_wagego_old_user_bid_20260801_20261023_samples
+;
+
+
+/*
+===============================================================================
+9. 老客发标成交样本
+目标表：model.tmp_eliam_wagego_old_user_bid_success_20260801_20261023_samples
+粒度：一行一条老客放款成功的借款申请
+用途：老客发标中放款成功的申请，按申请时间筛选样本窗口。
+说明：依赖第 3 段的主表；本段包含建表语句，建表后立即导出结果。
+===============================================================================
+*/
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_old_user_bid_success_20260801_20261023_samples;
+CREATE TABLE model.tmp_eliam_wagego_old_user_bid_success_20260801_20261023_samples AS
+SELECT
+     loan_no                                              AS flow_id
+    ,user_id
+    ,listing_id
+    ,apply_status
+    ,apply_status_desc
+    ,is_disburse_success
+    ,apply_time                                           AS sample_datetime
+    ,apply_date
+    ,apply_month
+    ,disburse_time
+    ,apply_amount
+    ,real_amount
+    ,term_quantity
+    ,term_unit
+    ,total_period
+    ,bid_time
+    ,bid_status
+    ,is_deal
+    ,full_bid_time
+    ,fail_bid_time
+    ,withdraw_time
+    ,list_due_date
+    ,user_type
+    ,first_disburse_time
+FROM model.tmp_eliam_wagego_dwd_loan_apply_label
+WHERE user_type = 'Old'
+  AND is_disburse_success = 1
+  AND apply_date >= TO_DATE('2026-08-01')
+  AND apply_date <  TO_DATE('2026-10-24')
+;
+SELECT *
+FROM model.tmp_eliam_wagego_old_user_bid_success_20260801_20261023_samples
 ;

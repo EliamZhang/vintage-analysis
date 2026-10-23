@@ -4,7 +4,7 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 -- 新客戳额样本按戳额时间筛选，发标及发标成交样本按申请时间筛选
 -- 事件时间列统一命名为 sample_datetime
 
--- 新客首笔申请样本：每个用户的第一条借款申请（无论成败）及其申请前最近一次戳额
+-- 新客戳额首笔申请样本：每个用户的第一条借款申请（无论成败）及其申请前最近一次戳额
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples;
 CREATE TABLE model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples AS
 SELECT
@@ -26,7 +26,7 @@ WHERE apply_seq = 1
 ;
 
 
--- 新客首笔成交样本：每个用户第一次放款成功的记录及其之前最近一次戳额
+-- 新客戳额首笔成交样本：每个用户第一次放款成功的记录及其之前最近一次戳额
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples;
 CREATE TABLE model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples AS
 SELECT

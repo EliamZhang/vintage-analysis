@@ -1,4 +1,4 @@
-"""执行 queries.sql，把《放款申请样本表及Y标签.sql》依赖的原始表和产出表打包成 vintage_data.zip。
+"""执行 queries.sql，把主流程加工表和新老客戳额/发标样本表打包成 vintage_data.zip。
 
 queries.sql 按「N. 段名」注释分段，段号从 1 连续排列。每段可以包含多条以分号结尾的
 语句：前面的语句是建表等准备工作，最后一条语句的结果写入 原始数据/ 下的 CSV。本脚本：
@@ -42,15 +42,15 @@ BUSINESS_TZ = timezone(timedelta(hours=8))
 
 # 段号 → 输出文件。段号必须和 queries.sql 段首注释一一对应，且从 1 连续排列。
 SEGMENT_SPECS = {
-    "1": {"file": "01_aus_ewa_loan_biz_t_loan_application"},
-    "2": {"file": "02_dwb_asset_cmn_listing"},
-    "3": {"file": "03_dwb_asset_debt_dtl_snp"},
-    "4": {"file": "04_aus_ewa_risk_risk_event_task"},
-    "5": {"file": "05_aus_listing_tb_loan_limit_apply"},
-    "6": {"file": "06_aus_cbd_gidp_core_ewa_gidp_model_run_log"},
-    "7": {"file": "07_tmp_eliam_wagego_param_obs_date"},
-    "8": {"file": "08_tmp_eliam_wagego_stg_debt_snp"},
-    "9": {"file": "09_tmp_eliam_wagego_dwd_loan_apply_label"},
+    "1": {"file": "01_tmp_eliam_wagego_param_obs_date"},
+    "2": {"file": "02_tmp_eliam_wagego_stg_debt_snp"},
+    "3": {"file": "03_tmp_eliam_wagego_dwd_loan_apply_label"},
+    "4": {"file": "04_tmp_eliam_wagego_new_user_credit_20260801_20261023_samples"},
+    "5": {"file": "05_tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples"},
+    "6": {"file": "06_tmp_eliam_wagego_new_user_bid_20260801_20261023_samples"},
+    "7": {"file": "07_tmp_eliam_wagego_new_user_bid_success_20260801_20261023_samples"},
+    "8": {"file": "08_tmp_eliam_wagego_old_user_bid_20260801_20261023_samples"},
+    "9": {"file": "09_tmp_eliam_wagego_old_user_bid_success_20260801_20261023_samples"},
 }
 
 _HEADER_RE = re.compile(r"/\*\s*\r?\n\s*=+\s*\r?\n\s*(\d+)\.\s+([^\r\n]+)")
@@ -258,19 +258,19 @@ def run_sync(statements, query_fn):
             for path, arcname in packaged:
                 archive.write(path, arcname)
         temporary_zip.replace(ZIP_FILE)
-        print(f"\n已打包：{ZIP_FILE}（原始数据 {len(packaged)} 个文件）")
+        print(f"\n已打包：{ZIP_FILE}（数据表 {len(packaged)} 个文件）")
     else:
         print(f"\n本次没有可打包的成功结果，未更新 {ZIP_FILE.name}")
 
     print(f"\n成功：{len(success_tables)} / 本次失败：{len(failed_tables)}")
-    print(f"原始数据：{RAW_DIR.resolve()}")
+    print(f"输出目录：{RAW_DIR.resolve()}")
     print(f"失败清单：{FAILED_FILE.resolve()}")
     print(f"运行清单：{MANIFEST_FILE.resolve()}")
     return 1 if failed_tables else 0
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="执行 queries.sql 并打包原始数据。")
+    parser = argparse.ArgumentParser(description="执行 queries.sql 并打包产出数据。")
     parser.add_argument("--segments", help="只执行指定段，逗号分隔，如 3,4")
     parser.add_argument("--dry-run", action="store_true", help="只检查段号和输出文件名，不连接数据库")
     args = parser.parse_args(argv)
