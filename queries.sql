@@ -337,6 +337,14 @@ loan_apply AS (
     LEFT JOIN credit_matched sm
       ON a.loan_no = sm.loan_no
 ),
+first_disburse AS (
+    SELECT
+         user_id
+        ,MIN(disburse_time)                                   AS first_disburse_time
+    FROM loan_apply
+    WHERE is_disburse_success = 1
+    GROUP BY user_id
+),
 latest AS (
     SELECT
          a.*
@@ -350,6 +358,10 @@ latest AS (
         ,CAST(l.is_deal AS INT)                               AS is_deal
         ,CAST(l.withdraw_time AS TIMESTAMP)                   AS withdraw_time
         ,CAST(l.list_due_date AS DATE)                        AS list_due_date
+        ,CAST(l.bid_time AS TIMESTAMP)                        AS bid_time
+        ,CAST(l.bid_status AS INT)                            AS bid_status
+        ,CAST(l.full_bid_time AS TIMESTAMP)                   AS full_bid_time
+        ,CAST(l.fail_bid_time AS TIMESTAMP)                   AS fail_bid_time
         ,s.listing_id                                         AS debt_listing_id
         ,s.init_due_date
         ,CASE WHEN s.init_due_date IS NOT NULL THEN DATE_ADD(s.init_due_date, 31) END AS label_obs_dt
@@ -367,8 +379,11 @@ latest AS (
         ,CASE WHEN a.is_disburse_success = 1 AND CAST(l.is_deal AS INT) = 1 AND s.listing_id IS NOT NULL
                AND DATE_ADD(s.init_due_date, 31) BETWEEN TO_DATE(a.disburse_time) AND p.obs_dt
               THEN 1 ELSE 0 END                               AS is_due_matured
+        ,f.first_disburse_time
     FROM loan_apply a
     CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
+    LEFT JOIN first_disburse f
+      ON a.user_id = f.user_id
     LEFT JOIN edw_ewa.dwb_asset_cmn_listing l
       ON a.listing_id = l.listing_id
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp s
@@ -558,7 +573,10 @@ labeled AS (
         ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ever_ovd_amt
         ,DATE_FORMAT(b.disburse_time, 'yyyy-MM')                 AS disburse_month
         ,DATEDIFF(b.obs_dt, TO_DATE(b.disburse_time))            AS days_on_book
-        ,CASE WHEN b.application_rank = 1 THEN 'New' WHEN b.application_rank IS NOT NULL THEN 'Old' END AS user_type
+        ,CASE WHEN b.first_disburse_time IS NULL THEN 'New'
+              WHEN COALESCE(b.disburse_time, b.apply_time) <= b.first_disburse_time THEN 'New'
+              ELSE 'Old'
+         END                                                  AS user_type
         ,m.y_mob1_5plus_cnt
         ,m.y_mob1_ever_5plus_cnt
         ,m.y_mob2_5plus_cnt
@@ -639,6 +657,10 @@ SELECT
     ,term_quantity
     ,term_unit
     ,total_period
+    ,bid_time
+    ,bid_status
+    ,full_bid_time
+    ,fail_bid_time
     ,is_deal
     ,withdraw_time
     ,list_due_date
@@ -688,6 +710,7 @@ SELECT
     ,disburse_month
     ,days_on_book
     ,user_type
+    ,first_disburse_time
     ,y_mob1_obs_cnt
     ,y_mob1_obs_amt
     ,y_mob1_5plus_cnt
