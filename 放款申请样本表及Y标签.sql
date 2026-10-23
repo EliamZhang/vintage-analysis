@@ -345,6 +345,20 @@ mob_track_wide AS (
     FROM mob_track_detail
     GROUP BY loan_no
 ),
+model_log AS (
+    SELECT
+         t.scene_id                                                                                   AS loan_no
+        ,CAST(GET_JSON_OBJECT(t.model_output, '$.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626') AS DOUBLE) AS aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
+    FROM (
+        SELECT
+             r.scene_id
+            ,r.model_output
+            ,ROW_NUMBER() OVER (PARTITION BY r.scene_id ORDER BY CAST(r.start_time AS TIMESTAMP) DESC, CAST(r.inserttime AS TIMESTAMP) DESC) AS rn
+        FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log r
+        WHERE r.model_code = 'aus_wagego_new_risk_3rd_v1_0'
+    ) t
+    WHERE t.rn = 1
+),
 labeled AS (
     SELECT
          b.*
@@ -399,11 +413,14 @@ labeled AS (
         ,t.estimate_principal_remaining_mob4
         ,t.dpd_days_mob4
         ,t.dpd_days_ever_mob4
+        ,ml.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
     FROM base b
     LEFT JOIN mob_label_wide m
       ON b.loan_no = m.loan_no
     LEFT JOIN mob_track_wide t
       ON b.loan_no = t.loan_no
+    LEFT JOIN model_log ml
+      ON b.loan_no = ml.loan_no
 )
 SELECT
      loan_no
@@ -505,5 +522,6 @@ SELECT
     ,estimate_principal_remaining_mob4
     ,dpd_days_mob4
     ,dpd_days_ever_mob4
+    ,aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
 FROM labeled
 ;

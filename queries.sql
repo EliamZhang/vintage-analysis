@@ -4,23 +4,25 @@ WageGo Vintage 数据同步 SQL
 适用语法：Spark SQL / Hive 风格（与《放款申请样本表及Y标签.sql》一致）
 
 本文件按段号顺序执行，结果落到 原始数据/：
-  1~5  原始表（《放款申请样本表及Y标签.sql》直接依赖）
-    1. ods_ewa.aus_ewa_loan_biz_t_loan_application  借款申请
-    2. edw_ewa.dwb_asset_cmn_listing                放款信息
-    3. edw_ewa.dwb_asset_debt_dtl_snp               债务快照
-    4. ods_ewa.aus_ewa_risk_risk_event_task         风控事件（按 biz_id 裁剪）
-    5. ods_ewa.aus_listing_tb_loan_limit_apply      额度申请（戳额）
-  6~8  加工表（库中原本没有，由本文件建表后导出）
-    6. model.tmp_eliam_wagego_param_obs_date        观察日参数
-    7. model.tmp_eliam_wagego_stg_debt_snp          借据日快照宽表
-    8. model.tmp_eliam_wagego_dwd_loan_apply_label  放款申请样本表及Y标签
+  1~6  原始表（《放款申请样本表及Y标签.sql》直接依赖）
+    1. ods_ewa.aus_ewa_loan_biz_t_loan_application          借款申请
+    2. edw_ewa.dwb_asset_cmn_listing                        放款信息
+    3. edw_ewa.dwb_asset_debt_dtl_snp                       债务快照
+    4. ods_ewa.aus_ewa_risk_risk_event_task                 风控事件（按 biz_id 裁剪）
+    5. ods_ewa.aus_listing_tb_loan_limit_apply              额度申请（戳额）
+    6. ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log     模型调用日志（按 model_code 裁剪）
+  7~9  加工表（库中原本没有，由本文件建表后导出）
+    7. model.tmp_eliam_wagego_param_obs_date                观察日参数
+    8. model.tmp_eliam_wagego_stg_debt_snp                  借据日快照宽表
+    9. model.tmp_eliam_wagego_dwd_loan_apply_label          放款申请样本表及Y标签
 
 说明：
 - 段首用注释块标注「N. 段名」，段号从 1 连续排列，并与 sync.py 的 SEGMENT_SPECS 对应。
 - 每段可包含多条以分号分隔的语句：前面的语句是建表等准备动作，最后一条语句的结果写入 CSV。
-- 6~8 段需按顺序执行：第 7 段使用第 6 段建的观察日参数表，第 8 段使用第 7 段的宽表。
+- 7~9 段需按顺序执行：第 8 段使用第 7 段建的观察日参数表，第 9 段使用第 8 段的宽表。
 - 底表按原表全量取数；风控事件表只保留本流程用到的 biz_id = 20050（借款申请事件）
-  和 biz_id = 10000（历史戳额事件），避免把无关风控记录打进数据包。
+  和 biz_id = 10000（历史戳额事件）；模型调用日志只保留本流程用到的
+  model_code = aus_wagego_new_risk_3rd_v1_0（放款阶段三方模型分），避免把无关记录打进数据包。
 - 源脚本开头的 SET spark.sql.session.timeZone = Australia/Sydney 由执行环境负责；
   请保持同一时区执行，避免 TO_DATE / DATE_FORMAT 在跨时区会话下产生日期偏移。
 ===============================================================================
@@ -98,7 +100,23 @@ FROM ods_ewa.aus_listing_tb_loan_limit_apply
 
 /*
 ===============================================================================
-6. 观察日参数表（加工表）
+6. 模型调用日志表（原始数据，按 model_code 裁剪）
+源表：ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log
+粒度：一行一次模型调用
+用途：scene_id 为放款号时提供放款阶段三方模型分，分值在 model_output 的
+      $.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626 字段。
+说明：只保留本流程用到的 model_code，避免把无关模型日志打进数据包。
+===============================================================================
+*/
+SELECT *
+FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log
+WHERE model_code = 'aus_wagego_new_risk_3rd_v1_0'
+;
+
+
+/*
+===============================================================================
+7. 观察日参数表（加工表）
 目标表：model.tmp_eliam_wagego_param_obs_date
 粒度：一行一个全局观察日 obs_dt
 用途：取债务快照表的最新快照日，作为后续加工步骤统一的“当前时点”。
@@ -117,11 +135,11 @@ FROM model.tmp_eliam_wagego_param_obs_date
 
 /*
 ===============================================================================
-7. 借据日快照宽表（加工表）
+8. 借据日快照宽表（加工表）
 目标表：model.tmp_eliam_wagego_stg_debt_snp
 粒度：一行一个借据（listing_id）× 快照日期（stat_date）
 用途：把“借据 × 期数 × 快照日”的债务明细汇总成借据级日状态。
-说明：库里没有这张表，本段包含建表语句；依赖第 6 段的观察日参数表。
+说明：库里没有这张表，本段包含建表语句；依赖第 7 段的观察日参数表。
 ===============================================================================
 */
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_stg_debt_snp;
@@ -193,11 +211,11 @@ FROM model.tmp_eliam_wagego_stg_debt_snp
 
 /*
 ===============================================================================
-8. 放款申请样本表及Y标签（加工表）
+9. 放款申请样本表及Y标签（加工表）
 目标表：model.tmp_eliam_wagego_dwd_loan_apply_label
 粒度：一行一条有效贷款申请（loan_no）
 用途：以申请为一行，关联放款信息、观察日状态、标签时点状态和各类 Y 标签。
-说明：库里没有这张表，本段包含建表语句；依赖第 6 段的观察日参数表和第 7 段的宽表。
+说明：库里没有这张表，本段包含建表语句；依赖第 7 段的观察日参数表和第 8 段的宽表。
 ===============================================================================
 */
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_dwd_loan_apply_label;
@@ -475,6 +493,20 @@ mob_track_wide AS (
     FROM mob_track_detail
     GROUP BY loan_no
 ),
+model_log AS (
+    SELECT
+         t.scene_id                                                                                   AS loan_no
+        ,CAST(GET_JSON_OBJECT(t.model_output, '$.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626') AS DOUBLE) AS aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
+    FROM (
+        SELECT
+             r.scene_id
+            ,r.model_output
+            ,ROW_NUMBER() OVER (PARTITION BY r.scene_id ORDER BY CAST(r.start_time AS TIMESTAMP) DESC, CAST(r.inserttime AS TIMESTAMP) DESC) AS rn
+        FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log r
+        WHERE r.model_code = 'aus_wagego_new_risk_3rd_v1_0'
+    ) t
+    WHERE t.rn = 1
+),
 labeled AS (
     SELECT
          b.*
@@ -529,11 +561,14 @@ labeled AS (
         ,t.estimate_principal_remaining_mob4
         ,t.dpd_days_mob4
         ,t.dpd_days_ever_mob4
+        ,ml.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
     FROM base b
     LEFT JOIN mob_label_wide m
       ON b.loan_no = m.loan_no
     LEFT JOIN mob_track_wide t
       ON b.loan_no = t.loan_no
+    LEFT JOIN model_log ml
+      ON b.loan_no = ml.loan_no
 )
 SELECT
      loan_no
@@ -635,6 +670,7 @@ SELECT
     ,estimate_principal_remaining_mob4
     ,dpd_days_mob4
     ,dpd_days_ever_mob4
+    ,aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
 FROM labeled
 ;
 SELECT *

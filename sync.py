@@ -47,9 +47,10 @@ SEGMENT_SPECS = {
     "3": {"file": "03_dwb_asset_debt_dtl_snp"},
     "4": {"file": "04_aus_ewa_risk_risk_event_task"},
     "5": {"file": "05_aus_listing_tb_loan_limit_apply"},
-    "6": {"file": "06_tmp_eliam_wagego_param_obs_date"},
-    "7": {"file": "07_tmp_eliam_wagego_stg_debt_snp"},
-    "8": {"file": "08_tmp_eliam_wagego_dwd_loan_apply_label"},
+    "6": {"file": "06_aus_cbd_gidp_core_ewa_gidp_model_run_log"},
+    "7": {"file": "07_tmp_eliam_wagego_param_obs_date"},
+    "8": {"file": "08_tmp_eliam_wagego_stg_debt_snp"},
+    "9": {"file": "09_tmp_eliam_wagego_dwd_loan_apply_label"},
 }
 
 _HEADER_RE = re.compile(r"/\*\s*\r?\n\s*=+\s*\r?\n\s*(\d+)\.\s+([^\r\n]+)")
