@@ -3,7 +3,7 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 -- 样本时间窗：2026-08-01 至 2026-10-23（今天），表名中的 _20260801_20261023 对应此窗口
 -- 新客戳额样本按戳额时间筛选，发标及发标成交样本按申请时间筛选
 -- 事件时间列统一命名为 sample_datetime
--- 每个样本表末尾附带 13 个核心 y 标签，直接取自主表同名字段
+-- 每个样本表末尾附带 19 个核心 y 标签，直接取自主表同名字段
 -- 新老客标签 user_type 也直接取自主表
 
 -- 新客戳额首笔申请样本：每个用户的第一条借款申请（无论成败）及其申请前最近一次戳额
@@ -29,12 +29,18 @@ SELECT
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
     ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_30plus_cnt
     ,y_mob1_ever_5plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_30plus_cnt
     ,y_mob2_ever_5plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_30plus_cnt
     ,y_mob3_ever_5plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
@@ -65,12 +71,18 @@ SELECT
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
     ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_30plus_cnt
     ,y_mob1_ever_5plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_30plus_cnt
     ,y_mob2_ever_5plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_30plus_cnt
     ,y_mob3_ever_5plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
@@ -115,12 +127,18 @@ SELECT
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
     ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_30plus_cnt
     ,y_mob1_ever_5plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_30plus_cnt
     ,y_mob2_ever_5plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_30plus_cnt
     ,y_mob3_ever_5plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
@@ -165,12 +183,18 @@ SELECT
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
     ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_30plus_cnt
     ,y_mob1_ever_5plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_30plus_cnt
     ,y_mob2_ever_5plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_30plus_cnt
     ,y_mob3_ever_5plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
@@ -216,12 +240,18 @@ SELECT
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
     ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_30plus_cnt
     ,y_mob1_ever_5plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_30plus_cnt
     ,y_mob2_ever_5plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_30plus_cnt
     ,y_mob3_ever_5plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
@@ -266,12 +296,18 @@ SELECT
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
     ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_30plus_cnt
     ,y_mob1_ever_5plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_30plus_cnt
     ,y_mob2_ever_5plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_30plus_cnt
     ,y_mob3_ever_5plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label

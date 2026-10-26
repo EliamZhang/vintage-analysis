@@ -275,35 +275,18 @@ mob_obs AS (
     WHERE b.is_disburse_success = 1
       AND LAST_DAY(ADD_MONTHS(TO_DATE(b.disburse_time), m.mob_no)) <= b.obs_dt
 ),
-mob_label_detail AS (
-    SELECT
-         o.loan_no
-        ,o.mob_no
-        ,CASE WHEN d.hist_overdue_days IS NOT NULL
-              THEN CASE WHEN d.hist_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_ever_5plus
-        ,CASE WHEN d.hist_overdue_days IS NOT NULL
-              THEN CASE WHEN d.hist_overdue_days > 30 THEN 1 ELSE 0 END END AS is_ever_30plus
-    FROM mob_obs o
-    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d
-      ON o.listing_id = d.listing_id
-     AND o.mob_obs_dt = d.stat_date
-),
-mob_label_wide AS (
-    SELECT
-         loan_no
-        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_5plus END) AS y_mob1_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_30plus END) AS y_mob1_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_5plus END) AS y_mob2_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_30plus END) AS y_mob2_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_5plus END) AS y_mob3_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_30plus END) AS y_mob3_ever_30plus_cnt
-    FROM mob_label_detail
-    GROUP BY loan_no
-),
-mob_track_detail AS (
+mob_snapshot_detail AS (
     SELECT
          t.loan_no
         ,t.mob_no
+        ,CASE WHEN t.current_overdue_days IS NOT NULL
+              THEN CASE WHEN t.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
+        ,CASE WHEN t.current_overdue_days IS NOT NULL
+              THEN CASE WHEN t.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus
+        ,CASE WHEN t.hist_overdue_days IS NOT NULL
+              THEN CASE WHEN t.hist_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_ever_5plus
+        ,CASE WHEN t.hist_overdue_days IS NOT NULL
+              THEN CASE WHEN t.hist_overdue_days > 30 THEN 1 ELSE 0 END END AS is_ever_30plus
         ,GREATEST(COALESCE(t.owing_principal, 0), 0) AS estimate_principal_remaining
         ,COALESCE(t.current_overdue_days, 0)         AS dpd_days
         ,COALESCE(t.hist_overdue_days, 0)            AS dpd_days_ever
@@ -316,7 +299,7 @@ mob_track_detail AS (
             ,d.hist_overdue_days
             ,ROW_NUMBER() OVER (
                  PARTITION BY o.loan_no, o.mob_no
-                 ORDER BY CASE WHEN d.stat_date <= o.mob_obs_dt THEN 0 ELSE 1 END
+                 ORDER BY CASE WHEN d.stat_date = o.mob_obs_dt THEN 0 ELSE 1 END
                          ,CASE WHEN d.stat_date <= o.mob_obs_dt THEN DATEDIFF(o.mob_obs_dt, d.stat_date)
                                ELSE DATEDIFF(d.stat_date, o.mob_obs_dt) END
              ) AS rn
@@ -324,9 +307,30 @@ mob_track_detail AS (
         JOIN model.tmp_eliam_wagego_stg_debt_snp d
           ON o.listing_id = d.listing_id
          AND d.stat_date >= o.disburse_date
-         AND d.stat_date <= DATE_ADD(o.mob_obs_dt, CASE WHEN o.mob_no = 0 THEN 7 ELSE 0 END)
+         AND (
+              (o.mob_no = 0 AND d.stat_date <= DATE_ADD(o.mob_obs_dt, 7))
+              OR (o.mob_no >= 1 AND d.stat_date = o.mob_obs_dt)
+         )
     ) t
     WHERE t.rn = 1
+),
+mob_label_wide AS (
+    SELECT
+         loan_no
+        ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS y_mob1_5plus_cnt
+        ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS y_mob1_30plus_cnt
+        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_5plus END) AS y_mob1_ever_5plus_cnt
+        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_30plus END) AS y_mob1_ever_30plus_cnt
+        ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS y_mob2_5plus_cnt
+        ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS y_mob2_30plus_cnt
+        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_5plus END) AS y_mob2_ever_5plus_cnt
+        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_30plus END) AS y_mob2_ever_30plus_cnt
+        ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS y_mob3_5plus_cnt
+        ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS y_mob3_30plus_cnt
+        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_5plus END) AS y_mob3_ever_5plus_cnt
+        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_30plus END) AS y_mob3_ever_30plus_cnt
+    FROM mob_snapshot_detail
+    GROUP BY loan_no
 ),
 mob_track_wide AS (
     SELECT
@@ -346,7 +350,7 @@ mob_track_wide AS (
         ,MAX(CASE WHEN mob_no = 4 THEN estimate_principal_remaining END) AS estimate_principal_remaining_mob4
         ,MAX(CASE WHEN mob_no = 4 THEN dpd_days END)                     AS dpd_days_mob4
         ,MAX(CASE WHEN mob_no = 4 THEN dpd_days_ever END)                AS dpd_days_ever_mob4
-    FROM mob_track_detail
+    FROM mob_snapshot_detail
     GROUP BY loan_no
 ),
 model_log AS (
@@ -378,10 +382,16 @@ labeled AS (
               WHEN COALESCE(b.disburse_time, b.apply_time) <= b.first_disburse_time THEN 'New'
               ELSE 'Old'
          END                                                  AS user_type
+        ,m.y_mob1_5plus_cnt
+        ,m.y_mob1_30plus_cnt
         ,m.y_mob1_ever_5plus_cnt
         ,m.y_mob1_ever_30plus_cnt
+        ,m.y_mob2_5plus_cnt
+        ,m.y_mob2_30plus_cnt
         ,m.y_mob2_ever_5plus_cnt
         ,m.y_mob2_ever_30plus_cnt
+        ,m.y_mob3_5plus_cnt
+        ,m.y_mob3_30plus_cnt
         ,m.y_mob3_ever_5plus_cnt
         ,m.y_mob3_ever_30plus_cnt
         ,t.estimate_principal_remaining_mob0
@@ -467,12 +477,18 @@ SELECT
     ,user_type
     ,first_disburse_time
     ,y_mob1_obs_cnt
+    ,y_mob1_5plus_cnt
+    ,y_mob1_30plus_cnt
     ,y_mob1_ever_5plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
+    ,y_mob2_5plus_cnt
+    ,y_mob2_30plus_cnt
     ,y_mob2_ever_5plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
+    ,y_mob3_5plus_cnt
+    ,y_mob3_30plus_cnt
     ,y_mob3_ever_5plus_cnt
     ,y_mob3_ever_30plus_cnt
     ,estimate_principal_remaining_mob0
