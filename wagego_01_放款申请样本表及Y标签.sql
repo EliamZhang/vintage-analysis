@@ -1,11 +1,11 @@
 -- ============================================================================
--- 输出：model.tmp_eliam_wagego_dwd_loan_apply_label（一行一条借款申请，共 88 列）
+-- 输出：model.tmp_eliam_wagego_dwd_loan_apply_label（一行一条借款申请，共 94 列）
 -- 观察日：obs_dt = 债务快照表最新日期
 -- 代码顺序：obs_dt → 借据日快照 → 申请/放款 → 成熟门控 → MOB 快照 → 标签/金额 → 输出
 --
--- Y 标签 19 个（全部 0/1 标记，SUM 即笔数）
---   FPD 4 ：y_fpd{7,15}_obs   窗口成熟，可判定
---           y_fpd{7,15}_ovd   首期实还日 > due+N
+-- Y 标签 25 个（全部 0/1 标记，SUM 即笔数）
+--   FPD 10：y_fpd{1,3,7,15,30}_obs   窗口成熟，可判定
+--           y_fpd{1,3,7,15,30}_ovd   首期实还日 > due+N
 --   MOB 15：y_mob{1,2,3}_obs              月末已到
 --           y_mob{1,2,3}_5plus             月末 current DPD >= 5
 --           y_mob{1,2,3}_30plus            月末 current DPD > 30
@@ -270,11 +270,20 @@ obs_labels AS (
     SELECT
          l.*
         ,CASE WHEN l.is_fpd_eligible = 1
+               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 1)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd1_obs
+        ,CASE WHEN l.is_fpd_eligible = 1
+               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 3)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd3_obs
+        ,CASE WHEN l.is_fpd_eligible = 1
                AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 7)) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd7_obs
         ,CASE WHEN l.is_fpd_eligible = 1
                AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 15)) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd15_obs
+        ,CASE WHEN l.is_fpd_eligible = 1
+               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 30)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd30_obs
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 1)) <= l.obs_dt THEN 1 ELSE 0 END
          END                                                  AS y_mob1_obs
@@ -398,8 +407,11 @@ labeled AS (
     SELECT
          b.*
         -- FPD 标签：obs 已在 obs_labels，这里补 ovd
-        ,CASE WHEN b.y_fpd7_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd
+        ,CASE WHEN b.y_fpd1_obs = 1  THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 1)  THEN 1 ELSE 0 END END AS y_fpd1_ovd
+        ,CASE WHEN b.y_fpd3_obs = 1  THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3)  THEN 1 ELSE 0 END END AS y_fpd3_ovd
+        ,CASE WHEN b.y_fpd7_obs = 1  THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7)  THEN 1 ELSE 0 END END AS y_fpd7_ovd
         ,CASE WHEN b.y_fpd15_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END END AS y_fpd15_ovd
+        ,CASE WHEN b.y_fpd30_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS y_fpd30_ovd
         -- 时间 / 新老客
         ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN DATEDIFF(TO_DATE(b.user_actual_repay_time), TO_DATE(b.disburse_time)) END AS loan_term_actual_days
@@ -443,7 +455,9 @@ SELECT
     ,hist_overdue_days, current_overdue_days
     ,principal, repay_amount, owing_amount, obs_dt
     -- FPD 标签
+    ,y_fpd1_obs, y_fpd1_ovd, y_fpd3_obs, y_fpd3_ovd
     ,y_fpd7_obs, y_fpd7_ovd, y_fpd15_obs, y_fpd15_ovd
+    ,y_fpd30_obs, y_fpd30_ovd
     -- 时间 / 新老客
     ,loan_term_contract_days, loan_term_actual_days, is_early_settlement
     ,disburse_month, disburse_quarter, days_on_book, user_type
