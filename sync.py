@@ -1,11 +1,7 @@
-"""执行 queries.sql，把主流程加工表和新老客戳额/发标样本表打包成 vintage_data.zip。
+"""执行 wagego_04_vintage分析.sql，把各查询块结果写入 原始数据/ 并打包成 vintage_data.zip。
 
-queries.sql 按「N. 段名」注释分段，段号从 1 连续排列。每段可以包含多条以分号结尾的
-语句：前面的语句是建表等准备工作，最后一条语句的结果写入 原始数据/ 下的 CSV。本脚本：
-1. 按段号顺序执行，每段结果写入 原始数据/ 下的 CSV；
-2. 打包成 vintage_data.zip，压缩包根目录只有 原始数据/ 文件夹；
-3. 运行日志、失败清单和 manifest 放在 同步日志/，不进入压缩包。
-
+SQL 文件按「块 N」注释组织；脚本按分号拆分语句，开头的 SET 作为全局会话设置，
+其余 SELECT 按 QUERY_SPECS 的顺序执行，每个结果写一个 CSV。
 数据库连接由外部 hive_config.query_to_df(sql) 提供，本脚本不负责建连。
 """
 
@@ -28,7 +24,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
-SQL_FILE = PROJECT_DIR / "queries.sql"
+SQL_FILE = PROJECT_DIR / "wagego_04_vintage分析.sql"
 
 RAW_DIR = PROJECT_DIR / "原始数据"
 LOG_DIR = PROJECT_DIR / "同步日志"
@@ -37,23 +33,20 @@ FAILED_FILE = LOG_DIR / "failed_tables.csv"
 ZIP_FILE = PROJECT_DIR / "vintage_data.zip"
 
 RAW_DIR_NAME = "原始数据"
-
 BUSINESS_TZ = timezone(timedelta(hours=8))
 
-# 段号 → 输出文件。段号必须和 queries.sql 段首注释一一对应，且从 1 连续排列。
-SEGMENT_SPECS = {
-    "1": {"file": "01_tmp_eliam_wagego_param_obs_date"},
-    "2": {"file": "02_tmp_eliam_wagego_stg_debt_snp"},
-    "3": {"file": "03_tmp_eliam_wagego_dwd_loan_apply_label"},
-    "4": {"file": "04_tmp_eliam_wagego_new_user_credit_20260801_20261023_samples"},
-    "5": {"file": "05_tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples"},
-    "6": {"file": "06_tmp_eliam_wagego_new_user_bid_20260801_20261023_samples"},
-    "7": {"file": "07_tmp_eliam_wagego_new_user_bid_success_20260801_20261023_samples"},
-    "8": {"file": "08_tmp_eliam_wagego_old_user_bid_20260801_20261023_samples"},
-    "9": {"file": "09_tmp_eliam_wagego_old_user_bid_success_20260801_20261023_samples"},
-}
+# 块号 → 输出文件。顺序必须与 SQL 中 SET 之后的 SELECT 一一对应。
+QUERY_SPECS = (
+    {"id": "1", "file": "vintage_01_fpd_overall", "title": "各窗口成熟样本、坏样本、笔数坏率、金额坏率"},
+    {"id": "2", "file": "vintage_02_fpd15_vs_fpd30", "title": "共同 cohort 上 FPD15 vs FPD30"},
+    {"id": "3", "file": "vintage_03_user_type", "title": "新老客拆分（每个 FPD 窗口 × user_type）"},
+    {"id": "4", "file": "vintage_04_week", "title": "按放款周的 vintage 路径"},
+    {"id": "5a", "file": "vintage_05a_score_coverage", "title": "模型分覆盖（FPD15 成熟样本）"},
+    {"id": "5b", "file": "vintage_05b_score_quintile", "title": "模型分五分位 × 新老客"},
+    {"id": "6", "file": "vintage_06_score_quintile_week", "title": "模型分五分位 × 放款周"},
+    {"id": "7", "file": "vintage_07_application_rank", "title": "老客复借期数（FPD15）"},
+)
 
-_HEADER_RE = re.compile(r"/\*\s*\r?\n\s*=+\s*\r?\n\s*(\d+)\.\s+([^\r\n]+)")
 _BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", flags=re.S)
 _LINE_COMMENT_RE = re.compile(r"--[^\n]*")
 
@@ -75,75 +68,48 @@ def file_digest(path, chunk_size=1024 * 1024):
 
 
 def split_statements(sql_text):
-    """按段首「N. 段名」注释分块，每块再按分号拆成多条语句。
-
-    只有以「/* + 等号行 + 标题行」开头的注释块才算段首。段内最后一条语句视为查询，
-    其余语句作为建表等准备语句依次执行。
-    """
-    headers = []
-    for block in _BLOCK_COMMENT_RE.finditer(sql_text):
-        match = _HEADER_RE.match(block.group(0))
-        if match:
-            headers.append((block.start(), block.end(), match.group(1), match.group(2).strip()))
-    if not headers:
-        raise ValueError("queries.sql 中没有找到「N. 段名」注释")
-
-    statements = []
-    seen = set()
-    for index, (_, header_end, number, title) in enumerate(headers):
-        end = headers[index + 1][0] if index + 1 < len(headers) else len(sql_text)
-        chunk = sql_text[header_end:end]
-
-        body = _BLOCK_COMMENT_RE.sub(" ", chunk)
-        body = _LINE_COMMENT_RE.sub(" ", body)
-        parts = [part.strip() for part in body.split(";") if part.strip()]
-
-        if not parts:
-            raise ValueError(f"段 {number} 没有可执行语句")
-        if number in seen:
-            raise ValueError(f"段号重复：{number}")
-        seen.add(number)
-        statements.append(
-            {
-                "number": number,
-                "title": title,
-                "setup": parts[:-1],
-                "sql": parts[-1],
-            }
-        )
-    return statements
+    """去掉注释后按分号拆分；返回 SQL 语句列表。"""
+    body = _BLOCK_COMMENT_RE.sub(" ", sql_text)
+    body = _LINE_COMMENT_RE.sub(" ", body)
+    return [part.strip() for part in body.split(";") if part.strip()]
 
 
-def load_statements():
+def build_queries():
     statements = split_statements(SQL_FILE.read_text(encoding="utf-8"))
-    actual = [item["number"] for item in statements]
-    expected = [str(index) for index in range(1, len(statements) + 1)]
-    if actual != expected:
-        raise ValueError(f"段号必须从 1 连续排列，实际为：{', '.join(actual)}")
-    missing = sorted(set(actual) - set(SEGMENT_SPECS), key=int)
-    extra = sorted(set(SEGMENT_SPECS) - set(actual), key=int)
-    if missing or extra:
+    setup = []
+    while statements and statements[0].lstrip().upper().startswith("SET "):
+        setup.append(statements.pop(0))
+    if len(statements) != len(QUERY_SPECS):
         raise ValueError(
-            f"段号与脚本注册表不一致：SQL 多出 {missing or '无'}，注册表多出 {extra or '无'}"
+            f"SQL 查询数 {len(statements)} 与 QUERY_SPECS 的 {len(QUERY_SPECS)} 条不一致；"
+            "请同步更新 sync.py 的块号/文件名"
         )
-    return statements
+    queries = [
+        {**spec, "sql": statement}
+        for spec, statement in zip(QUERY_SPECS, statements)
+    ]
+    return setup, queries
 
 
-def target_path(spec):
-    return RAW_DIR / f"{spec['file']}.csv"
+def select_queries(queries, raw):
+    if not raw:
+        return queries
+    selected = [item.strip() for item in raw.split(",") if item.strip()]
+    known = {query["id"] for query in queries}
+    unknown = sorted(set(selected) - known)
+    if unknown:
+        raise ValueError(
+            f"未知块号：{', '.join(unknown)}；可选：{', '.join(q['id'] for q in queries)}"
+        )
+    return [query for query in queries if query["id"] in selected]
 
 
-def relative_path(spec):
-    return f"{RAW_DIR_NAME}/{spec['file']}.csv"
+def target_path(query):
+    return RAW_DIR / f"{query['file']}.csv"
 
 
-def load_manifest():
-    if MANIFEST_FILE.exists():
-        try:
-            return json.loads(MANIFEST_FILE.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            pass
-    return {"schema_version": 1, "segments": {}}
+def relative_path(query):
+    return f"{RAW_DIR_NAME}/{query['file']}.csv"
 
 
 def save_manifest(manifest):
@@ -152,35 +118,41 @@ def save_manifest(manifest):
     temporary.replace(MANIFEST_FILE)
 
 
-def run_sync(statements, query_fn):
+def run_sync(setup_statements, queries, query_fn):
     for folder in (RAW_DIR, LOG_DIR):
         folder.mkdir(parents=True, exist_ok=True)
 
-    manifest = load_manifest()
-    manifest["schema_version"] = 1
-    entries = manifest.setdefault("segments", {})
-    current_digests = {
-        item["number"]: query_digest(";\n".join([*item["setup"], item["sql"]]))
-        for item in statements
+    manifest = {
+        "sql_file": SQL_FILE.name,
+        "sql_sha256": query_digest(SQL_FILE.read_text(encoding="utf-8")),
+        "run_at": now().isoformat(timespec="seconds"),
+        "queries": {},
     }
-    success_tables = []
-    failed_tables = []
+    save_manifest(manifest)
 
-    for index, statement in enumerate(statements, start=1):
-        number = statement["number"]
-        spec = SEGMENT_SPECS[number]
-        path = target_path(spec)
-        print(f"\n[{index}/{len(statements)}] {number}. {statement['title']} → {RAW_DIR_NAME}/{path.name}")
+    for setup_sql in setup_statements:
+        print(f"全局 SET | {setup_sql}")
+        try:
+            query_fn(setup_sql)
+        except Exception as exc:
+            print(f"警告 | 全局 SET 执行失败：{exc}")
+            print("      请确认 query_to_df 使用同一会话，或执行环境已设置 Australia/Sydney 时区。")
+
+    failed = []
+    succeeded = []
+    for index, query in enumerate(queries, start=1):
+        block = query["id"]
+        path = target_path(query)
+        print(f"\n[{index}/{len(queries)}] {block}. {query['title']} → {RAW_DIR_NAME}/{path.name}")
 
         entry = {
-            "number": number,
-            "title": statement["title"],
-            "file": relative_path(spec),
-            "sql_sha256": current_digests[number],
+            "title": query["title"],
+            "file": relative_path(query),
+            "sql_sha256": query_digest(query["sql"]),
             "started_at": now().isoformat(timespec="seconds"),
             "status": "running",
         }
-        entries[number] = entry
+        manifest["queries"][block] = entry
         save_manifest(manifest)
 
         # 删掉上一次的文件，失败时目录里不会留下看似成功的旧结果。
@@ -188,16 +160,9 @@ def run_sync(statements, query_fn):
             path.unlink()
 
         try:
-            if statement["setup"]:
-                print(f"准备 | 先执行 {len(statement['setup'])} 条建表/准备语句")
-            for setup_sql in statement["setup"]:
-                query_fn(setup_sql)
-
-            df = query_fn(statement["sql"])
-
+            df = query_fn(query["sql"])
             if not isinstance(df, pd.DataFrame):
                 raise ValueError("查询未返回 DataFrame")
-
             if len(df) == 0:
                 print("警告 | 查询返回 0 行，请确认底表是否有数据")
 
@@ -215,14 +180,14 @@ def run_sync(statements, query_fn):
                 columns=list(df.columns),
                 file_sha256=file_digest(path),
             )
-            success_tables.append(number)
+            succeeded.append((path, relative_path(query)))
             print(f"成功 | {len(df)} 行 × {len(df.columns)} 列 | {path}")
         except Exception as exc:
             entry.update(status="failed", error=str(exc))
-            failed_tables.append(
+            failed.append(
                 {
-                    "segment": number,
-                    "table_name": spec["file"],
+                    "block": block,
+                    "file": query["file"],
                     "error": str(exc),
                     "run_time": entry["started_at"],
                 }
@@ -233,69 +198,44 @@ def run_sync(statements, query_fn):
             save_manifest(manifest)
 
     pd.DataFrame(
-        failed_tables,
-        columns=["segment", "table_name", "error", "run_time"],
+        failed,
+        columns=["block", "file", "error", "run_time"],
     ).to_csv(FAILED_FILE, index=False, encoding="utf-8-sig")
 
-    packaged = []
-    for statement in statements:
-        number = statement["number"]
-        spec = SEGMENT_SPECS[number]
-        entry = entries.get(number, {})
-        path = target_path(spec)
-        if (
-            entry.get("status") == "success"
-            and entry.get("sql_sha256") == current_digests[number]
-            and path.exists()
-            and entry.get("file_sha256") == file_digest(path)
-        ):
-            packaged.append((path, relative_path(spec)))
-
-    if packaged:
+    if succeeded:
         temporary_zip = ZIP_FILE.with_suffix(".zip.tmp")
         with zipfile.ZipFile(temporary_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr(f"{RAW_DIR_NAME}/", "")
-            for path, arcname in packaged:
+            for path, arcname in succeeded:
                 archive.write(path, arcname)
         temporary_zip.replace(ZIP_FILE)
-        print(f"\n已打包：{ZIP_FILE}（数据表 {len(packaged)} 个文件）")
+        print(f"\n已打包：{ZIP_FILE}（数据表 {len(succeeded)} 个文件）")
     else:
         print(f"\n本次没有可打包的成功结果，未更新 {ZIP_FILE.name}")
 
-    print(f"\n成功：{len(success_tables)} / 本次失败：{len(failed_tables)}")
+    print(f"\n成功：{len(succeeded)} / 本次失败：{len(failed)}")
     print(f"输出目录：{RAW_DIR.resolve()}")
     print(f"失败清单：{FAILED_FILE.resolve()}")
     print(f"运行清单：{MANIFEST_FILE.resolve()}")
-    return 1 if failed_tables else 0
+    return 1 if failed else 0
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="执行 queries.sql 并打包产出数据。")
-    parser.add_argument("--segments", help="只执行指定段，逗号分隔，如 3,4")
-    parser.add_argument("--dry-run", action="store_true", help="只检查段号和输出文件名，不连接数据库")
+    parser = argparse.ArgumentParser(description="执行 wagego_04_vintage分析.sql 并打包产出数据。")
+    parser.add_argument("--blocks", help="只执行指定块，逗号分隔，如 1,3,5a,5b,6,7")
+    parser.add_argument("--dry-run", action="store_true", help="只检查块号和输出文件名，不连接数据库")
     args = parser.parse_args(argv)
 
     try:
-        statements = load_statements()
+        setup, queries = build_queries()
+        queries = select_queries(queries, args.blocks)
     except ValueError as exc:
         parser.error(str(exc))
 
-    if args.segments:
-        selected = [item.strip() for item in args.segments.split(",") if item.strip()]
-        unknown = sorted(set(selected) - set(SEGMENT_SPECS))
-        if unknown:
-            parser.error(f"未知段号：{', '.join(unknown)}")
-        statements = [item for item in statements if item["number"] in selected]
-        if not statements:
-            parser.error("没有匹配的段")
-        statements.sort(key=lambda item: int(item["number"]))
-
-    print(f"共 {len(statements)} 条查询：{SQL_FILE}")
+    print(f"共 {len(queries)} 条查询：{SQL_FILE}")
     if args.dry_run:
-        for statement in statements:
-            spec = SEGMENT_SPECS[statement["number"]]
-            setup_note = f"（前置 {len(statement['setup'])} 条）" if statement["setup"] else ""
-            print(f"- {statement['number']}. {statement['title']}{setup_note} → {relative_path(spec)}")
+        for query in queries:
+            print(f"- {query['id']}. {query['title']} → {relative_path(query)}")
         return 0
 
     try:
@@ -304,7 +244,7 @@ def main(argv=None):
         print("未找到 hive_config.py：请把提供 query_to_df(sql) 的模块放到本脚本同目录或 PYTHONPATH 中。")
         return 2
 
-    return run_sync(statements, query_to_df)
+    return run_sync(setup, queries, query_to_df)
 
 
 if __name__ == "__main__":
