@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>放款申请样本表怎么建</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --series: #2a78d6;
+    --c2: #eb6834;
+    --ring: rgba(11,11,11,0.10);
+    --highlight: rgba(42,120,214,0.10);
+    --wash: rgba(42,120,214,0.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --series: #3987e5;
+      --c2: #d95926;
+      --ring: rgba(255,255,255,0.10);
+      --highlight: rgba(57,135,229,0.16);
+      --wash: rgba(57,135,229,0.12);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px 56px;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 26px; line-height: 1.3; margin: 0 0 6px; }
+  h2 { font-size: 17px; margin: 30px 0 10px; }
+  .sub { color: var(--ink-2); margin: 0 0 8px; }
+  .n { color: var(--muted); font-size: 12px; margin: 0 0 26px; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    font-size: 0.9em;
+    color: var(--ink-2);
+    background: var(--page);
+    border: 1px solid var(--ring);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .callout {
+    display: flex; gap: 14px; align-items: baseline;
+    background: var(--surface); border: 1px solid var(--ring);
+    border-left: 3px solid var(--series);
+    border-radius: 10px; padding: 14px 18px; margin: 18px 0 4px;
+  }
+  .callout b { font-size: 16px; white-space: nowrap; }
+  .callout span { color: var(--ink-2); font-size: 13.5px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-radius: 12px;
+    padding: 16px 18px 12px;
+  }
+  .note { color: var(--muted); font-size: 12.5px; margin: 10px 2px 4px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; white-space: nowrap; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  td code { white-space: normal; overflow-wrap: anywhere; }
+  .table-wrap { overflow-x: auto; }
+  .mini th, .mini td { padding: 6px 8px; font-size: 12.5px; }
+  .cte-line {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 11.8px;
+    line-height: 1.9;
+    color: var(--ink-2);
+    background: var(--page);
+    border: 1px solid var(--ring);
+    border-radius: 8px;
+    padding: 8px 10px;
+    overflow-wrap: anywhere;
+  }
+
+  .build { list-style: none; margin: 0; padding: 0; }
+  .b-step {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    column-gap: 14px;
+    position: relative;
+    padding-bottom: 16px;
+  }
+  .b-step:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 14px; top: 30px; bottom: 0;
+    width: 1px;
+    background: var(--grid);
+  }
+  .b-dot {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--series); color: var(--surface);
+    font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 2px;
+  }
+  .b-body {
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-radius: 10px;
+    padding: 13px 16px 12px;
+    min-width: 0;
+  }
+  .b-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+  .b-head h3 { margin: 0; font-size: 14.5px; line-height: 1.5; }
+  .b-tag {
+    font-size: 11px; color: var(--muted);
+    border: 1px solid var(--ring); border-radius: 999px;
+    padding: 1px 7px; white-space: nowrap;
+  }
+  .purpose { margin: 0 0 8px; color: var(--ink-2); font-size: 13px; }
+  .purpose b { color: var(--ink); }
+  .io { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 9px; font-size: 12.5px; color: var(--muted); }
+  .io .arrow { color: var(--axis); }
+  .b-body p { font-size: 13px; margin: 6px 0; }
+  .b-body ul { margin: 6px 0 8px; padding-left: 18px; color: var(--ink-2); font-size: 13px; }
+  .b-body li { margin: 4px 0; }
+  .b-body b { color: var(--ink); }
+  pre {
+    margin: 8px 0 10px;
+    padding: 9px 12px;
+    background: var(--page);
+    border: 1px solid var(--ring);
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  pre code {
+    background: none; border: none; padding: 0;
+    color: var(--ink-2);
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre;
+  }
+  .ex {
+    margin: 9px 0 2px;
+    padding: 8px 11px;
+    border-left: 2px solid var(--series);
+    background: var(--wash);
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+  .ex b { color: var(--ink); }
+
+  @media (max-width: 560px) {
+    body { padding: 28px 14px 44px; }
+    h1 { font-size: 22px; }
+    .callout { flex-direction: column; gap: 6px; }
+    .callout b { white-space: normal; }
+    .b-step { grid-template-columns: 26px minmax(0, 1fr); column-gap: 10px; }
+    .b-step:not(:last-child)::before { left: 12px; }
+    .b-dot { width: 25px; height: 25px; font-size: 11px; }
+    .b-body { padding: 12px 12px 10px; }
+    th, td { padding: 6px 7px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>放款申请样本表怎么建</h1>
+  <p class="sub"><code>model.tmp_eliam_wagego_dwd_loan_apply_label</code> · 以真实借据 <code>LN00003185</code> 为主线，按执行顺序走一遍</p>
+  <p class="n">脚本：wagego_01_放款申请样本表及Y标签.sql ｜ 时区：Australia/Sydney ｜ 本次 obs_dt：2026-10-22</p>
+
+  <div class="callout">
+    <b>先建 2 张中间表，再建 1 张主表</b>
+    <span>观察日参数表和借据日快照表必须先落表；主表是一条 CREATE TABLE ... AS WITH，16 个 CTE 的书写顺序就是依赖顺序。</span>
+  </div>
+
+  <h2>建表总览</h2>
+  <div class="card">
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>顺序</th><th>物理表</th><th>粒度</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><code>model.tmp_eliam_wagego_param_obs_date</code></td><td>1 行，观察日</td></tr>
+        <tr><td>2</td><td><code>model.tmp_eliam_wagego_stg_debt_snp</code></td><td>listing × 快照日</td></tr>
+        <tr><td>3</td><td><code>model.tmp_eliam_wagego_dwd_loan_apply_label</code></td><td>1 行 / 借款申请，129 列</td></tr>
+    </tbody>
+    </table>
+    </div>
+    <p class="note">主表内部的 CTE 顺序：</p>
+    <div class="cte-line">apply → ranked → event → credit → credit_matched → loan_apply → first_disburse → latest → base → mob_obs → mob_label_detail/wide → mob_track_detail/wide → model_log → labeled → SELECT</div>
+  </div>
+
+  <h2>逐步骤</h2>
+  <ol class="build">
+
+    <li class="b-step">
+      <div class="b-dot">1</div>
+      <div class="b-body">
+        <div class="b-head"><h3>定观察日</h3><span class="b-tag">param_obs_date</span></div>
+        <p class="purpose"><b>目的：</b>给全流程一个统一截止时点，后面所有“是否成熟”都和 obs_dt 比。</p>
+        <div class="io"><span>输入</span><code>edw_ewa.dwb_asset_debt_dtl_snp</code><span class="arrow">→</span><span>输出</span><code>param_obs_date</code></div>
+        <p>取借据快照表里的最大日期：</p>
+        <pre><code>SELECT MAX(TO_DATE(dt)) AS obs_dt
+FROM edw_ewa.dwb_asset_debt_dtl_snp</code></pre>
+        <div class="ex"><b>本例：</b>obs_dt = 2026-10-22，整张表所有申请共用这个时点。</div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">2</div>
+      <div class="b-body">
+        <div class="b-head"><h3>把多期借据压成日快照</h3><span class="b-tag">stg_debt_snp</span></div>
+        <p class="purpose"><b>目的：</b>把原始借据明细压成 listing × 快照日一行，后面取到期日、首还日、状态、余额都只查这张表。</p>
+        <div class="io"><span>输入</span><code>dwb_asset_debt_dtl_snp</code><span class="arrow">→</span><span>输出</span><code>stg_debt_snp</code></div>
+        <ul>
+          <li>扫描窗口：最早申请时间前 1 个月至 obs_dt，避免全表扫。</li>
+          <li>按 <code>listing_id, stat_date</code> 分组，金额求和。</li>
+          <li><code>first_repay_time</code> 只取 <code>period_no = 1</code> 的实还时间。</li>
+          <li>多期状态按 <b>逾期中 &gt; 未结清 &gt; 已结清</b> 取最严重。</li>
+        </ul>
+        <pre><code>GROUP BY listing_id, stat_date
+
+MAX(CASE WHEN period_no = 1
+         THEN user_actual_repay_time END) AS first_repay_time
+MAX(CASE debt_status WHEN 4 THEN 3 WHEN 1 THEN 2 WHEN 2 THEN 1 END)
+  AS status_priority
+SUM(principal) AS principal, SUM(owing_amount) AS owing_amount</code></pre>
+        <div class="table-wrap">
+        <table class="mini">
+          <thead><tr><th>stat_date</th><th>状态</th><th>current / hist</th><th>first_repay_time</th><th>owing_amount</th></tr></thead>
+          <tbody>
+            <tr><td>2026-09-14</td><td>未结清</td><td>0 / 0</td><td>—</td><td>210.63</td></tr>
+            <tr><td>2026-09-30</td><td>逾期中</td><td>12 / 12</td><td>—</td><td>212.19</td></tr>
+            <tr><td>2026-10-16</td><td>逾期中</td><td>28 / 28</td><td>—</td><td>214.27</td></tr>
+            <tr><td>2026-10-19</td><td>已结清</td><td>0 / 28</td><td>2026-10-16 14:48</td><td>0</td></tr>
+            <tr><td>2026-10-22</td><td>已结清</td><td>0 / 28</td><td>2026-10-16 14:48</td><td>0</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="ex"><b>本例：</b>10-16 当天快照里还没有还款记录，仍是逾期中；到 10-19 才看到 10-16 14:48 的实还时间。后面所有标签都依赖“哪一天拍的快照”。</div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">3</div>
+      <div class="b-body">
+        <div class="b-head"><h3>取申请池并排序</h3><span class="b-tag">apply / ranked</span></div>
+        <p class="purpose"><b>目的：</b>取所有有效申请，给同一用户的申请编号，并给已放款申请一个放款顺序。</p>
+        <div class="io"><span>输入</span><code>ods_ewa.aus_ewa_loan_biz_t_loan_application</code><span class="arrow">→</span><span>输出</span><code>apply</code> <code>ranked</code></div>
+        <ul>
+          <li><code>apply</code>：过滤 <code>isactive = 1</code>，按用户申请时间生成 <code>apply_seq</code>。</li>
+          <li><code>ranked</code>：只看 <code>DISBURSE_SUCCESS</code>，按放款时间生成 <code>application_rank</code>。</li>
+        </ul>
+        <pre><code>ROW_NUMBER() OVER (PARTITION BY user_id
+  ORDER BY inserttime, loan_no) AS apply_seq
+
+ROW_NUMBER() OVER (PARTITION BY user_id
+  ORDER BY apply_disburse_time NULLS LAST, loan_no) AS application_rank</code></pre>
+        <div class="ex"><b>本例：</b>LN00003185，user_id 1007907，listing_id 2301，status DISBURSE_SUCCESS；申请时间 2026-09-13 20:10:37，放款时间 20:17:15。该用户只有这一条申请，<code>apply_seq = 1</code>、<code>application_rank = 1</code>。</div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">4</div>
+      <div class="b-body">
+        <div class="b-head"><h3>取发标策略事件</h3><span class="b-tag">event</span></div>
+        <p class="purpose"><b>目的：</b>把申请和发标策略调用对上，拿 application_id、appId、策略时间、重试次数。</p>
+        <div class="io"><span>输入</span><code>ods_ewa.aus_ewa_risk_risk_event_task</code><span class="arrow">→</span><span>输出</span><code>event</code></div>
+        <ul>
+          <li>过滤 <code>biz_id = '20050'</code> 且 <code>flow_id LIKE 'LN%'</code>。</li>
+          <li>同一 flow_id 可能多次调用，取 <code>updatetime</code> 最新的一条。</li>
+          <li><code>appId</code> 从 <code>params</code> JSON 里取。</li>
+        </ul>
+        <pre><code>ROW_NUMBER() OVER (PARTITION BY flow_id
+  ORDER BY updatetime DESC, inserttime DESC) AS rn
+-- WHERE rn = 1
+GET_JSON_OBJECT(params, '$.appId') AS app_id</code></pre>
+        <div class="ex"><b>本例：</b>flow_id LN00003185，biz_id 20050，application_id 11756，appId 1000008269，strategy_time 2026-09-13 20:10:37，retry_count 0。</div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">5</div>
+      <div class="b-body">
+        <div class="b-head"><h3>匹配申请前最近一次戳额</h3><span class="b-tag">credit / credit_matched</span></div>
+        <p class="purpose"><b>目的：</b>给每条申请找申请前最近一次戳额，得到 <code>last_limit_time</code> 和 <code>last_limit_flow_id</code>。</p>
+        <div class="io"><span>输入</span><code>aus_listing_tb_loan_limit_apply</code> <code>risk_event_task</code><span class="arrow">→</span><span>输出</span><code>credit</code> <code>credit_matched</code></div>
+        <ul>
+          <li><code>credit</code> 是两类事件的并集：额度申请 <code>biz_type = 400</code>（优先级 1）、风险事件 <code>biz_id = 10000</code>（优先级 2）。</li>
+          <li>按 user_id 关联，只取 <code>credit_time &lt;= apply_time</code>。</li>
+          <li>同一申请多条候选时，按优先级、时间倒序、id 倒序取第一条。</li>
+        </ul>
+        <pre><code>ROW_NUMBER() OVER (
+  PARTITION BY loan_no
+  ORDER BY source_priority, credit_time DESC, credit_id DESC
+) AS rn
+-- JOIN credit s ON a.user_id = s.user_id
+--             AND s.credit_time &lt;= a.apply_time</code></pre>
+        <div class="ex"><b>本例：</b>命中额度申请 id 10814，<code>biz_type = 400</code>，inserttime 2026-09-13 20:08:46（申请前 2 分钟）→ <code>last_limit_time = 2026-09-13 20:08:46</code>。10-16 的 401 在申请之后、9-24 的 404 类型不对，都不取。</div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">6</div>
+      <div class="b-body">
+        <div class="b-head"><h3>拼申请主表</h3><span class="b-tag">loan_apply</span></div>
+        <p class="purpose"><b>目的：</b>一条申请一行，把状态、时间、戳额、事件、排序拼齐，后面不再回查申请流水。</p>
+        <div class="io"><span>输入</span><code>apply</code> <code>event</code> <code>ranked</code> <code>credit_matched</code><span class="arrow">→</span><span>输出</span><code>loan_apply</code></div>
+        <ul>
+          <li><code>apply</code> 左连 <code>event</code>、<code>ranked</code>、<code>credit_matched</code>，保证未放款申请也保留。</li>
+          <li>状态翻译成中文，并打四个标识：<code>is_disburse_success</code>、<code>is_reject</code>、<code>is_expired</code>、<code>is_disburse_failed</code>。</li>
+          <li>只有放款成功才把 <code>apply_disburse_time</code> 记成 <code>disburse_time</code>。</li>
+        </ul>
+        <pre><code>CASE WHEN apply_status = 'DISBURSE_SUCCESS'
+     THEN apply_disburse_time END AS disburse_time
+
+CASE WHEN apply_status = 'DISBURSE_SUCCESS' THEN 1 ELSE 0 END
+  AS is_disburse_success</code></pre>
+        <div class="table-wrap">
+        <table class="mini">
+          <thead><tr><th>字段</th><th>本例值</th></tr></thead>
+          <tbody>
+            <tr><td>application_id / app_id</td><td>11756 / 1000008269</td></tr>
+            <tr><td>apply_status_desc</td><td>放款成功</td></tr>
+            <tr><td>is_disburse_success</td><td>1</td></tr>
+            <tr><td>apply_time / disburse_time</td><td>2026-09-13 20:10:37 / 20:17:15</td></tr>
+            <tr><td>apply_seq / application_rank</td><td>1 / 1</td></tr>
+            <tr><td>last_limit_time</td><td>2026-09-13 20:08:46</td></tr>
+            <tr><td>strategy_time / retry_count</td><td>2026-09-13 20:10:37 / 0</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">7</div>
+      <div class="b-body">
+        <div class="b-head"><h3>首笔放款 + 关联发标与观察日快照</h3><span class="b-tag">first_disburse / latest</span></div>
+        <p class="purpose"><b>目的：</b>补金额、期次、到期日；确定标签观察日 due+31；同时算出每个用户的第一笔放款时间。</p>
+        <div class="io"><span>输入</span><code>loan_apply</code> <code>dwb_asset_cmn_listing</code> <code>stg_debt_snp</code><span class="arrow">→</span><span>输出</span><code>first_disburse</code> <code>latest</code></div>
+        <ul>
+          <li><code>first_disburse</code>：按用户取 <code>MIN(disburse_time)</code>，只算放款成功的申请。</li>
+          <li><code>latest</code>：按 listing_id 关联发标信息，按 <code>stat_date = obs_dt</code> 关联当天借据快照。</li>
+          <li>本金优先 <code>real_amount</code>，为 0 时回退借据快照的 <code>principal</code>。</li>
+          <li><code>label_obs_dt = init_due_date + 31</code>；满足“成功 + is_deal=1 + 有快照 + due+31 在放款日和 obs_dt 之间”才记 <code>is_due_matured = 1</code>。</li>
+        </ul>
+        <pre><code>DATE_ADD(s.init_due_date, 31) AS label_obs_dt
+
+COALESCE(NULLIF(CAST(l.real_amount AS DOUBLE), 0), s.principal)
+  AS principal</code></pre>
+        <div class="table-wrap">
+        <table class="mini">
+          <thead><tr><th>字段</th><th>本例值</th></tr></thead>
+          <tbody>
+            <tr><td>first_disburse_time</td><td>2026-09-13 20:17:15</td></tr>
+            <tr><td>real_amount / interest / service_fee</td><td>200 / 0.63 / 10</td></tr>
+            <tr><td>term_quantity / term_unit</td><td>1 / F</td></tr>
+            <tr><td>is_deal</td><td>1</td></tr>
+            <tr><td>list_due_date / init_due_date</td><td>2026-09-18 / 2026-09-18</td></tr>
+            <tr><td>label_obs_dt</td><td>2026-10-19</td></tr>
+            <tr><td>is_due_matured</td><td>1</td></tr>
+            <tr><td>obs_dt 当天快照</td><td>已结清，首还 10-16，余额 0</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">8</div>
+      <div class="b-body">
+        <div class="b-head"><h3>取 due+31 标签快照，判断 FPD 是否成熟</h3><span class="b-tag">base</span></div>
+        <p class="purpose"><b>目的：</b>在 due+31 再取一次借据，得到最终标签日；同时判断 FPD3/7/14/15/30 每一档是否已经可以下结论。</p>
+        <div class="io"><span>输入</span><code>latest</code> <code>stg_debt_snp</code><span class="arrow">→</span><span>输出</span><code>base</code></div>
+        <ul>
+          <li>按 <code>stat_date = label_obs_dt</code> 关联借据快照，得到 label_* 字段。</li>
+          <li><code>label_obs_day</code>：优先取 due+31 快照里的首还日；缺失则取 obs_dt 前已记录的首还日；再缺取 due+31。</li>
+          <li>FPD-X 成熟：<code>LEAST(首还日, due+X) &lt; obs_dt</code>，成熟记 obs_cnt = 1；未成熟 obs_cnt = 0，坏标签为 NULL。</li>
+        </ul>
+        <pre><code>CASE WHEN is_deal = 1 AND debt_listing_id IS NOT NULL
+      AND LEAST(COALESCE(TO_DATE(first_repay_time), obs_dt),
+                DATE_ADD(init_due_date, 15)) &lt; obs_dt
+     THEN 1 ELSE 0 END AS y_fpd15_obs_cnt</code></pre>
+        <div class="table-wrap">
+        <table class="mini">
+          <thead><tr><th>X</th><th>due+X</th><th>LEAST(首还, due+X)</th><th>y_fpdX_obs_cnt</th></tr></thead>
+          <tbody>
+            <tr><td>3</td><td>2026-09-21</td><td>2026-09-21</td><td>1</td></tr>
+            <tr><td>7</td><td>2026-09-25</td><td>2026-09-25</td><td>1</td></tr>
+            <tr><td>14</td><td>2026-10-02</td><td>2026-10-02</td><td>1</td></tr>
+            <tr><td>15</td><td>2026-10-03</td><td>2026-10-03</td><td>1</td></tr>
+            <tr><td>30</td><td>2026-10-18</td><td>2026-10-16</td><td>1</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="ex"><b>本例：</b>due+31（10-19）快照已结清，<code>label_obs_day = 10-16</code>；五档 FPD 全部成熟。MOB1 的 10-31 还没到，所以 <code>y_mob1_obs_cnt = 0</code>。</div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">9</div>
+      <div class="b-body">
+        <div class="b-head"><h3>展开 MOB 观测点，算 5+ / 30+ 标签</h3><span class="b-tag">mob_obs / mob_label_*</span></div>
+        <p class="purpose"><b>目的：</b>在放款后每个已到的月末判断当前是否 5+/30+、历史是否 5+/30+。</p>
+        <div class="io"><span>输入</span><code>base</code> <code>stg_debt_snp</code><span class="arrow">→</span><span>输出</span><code>mob_obs</code> <code>mob_label_wide</code></div>
+        <ul>
+          <li><code>EXPLODE(SEQUENCE(0, 4))</code> 展开 mob0~mob4，只保留月末 ≤ obs_dt 的观测点。</li>
+          <li>按观测日关联快照：<code>current_overdue_days &gt;= 5</code> 记 5+，<code>&gt; 30</code> 记 30+；ever 用 <code>hist_overdue_days</code>。</li>
+          <li>只把 mob1/2/3 透成 <code>y_mob1/2/3_*</code>；mob0 只用于后面的追踪。</li>
+        </ul>
+        <pre><code>CROSS JOIN (SELECT EXPLODE(SEQUENCE(0, 4)) AS mob_no) m
+WHERE LAST_DAY(ADD_MONTHS(TO_DATE(disburse_time), m.mob_no)) &lt;= obs_dt
+
+CASE WHEN current_overdue_days &gt;= 5 THEN 1 ELSE 0 END AS is_5plus
+CASE WHEN current_overdue_days &gt; 30 THEN 1 ELSE 0 END AS is_30plus</code></pre>
+        <div class="table-wrap">
+        <table class="mini">
+          <thead><tr><th>mob</th><th>观测日</th><th>5+</th><th>30+</th><th>ever 5+</th><th>ever 30+</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>2026-09-30</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+            <tr><td>1</td><td>2026-10-31</td><td>未到</td><td>—</td><td>—</td><td>—</td></tr>
+            <tr><td>2</td><td>2026-11-30</td><td>未到</td><td>—</td><td>—</td><td>—</td></tr>
+            <tr><td>3</td><td>2026-12-31</td><td>未到</td><td>—</td><td>—</td><td>—</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="ex"><b>本例：</b>只有 mob0 到期；mob0 不输出 5+/30+ 标签，所以最终 <code>y_mob1/2/3_*</code> 全为 NULL。</div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">10</div>
+      <div class="b-body">
+        <div class="b-head"><h3>算 MOB 剩余本金与 DPD</h3><span class="b-tag">mob_track_*</span></div>
+        <p class="purpose"><b>目的：</b>在每个 MOB 观测点取最近一天快照，记录剩余本金和 DPD，供账龄追踪使用。</p>
+        <div class="io"><span>输入</span><code>mob_obs</code> <code>stg_debt_snp</code><span class="arrow">→</span><span>输出</span><code>mob_track_wide</code></div>
+        <ul>
+          <li>在放款日到观测日之间找快照；mob0 允许往后多取 7 天。</li>
+          <li>优先取观测日或之前最近的一天；之前没有，才取之后最近的一天。</li>
+          <li>透成 mob0~mob4 的剩余本金、当前 DPD、历史 DPD。</li>
+        </ul>
+        <pre><code>ROW_NUMBER() OVER (
+  PARTITION BY loan_no, mob_no
+  ORDER BY CASE WHEN stat_date &lt;= mob_obs_dt THEN 0 ELSE 1 END,
+           CASE WHEN stat_date &lt;= mob_obs_dt
+                THEN DATEDIFF(mob_obs_dt, stat_date)
+                ELSE DATEDIFF(stat_date, mob_obs_dt) END
+) AS rn</code></pre>
+        <div class="ex"><b>本例：</b>mob0 取 2026-09-30 快照：<code>estimate_principal_remaining_mob0 = 200</code>，<code>dpd_days_mob0 = 12</code>，<code>dpd_days_ever_mob0 = 12</code>；mob1~4 为空。</div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">11</div>
+      <div class="b-body">
+        <div class="b-head"><h3>挂模型分</h3><span class="b-tag">model_log</span></div>
+        <p class="purpose"><b>目的：</b>按 <code>loan_no = scene_id</code> 取最新一次三方模型调用分，挂到申请上。</p>
+        <div class="io"><span>输入</span><code>ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log</code><span class="arrow">→</span><span>输出</span><code>model_log</code></div>
+        <ul>
+          <li>过滤 <code>model_code = 'aus_wagego_new_risk_3rd_v1_0'</code>。</li>
+          <li>同一 scene_id 多次调用取 <code>start_time</code>、<code>inserttime</code> 最新的一条。</li>
+          <li>从 <code>model_output</code> JSON 里取模型分。</li>
+        </ul>
+        <pre><code>GET_JSON_OBJECT(model_output,
+  '$.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626') AS score</code></pre>
+        <div class="ex"><b>本例：</b>模型日志里没有 LN00003185，左连后模型分字段为 NULL；不影响其他标签。</div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">12</div>
+      <div class="b-body">
+        <div class="b-head"><h3>派生全部标签与维度</h3><span class="b-tag">labeled</span></div>
+        <p class="purpose"><b>目的：</b>把快照值翻译成所有 y_*，并补 user_type、放款月/季度、在贷天数，最后拼上 MOB 与模型分。</p>
+        <div class="io"><span>输入</span><code>base</code> <code>mob_label_wide</code> <code>mob_track_wide</code> <code>model_log</code><span class="arrow">→</span><span>输出</span><code>labeled</code></div>
+        <ul>
+          <li><b>到期标签</b>：<code>y_due_dpd</code> / <code>y_due_ever_dpd</code> 直接取 label 快照；逾期、5+、30+ 以及金额标签由它派生，无标签快照记 NULL。</li>
+          <li><b>FPD 坏标签</b>：只有成熟（obs_cnt = 1）才计算；<code>label_obs_day &gt; due+X</code> 记 1，否则 0，未成熟记 NULL。</li>
+          <li><b>时点标签</b>：<code>y_obs_*</code> 看 obs_dt 当天，仅对 is_deal = 1 计算。</li>
+          <li><b>期限</b>：合同天数 = due − 放款日；实际天数 = 首还日 − 放款日；首还早于到期日记提前结清。</li>
+          <li><b>新老客</b>：放款时间（未放款取申请时间）≤ 首笔放款时间为 New；无放款记录记 New。</li>
+        </ul>
+        <pre><code>CASE WHEN y_fpd15_obs_cnt = 1
+     THEN CASE WHEN label_obs_day &gt; DATE_ADD(init_due_date, 15)
+               THEN 1 ELSE 0 END
+END AS y_fpd15_ovd_cnt
+
+CASE WHEN first_disburse_time IS NULL THEN 'New'
+     WHEN COALESCE(disburse_time, apply_time) &lt;= first_disburse_time
+          THEN 'New'
+     ELSE 'Old' END AS user_type</code></pre>
+        <div class="table-wrap">
+        <table class="mini">
+          <thead><tr><th>标签</th><th>本例值</th><th>依据</th></tr></thead>
+          <tbody>
+            <tr><td>y_due_dpd / y_due_ever_dpd</td><td>0 / 28</td><td>due+31 时点逾期 0；历史逾期 28 天</td></tr>
+            <tr><td>y_due_ovd_cnt / y_due_ever_ovd_cnt</td><td>0 / 1</td><td>时点未逾期；历史逾期过</td></tr>
+            <tr><td>y_due_5plus / y_due_30plus</td><td>0 / 0</td><td>due+31 已结清，当前均未逾期</td></tr>
+            <tr><td>y_due_ever_5plus / ever_30plus</td><td>1 / 0</td><td>历史 28 天：到过 5+，未到 30+</td></tr>
+            <tr><td>y_fpd3/7/14/15_ovd_cnt</td><td>1</td><td>首还 10-16 晚于各 due+X</td></tr>
+            <tr><td>y_fpd30_ovd_cnt</td><td>0</td><td>首还 10-16 ≤ due+30（10-18）</td></tr>
+            <tr><td>y_obs_ovd_cnt / ever_ovd_cnt</td><td>0 / 1</td><td>obs 10-22 已结清，但历史逾期</td></tr>
+            <tr><td>loan_term_contract / actual</td><td>5 / 33</td><td>9-18 − 9-13；10-16 − 9-13</td></tr>
+            <tr><td>is_early_settlement</td><td>0</td><td>首还晚于到期日</td></tr>
+            <tr><td>user_type</td><td>New</td><td>该用户唯一一笔放款</td></tr>
+            <tr><td>days_on_book</td><td>39</td><td>10-22 − 9-13</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="ex"><b>本例：</b>FPD15 坏、FPD30 好，但 due+31 已结清。FPD 标签回答“到期后 X 天内是否还清”，y_due_* 回答“due+31 时点有多坏”，两者不要混用。</div>
+      </div>
+    </li>
+
+    <li class="b-step">
+      <div class="b-dot">13</div>
+      <div class="b-body">
+        <div class="b-head"><h3>固定列顺序落表</h3><span class="b-tag">final SELECT</span></div>
+        <p class="purpose"><b>目的：</b>按固定顺序输出 129 列，落成一张物理宽表，下游直接查。</p>
+        <div class="io"><span>输入</span><code>labeled</code><span class="arrow">→</span><span>输出</span><code>model.tmp_eliam_wagego_dwd_loan_apply_label</code></div>
+        <p>最后一段 SELECT 只是把 <code>labeled</code> 的列按约定顺序列出；建表方式是 <code>DROP TABLE IF EXISTS</code> + <code>CREATE TABLE ... AS</code>，一行对应一条借款申请，拒绝/过期/放款失败也保留。</p>
+        <div class="table-wrap">
+        <table class="mini">
+          <thead><tr><th>分组</th><th class="num">列数</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>申请与状态</td><td class="num">17</td><td>loan_no、user_id、apply_status、is_reject、apply_time、apply_seq…</td></tr>
+            <tr><td>戳额</td><td class="num">4</td><td>strategy_time、retry_count、last_limit_time、last_limit_flow_id</td></tr>
+            <tr><td>放款与借据</td><td class="num">15</td><td>real_amount、is_deal、init_due_date、debt_status…</td></tr>
+            <tr><td>观察点快照</td><td class="num">9</td><td>obs_dt 当天的状态、逾期天数、本金与余额</td></tr>
+            <tr><td>标签快照</td><td class="num">6</td><td>label_obs_dt、label_user_actual_repay_time、label_debt_status…</td></tr>
+            <tr><td>到期 / FPD / 时点 / 期限</td><td class="num">27</td><td>y_due_* 10、y_fpd* 10、y_obs_* 4、期限与提前结清 3</td></tr>
+            <tr><td>MOB 标签与追踪</td><td class="num">45</td><td>y_mob1~3 的 obs / 5+ / 30+（cnt + amt）30；剩余本金与 DPD 15</td></tr>
+            <tr><td>时间维度</td><td class="num">5</td><td>disburse_month、disburse_quarter、days_on_book、user_type、first_disburse_time</td></tr>
+            <tr><td>模型分</td><td class="num">1</td><td>aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p class="note">合计 129 列；完整字段顺序见建表脚本最后一段 SELECT。</p>
+      </div>
+    </li>
+  </ol>
+
+  <h2>重跑顺序</h2>
+  <div class="card">
+    <ul class="notes" style="margin:2px 0 4px;padding-left:20px;color:var(--ink-2);font-size:13.5px">
+      <li>先确认 <code>dwb_asset_debt_dtl_snp</code> 已更新到目标 obs_dt，否则整张表会停在旧观察日。</li>
+      <li>按顺序执行 <code>wagego_01</code> 全脚本：步骤 1 → 2 → 3；不要跳过前两张中间表。</li>
+      <li>下游 <code>wagego_02</code> 和 <code>queries.sql</code> 直接读主表；改口径只改主表脚本，不在下游重复写标签逻辑。</li>
+    </ul>
+  </div>
+</main>
+</body>
+</html>
