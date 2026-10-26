@@ -20,8 +20,8 @@ SELECT
     ,disburse_time
     ,last_limit_time                                      AS sample_datetime
     ,last_limit_flow_id                                   AS flow_id
-    ,disburse_month
-    ,disburse_quarter
+    ,disburse_month AS sample_month
+    ,disburse_quarter AS sample_quarter
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
@@ -62,8 +62,8 @@ SELECT
     ,last_limit_time                                      AS sample_datetime
     ,last_limit_flow_id                                   AS flow_id
     ,DATEDIFF(TO_DATE(disburse_time), TO_DATE(last_limit_time)) AS days_credit_to_disburse
-    ,disburse_month
-    ,disburse_quarter
+    ,disburse_month AS sample_month
+    ,disburse_quarter AS sample_quarter
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
@@ -118,8 +118,8 @@ SELECT
     ,fail_bid_time
     ,withdraw_time
     ,list_due_date
-    ,disburse_month
-    ,disburse_quarter
+    ,disburse_month AS sample_month
+    ,disburse_quarter AS sample_quarter
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
@@ -174,8 +174,8 @@ SELECT
     ,fail_bid_time
     ,withdraw_time
     ,list_due_date
-    ,disburse_month
-    ,disburse_quarter
+    ,disburse_month AS sample_month
+    ,disburse_quarter AS sample_quarter
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
@@ -231,8 +231,8 @@ SELECT
     ,fail_bid_time
     ,withdraw_time
     ,list_due_date
-    ,disburse_month
-    ,disburse_quarter
+    ,disburse_month AS sample_month
+    ,disburse_quarter AS sample_quarter
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
@@ -287,8 +287,8 @@ SELECT
     ,fail_bid_time
     ,withdraw_time
     ,list_due_date
-    ,disburse_month
-    ,disburse_quarter
+    ,disburse_month AS sample_month
+    ,disburse_quarter AS sample_quarter
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
