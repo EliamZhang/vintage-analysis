@@ -1,3 +1,24 @@
+-- ============================================================================
+-- 输出：model.tmp_eliam_wagego_dwd_loan_apply_label（一行一条借款申请，共 88 列）
+-- 观察日：obs_dt = 债务快照表最新日期
+-- 代码顺序：obs_dt → 借据日快照 → 申请/放款 → 成熟门控 → MOB 快照 → 标签/金额 → 输出
+--
+-- Y 标签 19 个（全部 0/1 标记，SUM 即笔数）
+--   FPD 4 ：y_fpd{7,15}_obs   窗口成熟，可判定
+--           y_fpd{7,15}_ovd   首期实还日 > due+N
+--   MOB 15：y_mob{1,2,3}_obs              月末已到
+--           y_mob{1,2,3}_5plus             月末 current DPD >= 5
+--           y_mob{1,2,3}_30plus            月末 current DPD > 30
+--           y_mob{1,2,3}_ever_5plus        截至月末 hist DPD >= 5
+--           y_mob{1,2,3}_ever_30plus       截至月末 hist DPD > 30
+--
+-- 关键口径：
+--   FPD 是单时点事件，没有 ever；label_obs_day = COALESCE(首还日, obs_dt)，obs=1 才判 ovd
+--   MOB1-3 的标签与金额指标共用月末当天快照；缺快照 -> NULL
+--   MOB0/4 只有金额指标；MOB0 允许月末后 7 天内的快照
+--   金额率分母 estimate_principal_remaining_mobN；current/ever 分子分别用
+--   dpd_days_mobN / dpd_days_ever_mobN
+-- ============================================================================
 SET spark.sql.session.timeZone = Australia/Sydney;
 
 -- 观察日参数表：取债务快照表的最新日期，作为全流程统一的观察时点（一行）
@@ -226,6 +247,8 @@ latest AS (
         ,s.debt_status_desc
         ,s.hist_overdue_days
         ,s.current_overdue_days
+        ,CASE WHEN l.is_deal = 1 AND s.listing_id IS NOT NULL THEN 1 ELSE 0 END AS is_fpd_eligible
+        ,COALESCE(TO_DATE(s.first_repay_time), p.obs_dt)       AS label_obs_day
         ,CASE WHEN a.is_disburse_success = 1
               THEN CAST(l.real_amount AS DOUBLE) END           AS principal
         ,s.repay_amount
@@ -242,15 +265,15 @@ latest AS (
       ON a.listing_id = s.listing_id
      AND s.stat_date = p.obs_dt
 ),
-base AS (
+-- 成熟门控：FPD 看窗口，MOB 看月末是否已到
+obs_labels AS (
     SELECT
          l.*
-        ,COALESCE(TO_DATE(l.first_repay_time), l.obs_dt)      AS label_obs_day
-        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
-               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 7)) < l.obs_dt
+        ,CASE WHEN l.is_fpd_eligible = 1
+               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 7)) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd7_obs
-        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
-               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 15)) < l.obs_dt
+        ,CASE WHEN l.is_fpd_eligible = 1
+               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 15)) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd15_obs
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 1)) <= l.obs_dt THEN 1 ELSE 0 END
@@ -263,6 +286,7 @@ base AS (
          END                                                  AS y_mob3_obs
     FROM latest l
 ),
+-- MOB 观察点：放款后 0-4 个自然月末，只保留已到观察日的
 mob_obs AS (
     SELECT
          b.loan_no
@@ -270,11 +294,12 @@ mob_obs AS (
         ,TO_DATE(b.disburse_time)                             AS disburse_date
         ,m.mob_no
         ,LAST_DAY(ADD_MONTHS(TO_DATE(b.disburse_time), m.mob_no)) AS mob_obs_dt
-    FROM base b
+    FROM obs_labels b
     CROSS JOIN (SELECT EXPLODE(SEQUENCE(0, 4)) AS mob_no) m
     WHERE b.is_disburse_success = 1
       AND LAST_DAY(ADD_MONTHS(TO_DATE(b.disburse_time), m.mob_no)) <= b.obs_dt
 ),
+-- 月末快照：标签和金额指标共用；N>=1 取月末当天，MOB0 允许 +7 天
 mob_snapshot_detail AS (
     SELECT
          t.loan_no
@@ -314,6 +339,7 @@ mob_snapshot_detail AS (
     ) t
     WHERE t.rn = 1
 ),
+-- MOB 笔数标签：current 与 ever
 mob_label_wide AS (
     SELECT
          loan_no
@@ -332,7 +358,8 @@ mob_label_wide AS (
     FROM mob_snapshot_detail
     GROUP BY loan_no
 ),
-mob_track_wide AS (
+-- MOB 金额指标：余额 + current/ever DPD
+mob_amount_wide AS (
     SELECT
          loan_no
         ,MAX(CASE WHEN mob_no = 0 THEN estimate_principal_remaining END) AS estimate_principal_remaining_mob0
@@ -370,8 +397,10 @@ model_log AS (
 labeled AS (
     SELECT
          b.*
+        -- FPD 标签：obs 已在 obs_labels，这里补 ovd
         ,CASE WHEN b.y_fpd7_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd
         ,CASE WHEN b.y_fpd15_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END END AS y_fpd15_ovd
+        -- 时间 / 新老客
         ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN DATEDIFF(TO_DATE(b.user_actual_repay_time), TO_DATE(b.disburse_time)) END AS loan_term_actual_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN CASE WHEN TO_DATE(b.user_actual_repay_time) < b.init_due_date THEN 1 ELSE 0 END END AS is_early_settlement
@@ -382,130 +411,54 @@ labeled AS (
               WHEN COALESCE(b.disburse_time, b.apply_time) <= b.first_disburse_time THEN 'New'
               ELSE 'Old'
          END                                                  AS user_type
-        ,m.y_mob1_5plus
-        ,m.y_mob1_30plus
-        ,m.y_mob1_ever_5plus
-        ,m.y_mob1_ever_30plus
-        ,m.y_mob2_5plus
-        ,m.y_mob2_30plus
-        ,m.y_mob2_ever_5plus
-        ,m.y_mob2_ever_30plus
-        ,m.y_mob3_5plus
-        ,m.y_mob3_30plus
-        ,m.y_mob3_ever_5plus
-        ,m.y_mob3_ever_30plus
-        ,t.estimate_principal_remaining_mob0
-        ,t.dpd_days_mob0
-        ,t.dpd_days_ever_mob0
-        ,t.estimate_principal_remaining_mob1
-        ,t.dpd_days_mob1
-        ,t.dpd_days_ever_mob1
-        ,t.estimate_principal_remaining_mob2
-        ,t.dpd_days_mob2
-        ,t.dpd_days_ever_mob2
-        ,t.estimate_principal_remaining_mob3
-        ,t.dpd_days_mob3
-        ,t.dpd_days_ever_mob3
-        ,t.estimate_principal_remaining_mob4
-        ,t.dpd_days_mob4
-        ,t.dpd_days_ever_mob4
+        -- MOB 标签
+        ,m.y_mob1_5plus, m.y_mob1_30plus, m.y_mob1_ever_5plus, m.y_mob1_ever_30plus
+        ,m.y_mob2_5plus, m.y_mob2_30plus, m.y_mob2_ever_5plus, m.y_mob2_ever_30plus
+        ,m.y_mob3_5plus, m.y_mob3_30plus, m.y_mob3_ever_5plus, m.y_mob3_ever_30plus
+        -- MOB 金额指标
+        ,t.estimate_principal_remaining_mob0, t.dpd_days_mob0, t.dpd_days_ever_mob0
+        ,t.estimate_principal_remaining_mob1, t.dpd_days_mob1, t.dpd_days_ever_mob1
+        ,t.estimate_principal_remaining_mob2, t.dpd_days_mob2, t.dpd_days_ever_mob2
+        ,t.estimate_principal_remaining_mob3, t.dpd_days_mob3, t.dpd_days_ever_mob3
+        ,t.estimate_principal_remaining_mob4, t.dpd_days_mob4, t.dpd_days_ever_mob4
         ,ml.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
-    FROM base b
+    FROM obs_labels b
     LEFT JOIN mob_label_wide m
       ON b.loan_no = m.loan_no
-    LEFT JOIN mob_track_wide t
+    LEFT JOIN mob_amount_wide t
       ON b.loan_no = t.loan_no
     LEFT JOIN model_log ml
       ON b.loan_no = ml.loan_no
 )
 SELECT
-     loan_no
-    ,user_id
-    ,application_id
-    ,app_id
-    ,listing_id
-    ,apply_status
-    ,apply_status_desc
-    ,is_disburse_success
-    ,is_reject
-    ,is_expired
-    ,is_disburse_failed
-    ,apply_time
-    ,apply_date
-    ,apply_month
-    ,disburse_time
-    ,apply_seq
-    ,application_rank
-    ,strategy_time
-    ,retry_count
-    ,credit_time AS last_limit_time
-    ,credit_flow_id AS last_limit_flow_id
-    ,real_amount
-    ,apply_amount
-    ,interest
-    ,service_fee
-    ,term_quantity
-    ,term_unit
-    ,total_period
-    ,bid_time
-    ,bid_status
-    ,full_bid_time
-    ,fail_bid_time
-    ,is_deal
-    ,withdraw_time
-    ,list_due_date
-    ,init_due_date
-    ,user_actual_repay_time
-    ,debt_status
-    ,debt_status_desc
-    ,hist_overdue_days
-    ,current_overdue_days
-    ,principal
-    ,repay_amount
-    ,owing_amount
-    ,obs_dt
-    ,y_fpd7_obs
-    ,y_fpd7_ovd
-    ,y_fpd15_obs
-    ,y_fpd15_ovd
-    ,loan_term_contract_days
-    ,loan_term_actual_days
-    ,is_early_settlement
-    ,disburse_month
-    ,disburse_quarter
-    ,days_on_book
-    ,user_type
+    -- 申请 / 放款
+     loan_no, user_id, application_id, app_id, listing_id
+    ,apply_status, apply_status_desc, is_disburse_success, is_reject, is_expired, is_disburse_failed
+    ,apply_time, apply_date, apply_month, disburse_time, apply_seq, application_rank
+    ,strategy_time, retry_count
+    ,credit_time AS last_limit_time, credit_flow_id AS last_limit_flow_id
+    ,real_amount, apply_amount, interest, service_fee, term_quantity, term_unit, total_period
+    ,bid_time, bid_status, full_bid_time, fail_bid_time, is_deal, withdraw_time, list_due_date
+    ,init_due_date, user_actual_repay_time, debt_status, debt_status_desc
+    ,hist_overdue_days, current_overdue_days
+    ,principal, repay_amount, owing_amount, obs_dt
+    -- FPD 标签
+    ,y_fpd7_obs, y_fpd7_ovd, y_fpd15_obs, y_fpd15_ovd
+    -- 时间 / 新老客
+    ,loan_term_contract_days, loan_term_actual_days, is_early_settlement
+    ,disburse_month, disburse_quarter, days_on_book, user_type
     ,first_disburse_time
-    ,y_mob1_obs
-    ,y_mob1_5plus
-    ,y_mob1_30plus
-    ,y_mob1_ever_5plus
-    ,y_mob1_ever_30plus
-    ,y_mob2_obs
-    ,y_mob2_5plus
-    ,y_mob2_30plus
-    ,y_mob2_ever_5plus
-    ,y_mob2_ever_30plus
-    ,y_mob3_obs
-    ,y_mob3_5plus
-    ,y_mob3_30plus
-    ,y_mob3_ever_5plus
-    ,y_mob3_ever_30plus
-    ,estimate_principal_remaining_mob0
-    ,dpd_days_mob0
-    ,dpd_days_ever_mob0
-    ,estimate_principal_remaining_mob1
-    ,dpd_days_mob1
-    ,dpd_days_ever_mob1
-    ,estimate_principal_remaining_mob2
-    ,dpd_days_mob2
-    ,dpd_days_ever_mob2
-    ,estimate_principal_remaining_mob3
-    ,dpd_days_mob3
-    ,dpd_days_ever_mob3
-    ,estimate_principal_remaining_mob4
-    ,dpd_days_mob4
-    ,dpd_days_ever_mob4
+    -- MOB 标签
+    ,y_mob1_obs, y_mob1_5plus, y_mob1_30plus, y_mob1_ever_5plus, y_mob1_ever_30plus
+    ,y_mob2_obs, y_mob2_5plus, y_mob2_30plus, y_mob2_ever_5plus, y_mob2_ever_30plus
+    ,y_mob3_obs, y_mob3_5plus, y_mob3_30plus, y_mob3_ever_5plus, y_mob3_ever_30plus
+    -- MOB 金额指标
+    ,estimate_principal_remaining_mob0, dpd_days_mob0, dpd_days_ever_mob0
+    ,estimate_principal_remaining_mob1, dpd_days_mob1, dpd_days_ever_mob1
+    ,estimate_principal_remaining_mob2, dpd_days_mob2, dpd_days_ever_mob2
+    ,estimate_principal_remaining_mob3, dpd_days_mob3, dpd_days_ever_mob3
+    ,estimate_principal_remaining_mob4, dpd_days_mob4, dpd_days_ever_mob4
+    -- 模型分
     ,aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
 FROM labeled
 ;
