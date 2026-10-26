@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Y 标签说明：tmp_eliam_wagego_dwd_loan_apply_label</title>
+<title>Y 标签与金额逾期率指标说明</title>
 <style>
   :root {
     color-scheme: light;
@@ -113,115 +113,130 @@
 </head>
 <body>
 <main>
-  <h1>Y 标签说明：13 个建模标签</h1>
-  <p class="sub">目标表 <code>model.tmp_eliam_wagego_dwd_loan_apply_label</code>，一行一条借款申请。已按 C 档精简：只保留独立信息最强的 13 个 <code>y_*</code>，金额列和重复阈值不再落表；6 张新老客样本表也同步只带这 13 个标签。下面用真实借据 <code>LN00000033</code> 逐个说明。</p>
-  <p class="n">13 个 <code>y_*</code> = fpd 4 + mob 9 ｜ 另保留 15 个非 Y 的 MOB 余额/DPD 列用于金额逾期率 ｜ 观察截止 obs_dt = 2026-10-22</p>
+  <h1>Y 标签与金额逾期率指标说明</h1>
+  <p class="sub">目标表 <code>model.tmp_eliam_wagego_dwd_loan_apply_label</code>，一行一条借款申请。Y 标签共 <b>13 个</b>，全部为笔数口径：FPD 4 + MOB 9。金额逾期率另用 1 个放款金额列 <code>principal</code> 和 15 个 MOB 中间指标列，这些都不是 Y 标。下面用真实借据 <code>LN00000033</code> 说明。</p>
+  <p class="n">观察截止 obs_dt = 2026-10-22 ｜ FPD 窗口 due+7 / due+15 ｜ MOB 观察点 = 放款后第 N 个自然月末 ｜ 金额指标覆盖 MOB0–4</p>
 
   <h2>先看这条样本借据</h2>
   <div class="card">
     <p><code>LN00000033</code> · 2026-07-28 放款 <b>50 元</b> · 2026-08-02 到期 · 2026-08-09 首期实还，晚 7 天，随后结清。</p>
     <div class="table-wrap">
     <table class="mini">
-      <thead><tr><th>快照日</th><th>用来算</th><th class="num">current</th><th class="num">hist</th></tr></thead>
+      <thead><tr><th>快照日</th><th>用途</th><th class="num">剩余本金</th><th class="num">current</th><th class="num">hist</th></tr></thead>
       <tbody>
-        <tr><td>2026-08-31</td><td>MOB1 月末</td><td class="num">0</td><td class="num">7</td></tr>
-        <tr><td>2026-09-02</td><td>due + 31（FPD 取首还日）</td><td class="num">0</td><td class="num">7</td></tr>
-        <tr><td>2026-09-30</td><td>MOB2 月末</td><td class="num">0</td><td class="num">7</td></tr>
-        <tr><td>2026-10-22</td><td>obs_dt 观察截止（成熟判断）</td><td class="num">0</td><td class="num">7</td></tr>
-        <tr><td>2026-10-31</td><td>MOB3 月末（还没到）</td><td class="num null">—</td><td class="num null">—</td></tr>
+        <tr><td>2026-08-01</td><td>MOB0 窗口（07-31 月末 +7 天内）</td><td class="num">50</td><td class="num null">NULL</td><td class="num null">NULL</td></tr>
+        <tr><td>2026-08-31</td><td>MOB1 月末</td><td class="num">0</td><td class="num">0</td><td class="num">7</td></tr>
+        <tr><td>2026-09-30</td><td>MOB2 月末</td><td class="num">0</td><td class="num">0</td><td class="num">7</td></tr>
+        <tr><td>2026-10-22</td><td>obs_dt 观察截止</td><td class="num">0</td><td class="num">0</td><td class="num">7</td></tr>
+        <tr><td>2026-10-31</td><td>MOB3 月末（还没到）</td><td class="num null">—</td><td class="num null">—</td><td class="num null">—</td></tr>
       </tbody>
     </table>
     </div>
-    <p class="note"><code>current</code> = 当天还欠几天；<code>hist</code> = 历史上最深欠几天。本例每次看都是 current 0、hist 7：早就结清了，但曾经晚还 7 天。这也是为什么主标签用 <code>ever</code> 口径。</p>
+    <p class="note"><code>current</code> = 当天还欠几天；<code>hist</code> = 历史上最深欠几天。<code>NULL</code> 在 MOB 金额指标里记 0，但没有快照时整组为 NULL。本例结清后 current 一直是 0，hist 一直是 7。</p>
   </div>
 
-  <div class="fam-h"><span class="badge fpd">fpd</span><h2>首期逾期：FPD7 / FPD15</h2></div>
+  <div class="fam-h"><span class="badge fpd">fpd</span><h2>Y 标签：FPD7 / FPD15（4 个）</h2></div>
   <div class="card fpd">
-    <p class="fam-lede">只看首期（<code>period_no = 1</code>）。<code>label_obs_day</code> 先取 due+31 快照的首还日；没有就取 obs 快照首还日（需 ≤ due+31）；再没有就截在 due+31。本例 = <b>2026-08-09</b>。两个窗口：due+7 = 08-09、due+15 = 08-17。</p>
+    <p class="fam-lede">只看首期（<code>period_no = 1</code>）。<code>label_obs_day</code> 取 obs 快照的首还日；没有首还记录就用 <code>obs_dt</code>。本例 = <b>2026-08-09</b>，两个窗口 due+7 = 08-09、due+15 = 08-17。</p>
     <div class="table-wrap">
     <table>
       <thead><tr><th>标签</th><th>含义</th><th>怎么算</th><th class="num">本例</th></tr></thead>
       <tbody>
-        <tr><td><code>y_fpd7_obs_cnt</code></td><td>due+7 窗口能否判定（成熟标志）</td><td><code>LEAST(obs 快照首还日或 obs_dt, 08-09) &lt; 10-22</code></td><td class="num">1</td></tr>
-        <tr><td><code>y_fpd7_ovd_cnt</code></td><td>首期是否晚于 due+7</td><td><code>label_obs_day &gt; 08-09</code></td><td class="num">0</td></tr>
-        <tr><td><code>y_fpd15_obs_cnt</code></td><td>due+15 窗口能否判定</td><td><code>LEAST(obs 快照首还日或 obs_dt, 08-17) &lt; 10-22</code></td><td class="num">1</td></tr>
-        <tr><td><code>y_fpd15_ovd_cnt</code></td><td>首期是否晚于 due+15</td><td><code>label_obs_day &gt; 08-17</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_fpd7_obs_cnt</code></td><td>due+7 窗口能否判定</td><td><code>LEAST(首还日或 obs_dt, due+7) &lt; obs_dt</code>，且 <code>is_deal = 1</code>、有借据</td><td class="num">1</td></tr>
+        <tr><td><code>y_fpd7_ovd_cnt</code></td><td>首期是否晚于 due+7</td><td><code>y_fpd7_obs_cnt = 1</code> 时，<code>label_obs_day &gt; due+7</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_fpd15_obs_cnt</code></td><td>due+15 窗口能否判定</td><td><code>LEAST(首还日或 obs_dt, due+15) &lt; obs_dt</code>，且 <code>is_deal = 1</code>、有借据</td><td class="num">1</td></tr>
+        <tr><td><code>y_fpd15_ovd_cnt</code></td><td>首期是否晚于 due+15</td><td><code>y_fpd15_obs_cnt = 1</code> 时，<code>label_obs_day &gt; due+15</code></td><td class="num">0</td></tr>
       </tbody>
     </table>
     </div>
-    <p class="note"><code>obs_cnt</code> 是成熟标志兼分母，不是坏标志；窗口未到时 <code>obs_cnt = 0</code>、<code>ovd_cnt = NULL</code>。窗口嵌套：窗口越长，坏样本只会越少。FPD15 是选型主标签；FPD14 与之重叠 93.6%，已删。</p>
+    <p class="note"><code>obs_cnt</code> 是成熟标志兼分母，不是坏标志；窗口未到时 <code>obs_cnt = 0</code>、<code>ovd_cnt = NULL</code>。窗口嵌套：窗口越长，坏样本只会越少。FPD15 是主标签。</p>
   </div>
 
-  <div class="fam-h"><span class="badge mob">mob</span><h2>放款后第 N 个自然月末：成熟标志 + ever 阈值</h2></div>
+  <div class="fam-h"><span class="badge mob">mob</span><h2>Y 标签：MOB1 / MOB2 / MOB3（9 个）</h2></div>
   <div class="card mob">
-    <p class="fam-lede">放款日 07-28 → <b>MOB1 = 08-31、MOB2 = 09-30、MOB3 = 10-31</b>。每个 N 保留 3 列：<code>obs_cnt</code>（成熟/分母）、<code>ever_5plus_cnt</code>、<code>ever_30plus_cnt</code>。</p>
+    <p class="fam-lede">放款日 07-28 → <b>MOB1 = 08-31、MOB2 = 09-30、MOB3 = 10-31</b>。每个 N 有 3 个标签：<code>obs_cnt</code>（成熟/分母）、<code>ever_5plus_cnt</code>、<code>ever_30plus_cnt</code>，都取该月末快照的 <code>hist_overdue_days</code>。</p>
     <div class="table-wrap">
     <table>
       <thead><tr><th>标签</th><th>含义</th><th>怎么算</th><th class="num">本例</th></tr></thead>
       <tbody>
-        <tr class="grp"><td colspan="4">N = 1 · 2026-08-31 · 快照 current = 0 / hist = 7 · 已成熟</td></tr>
-        <tr><td><code>y_mob1_obs_cnt</code></td><td>这个月末是否已过（成熟标志）</td><td><code>08-31 &lt;= 10-22</code></td><td class="num">1</td></tr>
+        <tr class="grp"><td colspan="4">N = 1 · 2026-08-31 · 快照 hist = 7</td></tr>
+        <tr><td><code>y_mob1_obs_cnt</code></td><td>这个月末是否已过</td><td><code>08-31 &lt;= obs_dt</code></td><td class="num">1</td></tr>
         <tr><td><code>y_mob1_ever_5plus_cnt</code></td><td>到月末是否曾逾期 ≥ 5 天</td><td><code>hist &gt;= 5</code></td><td class="num key">1</td></tr>
         <tr><td><code>y_mob1_ever_30plus_cnt</code></td><td>到月末是否曾逾期 &gt; 30 天</td><td><code>hist &gt; 30</code></td><td class="num">0</td></tr>
 
-        <tr class="grp"><td colspan="4">N = 2 · 2026-09-30 · 快照 current = 0 / hist = 7 · 已成熟</td></tr>
-        <tr><td><code>y_mob2_obs_cnt</code></td><td>这个月末是否已过（成熟标志）</td><td><code>09-30 &lt;= 10-22</code></td><td class="num">1</td></tr>
+        <tr class="grp"><td colspan="4">N = 2 · 2026-09-30 · 快照 hist = 7</td></tr>
+        <tr><td><code>y_mob2_obs_cnt</code></td><td>这个月末是否已过</td><td><code>09-30 &lt;= obs_dt</code></td><td class="num">1</td></tr>
         <tr><td><code>y_mob2_ever_5plus_cnt</code></td><td>到月末是否曾逾期 ≥ 5 天</td><td><code>hist &gt;= 5</code></td><td class="num key">1</td></tr>
         <tr><td><code>y_mob2_ever_30plus_cnt</code></td><td>到月末是否曾逾期 &gt; 30 天</td><td><code>hist &gt; 30</code></td><td class="num">0</td></tr>
 
         <tr class="grp"><td colspan="4">N = 3 · 2026-10-31 · 还没到 obs_dt（10-22）</td></tr>
-        <tr><td><code>y_mob3_obs_cnt</code></td><td>这个月末是否已过（成熟标志）</td><td><code>10-31 &gt; 10-22</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_mob3_obs_cnt</code></td><td>这个月末是否已过</td><td><code>10-31 &gt; obs_dt</code></td><td class="num">0</td></tr>
         <tr><td><code>y_mob3_ever_5plus_cnt</code></td><td>到月末是否曾逾期 ≥ 5 天</td><td rowspan="2">月末未到，不给结论</td><td class="num null">NULL</td></tr>
         <tr><td><code>y_mob3_ever_30plus_cnt</code></td><td>到月末是否曾逾期 &gt; 30 天</td><td class="num null">NULL</td></tr>
       </tbody>
     </table>
     </div>
-    <p class="note"><code>obs_cnt</code> 是成熟标志，不是坏标志；月末已过但当天没有快照时，坏标签为 NULL。当前阈值、金额列、到期日锚点和固定天数锚点都已删；需要时用 <code>dpd_days_mobN</code> / <code>dpd_days_ever_mobN</code> 派生。</p>
+    <p class="note"><code>obs_cnt</code> 是成熟标志，不是坏标志；未放款时整族 NULL。月末已过但当天没有快照时，<code>obs_cnt = 1</code>，两个 ever 标签为 NULL。阈值边界：<b>5plus 是 ≥ 5，30plus 是 &gt; 30</b>。</p>
   </div>
 
-  <h2>金额逾期率：用这 15 个非 Y 列</h2>
-  <div class="card">
+  <div class="fam-h"><span class="badge fpd">fpd</span><h2>金额逾期率：FPD 用 principal（1 个中间指标）</h2></div>
+  <div class="card fpd">
+    <p class="fam-lede">FPD 是单一时点，没有余额轨迹，不需要额外中间列。金额口径直接用 <code>principal</code>：放款成功时等于 <code>real_amount</code>，未放款为 NULL。分子分母都用它，成熟由 <code>y_fpdN_obs_cnt</code> 门控。</p>
     <div class="table-wrap">
     <table>
-      <thead><tr><th>列</th><th>含义</th><th>角色</th></tr></thead>
+      <thead><tr><th>列</th><th>含义</th><th>在金额率中的角色</th><th class="num">本例</th></tr></thead>
       <tbody>
-        <tr><td><code>estimate_principal_remaining_mobN</code></td><td>MOB N 时点剩余本金，负数截 0</td><td>分母（余额口径）</td></tr>
-        <tr><td><code>dpd_days_mobN</code></td><td>MOB N 时点当前逾期天数，NULL 记 0</td><td>分子条件（当天）</td></tr>
-        <tr><td><code>dpd_days_ever_mobN</code></td><td>MOB N 时点历史最深逾期天数</td><td>分子条件（曾经）</td></tr>
+        <tr><td><code>principal</code></td><td>放款本金（= 放款成功时的 <code>real_amount</code>）</td><td>分子和分母的金额基数</td><td class="num">50</td></tr>
+        <tr><td><code>y_fpd7_obs_cnt</code> / <code>y_fpd15_obs_cnt</code></td><td>窗口是否成熟</td><td>分母门控</td><td class="num">1 / 1</td></tr>
+        <tr><td><code>y_fpd7_ovd_cnt</code> / <code>y_fpd15_ovd_cnt</code></td><td>是否首期逾期</td><td>分子门控</td><td class="num">0 / 0</td></tr>
       </tbody>
     </table>
     </div>
-    <p class="note">N = 0–4。示例：<code>SUM(CASE WHEN dpd_days_mobN &gt;= 5 THEN estimate_principal_remaining_mobN ELSE 0 END) / SUM(estimate_principal_remaining_mobN)</code>。注意它们取的是<b>离 MOB 目标最近的快照</b>（MOB0 允许 +7 天），和上面 <code>y_mobN</code> 的精确日期不完全一样；NULL 表示没快照或 MOB 未到。</p>
+    <p class="note">公式：<code>SUM(CASE WHEN y_fpdN_ovd_cnt = 1 THEN principal ELSE 0 END) / SUM(CASE WHEN y_fpdN_obs_cnt = 1 THEN principal ELSE 0 END)</code>。本例 FPD7 / FPD15 都是 0 / 50 = <b>0%</b>。若要用申请金额加权，可改用 <code>real_amount</code>，但仍以 <code>obs_cnt = 1</code> 限定成熟样本。</p>
   </div>
 
-  <h2>累计删了哪些：134 → 13，共 121 列</h2>
-  <div class="card">
+  <div class="fam-h"><span class="badge mob">mob</span><h2>金额逾期率：MOB 用 15 个非 Y 列（MOB0–4）</h2></div>
+  <div class="card mob">
+    <p class="fam-lede">每个 MOB 有 3 个中间指标：剩余本金作分母，current / ever DPD 作分子条件。<code>dpd_days_mobN</code> 和 <code>dpd_days_ever_mobN</code> 是快照的原始 DPD，NULL 记 0；没有快照时整组为 NULL。</p>
     <div class="table-wrap">
     <table>
-      <thead><tr><th>类别</th><th>列数</th><th>其中金额列</th></tr></thead>
+      <thead><tr><th>列</th><th>含义</th><th>在金额率中的角色</th><th class="num">本例</th></tr></thead>
       <tbody>
-        <tr><td>mob_due1/2/3 + mob_day30/60/90 两套锚点</td><td class="num">60</td><td class="num">30</td></tr>
-        <tr><td>due_m2/m3 延伸窗口</td><td class="num">20</td><td class="num">4</td></tr>
-        <tr><td>主 mob 1/2/3 的 current 阈值和金额列（<code>obs_cnt</code>、ever 阈值保留）</td><td class="num">21</td><td class="num">15</td></tr>
-        <tr><td>fpd3 / fpd14 / fpd30</td><td class="num">6</td><td class="num">0</td></tr>
-        <tr><td>due 基础族全部（原始 DPD、ever 阈值、current、金额）</td><td class="num">10</td><td class="num">2</td></tr>
-        <tr><td>obs 全部（ever、current、金额）</td><td class="num">4</td><td class="num">2</td></tr>
-        <tr><td><b>合计</b></td><td class="num"><b>121</b></td><td class="num"><b>53</b></td></tr>
+        <tr class="grp"><td colspan="4">N = 0 · 2026-07-31 月末 · 取 08-01 快照（月末 +7 天内）</td></tr>
+        <tr><td><code>estimate_principal_remaining_mob0</code></td><td>剩余本金，负数截 0</td><td>分母</td><td class="num">50</td></tr>
+        <tr><td><code>dpd_days_mob0</code></td><td>当天逾期天数</td><td>current 口径分子条件</td><td class="num">0</td></tr>
+        <tr><td><code>dpd_days_ever_mob0</code></td><td>历史最深逾期天数</td><td>ever 口径分子条件</td><td class="num">0</td></tr>
+
+        <tr class="grp"><td colspan="4">N = 1 · 2026-08-31 月末 · 快照已结清</td></tr>
+        <tr><td><code>estimate_principal_remaining_mob1</code></td><td>剩余本金，负数截 0</td><td>分母</td><td class="num key">0</td></tr>
+        <tr><td><code>dpd_days_mob1</code></td><td>当天逾期天数</td><td>current 口径分子条件</td><td class="num">0</td></tr>
+        <tr><td><code>dpd_days_ever_mob1</code></td><td>历史最深逾期天数</td><td>ever 口径分子条件</td><td class="num key">7</td></tr>
+
+        <tr class="grp"><td colspan="4">N = 2 · 2026-09-30 月末 · 快照已结清</td></tr>
+        <tr><td><code>estimate_principal_remaining_mob2</code></td><td>剩余本金，负数截 0</td><td>分母</td><td class="num">0</td></tr>
+        <tr><td><code>dpd_days_mob2</code></td><td>当天逾期天数</td><td>current 口径分子条件</td><td class="num">0</td></tr>
+        <tr><td><code>dpd_days_ever_mob2</code></td><td>历史最深逾期天数</td><td>ever 口径分子条件</td><td class="num">7</td></tr>
+
+        <tr class="grp"><td colspan="4">N = 3 / 4 · 月末未到或没有快照</td></tr>
+        <tr><td><code>estimate_principal_remaining_mob3/4</code></td><td>剩余本金，负数截 0</td><td>分母</td><td class="num null">NULL</td></tr>
+        <tr><td><code>dpd_days_mob3/4</code></td><td>当天逾期天数</td><td>current 口径分子条件</td><td class="num null">NULL</td></tr>
+        <tr><td><code>dpd_days_ever_mob3/4</code></td><td>历史最深逾期天数</td><td>ever 口径分子条件</td><td class="num null">NULL</td></tr>
       </tbody>
     </table>
     </div>
-    <p class="note">53 个金额列都能机械还原：44 个坏账 <code>*_amt</code> = 对应 <code>*_cnt × real_amount</code>；9 个 mob <code>obs_amt</code> = <code>obs_cnt × real_amount</code>。FPD14 与 FPD15 重叠 93.6%；current 阈值在短期产品上大量为 0，所以 MOB 只保留 ever。due 与 obs 整族删除：观察时点不固定，且与 FPD/MOB 时间轴重叠。</p>
+    <p class="note">公式（把 <code>dpd_days_mobN</code> 换成 <code>dpd_days_ever_mobN</code> 就是 ever 口径）：<code>SUM(CASE WHEN dpd_days_mobN &gt;= 5 THEN estimate_principal_remaining_mobN ELSE 0 END) / SUM(estimate_principal_remaining_mobN)</code>。本例 MOB1 / MOB2 余额为 0，不进分母，但 ever DPD 仍是 7；MOB0 余额 50，current / ever 都是 0。</p>
+    <p class="note">快照选择：N ≥ 1 取月末当天或之前最近一次快照；MOB0 允许月末后 7 天内，优先月末及之前。没有快照就整组 NULL。MOB4 只有金额指标，没有对应的 Y 标签。</p>
   </div>
 
   <h2>用之前记住 4 件事</h2>
   <div class="card">
     <ul class="notes">
-      <li><b>算坏率先分分子分母。</b>FPD / MOB 用 <code>obs_cnt</code> 作分母；不要把 NULL 当 0。</li>
-      <li><b>ever 是主口径。</b>短期借据到 MOB 时点大多已结清，current 看不出历史坏；ever 用 <code>hist_overdue_days</code>，不会漏掉已结清的坏样本。</li>
-      <li><b>阈值边界：5plus 是 ≥ 5，30plus 是 &gt; 30。</b>刚好 30 天不算 30+。</li>
-      <li><b>金额逾期率用余额，不用放款金额。</b>分母用 <code>estimate_principal_remaining_mobN</code>；<code>real_amount</code> 只适合放款金额加权。</li>
+      <li><b>Y 标签先分分子分母。</b>FPD / MOB 都用 <code>obs_cnt</code> 作成熟门控和分母；窗口未到时 <code>ovd_cnt</code> 为 NULL，不要把 NULL 当 0。</li>
+      <li><b>金额率不要混基数。</b>FPD 用 <code>principal</code>（放款本金）；MOB 用 <code>estimate_principal_remaining_mobN</code>（时点余额），两者不能互相替代。</li>
+      <li><b>余额为 0 的样本不进 MOB 分母。</b>提前结清的借据会拉小分母，报金额率时同时报分母金额；ever DPD 仍保留历史逾期。</li>
+      <li><b>阈值边界：5plus 是 ≥ 5，30plus 是 &gt; 30。</b>刚好 30 天不算 30+；金额率可以按 5 / 30 或自定义阈值切。</li>
     </ul>
-    <p class="note">被拒、未放款、没有借据的申请也会保留一行，但 Y 列是 NULL 或 0：mob 整族 NULL，fpd 的 <code>obs_cnt = 0</code>、<code>ovd_cnt = NULL</code>。</p>
+    <p class="note">被拒、未放款、没有借据的申请也会保留一行：FPD 的 <code>obs_cnt = 0</code>、<code>ovd_cnt = NULL</code>；MOB 整族 NULL。</p>
   </div>
 
   <p class="note" style="margin-top:22px">示例为本地 ODS 导出中的真实借据 LN00000033，所有数值均按现行 SQL 复算。</p>
