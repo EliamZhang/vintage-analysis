@@ -294,6 +294,12 @@ latest AS (
         ,CASE WHEN a.is_disburse_success = 1 AND CAST(l.is_deal AS INT) = 1 AND s.listing_id IS NOT NULL
                AND DATE_ADD(s.init_due_date, 31) BETWEEN TO_DATE(a.disburse_time) AND p.obs_dt
               THEN 1 ELSE 0 END                               AS is_due_matured
+        ,CASE WHEN a.is_disburse_success = 1 AND CAST(l.is_deal AS INT) = 1 AND s.listing_id IS NOT NULL
+               AND ADD_MONTHS(s.init_due_date, 2) BETWEEN TO_DATE(a.disburse_time) AND p.obs_dt
+              THEN 1 ELSE 0 END                               AS is_due_m2_matured
+        ,CASE WHEN a.is_disburse_success = 1 AND CAST(l.is_deal AS INT) = 1 AND s.listing_id IS NOT NULL
+               AND ADD_MONTHS(s.init_due_date, 3) BETWEEN TO_DATE(a.disburse_time) AND p.obs_dt
+              THEN 1 ELSE 0 END                               AS is_due_m3_matured
         ,f.first_disburse_time
     FROM loan_apply a
     CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
@@ -316,6 +322,10 @@ base AS (
         ,x.owing_amount                                       AS label_owing_amount
         ,CASE WHEN l.is_due_matured = 1 THEN x.current_overdue_days END AS label_dpd
         ,CASE WHEN l.is_due_matured = 1 THEN x.hist_overdue_days END    AS label_hist_dpd
+        ,CASE WHEN l.is_due_m2_matured = 1 THEN x2.current_overdue_days END AS label_dpd_m2
+        ,CASE WHEN l.is_due_m2_matured = 1 THEN x2.hist_overdue_days END    AS label_hist_dpd_m2
+        ,CASE WHEN l.is_due_m3_matured = 1 THEN x3.current_overdue_days END AS label_dpd_m3
+        ,CASE WHEN l.is_due_m3_matured = 1 THEN x3.hist_overdue_days END    AS label_hist_dpd_m3
         ,COALESCE(
              TO_DATE(x.first_repay_time)
             ,CASE WHEN l.first_repay_time IS NOT NULL AND TO_DATE(l.first_repay_time) <= l.due_label_obs_dt
@@ -368,6 +378,12 @@ base AS (
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp x
       ON l.listing_id = x.listing_id
      AND x.stat_date = l.due_label_obs_dt
+    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp x2
+      ON l.listing_id = x2.listing_id
+     AND x2.stat_date = ADD_MONTHS(l.init_due_date, 2)
+    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp x3
+      ON l.listing_id = x3.listing_id
+     AND x3.stat_date = ADD_MONTHS(l.init_due_date, 3)
 ),
 mob_obs AS (
     SELECT
@@ -564,6 +580,26 @@ labeled AS (
         ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_due_ever_ovd_amt
         ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd >= 5 THEN 1 ELSE 0 END END AS y_due_ever_5plus_cnt
         ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 30 THEN 1 ELSE 0 END END AS y_due_ever_30plus_cnt
+        ,b.label_dpd_m2                                        AS y_due_m2_dpd
+        ,b.label_hist_dpd_m2                                   AS y_due_m2_ever_dpd
+        ,CASE WHEN b.label_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_dpd_m2 > 0 THEN 1 ELSE 0 END END AS y_due_m2_ovd_cnt
+        ,CASE WHEN b.label_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_dpd_m2 > 0 THEN b.real_amount ELSE 0 END END AS y_due_m2_ovd_amt
+        ,CASE WHEN b.label_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_dpd_m2 >= 5 THEN 1 ELSE 0 END END AS y_due_m2_5plus_cnt
+        ,CASE WHEN b.label_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_dpd_m2 > 30 THEN 1 ELSE 0 END END AS y_due_m2_30plus_cnt
+        ,CASE WHEN b.label_hist_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m2 > 0 THEN 1 ELSE 0 END END AS y_due_m2_ever_ovd_cnt
+        ,CASE WHEN b.label_hist_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m2 > 0 THEN b.real_amount ELSE 0 END END AS y_due_m2_ever_ovd_amt
+        ,CASE WHEN b.label_hist_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m2 >= 5 THEN 1 ELSE 0 END END AS y_due_m2_ever_5plus_cnt
+        ,CASE WHEN b.label_hist_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m2 > 30 THEN 1 ELSE 0 END END AS y_due_m2_ever_30plus_cnt
+        ,b.label_dpd_m3                                        AS y_due_m3_dpd
+        ,b.label_hist_dpd_m3                                   AS y_due_m3_ever_dpd
+        ,CASE WHEN b.label_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_dpd_m3 > 0 THEN 1 ELSE 0 END END AS y_due_m3_ovd_cnt
+        ,CASE WHEN b.label_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_dpd_m3 > 0 THEN b.real_amount ELSE 0 END END AS y_due_m3_ovd_amt
+        ,CASE WHEN b.label_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_dpd_m3 >= 5 THEN 1 ELSE 0 END END AS y_due_m3_5plus_cnt
+        ,CASE WHEN b.label_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_dpd_m3 > 30 THEN 1 ELSE 0 END END AS y_due_m3_30plus_cnt
+        ,CASE WHEN b.label_hist_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m3 > 0 THEN 1 ELSE 0 END END AS y_due_m3_ever_ovd_cnt
+        ,CASE WHEN b.label_hist_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m3 > 0 THEN b.real_amount ELSE 0 END END AS y_due_m3_ever_ovd_amt
+        ,CASE WHEN b.label_hist_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m3 >= 5 THEN 1 ELSE 0 END END AS y_due_m3_ever_5plus_cnt
+        ,CASE WHEN b.label_hist_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m3 > 30 THEN 1 ELSE 0 END END AS y_due_m3_ever_30plus_cnt
         ,CASE WHEN b.y_fpd3_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3) THEN 1 ELSE 0 END END AS y_fpd3_ovd_cnt
         ,CASE WHEN b.y_fpd7_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd_cnt
         ,CASE WHEN b.y_fpd14_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END AS y_fpd14_ovd_cnt
@@ -728,6 +764,26 @@ SELECT
     ,y_due_ever_ovd_amt
     ,y_due_ever_5plus_cnt
     ,y_due_ever_30plus_cnt
+    ,y_due_m2_dpd
+    ,y_due_m2_ever_dpd
+    ,y_due_m2_ovd_cnt
+    ,y_due_m2_ovd_amt
+    ,y_due_m2_5plus_cnt
+    ,y_due_m2_30plus_cnt
+    ,y_due_m2_ever_ovd_cnt
+    ,y_due_m2_ever_ovd_amt
+    ,y_due_m2_ever_5plus_cnt
+    ,y_due_m2_ever_30plus_cnt
+    ,y_due_m3_dpd
+    ,y_due_m3_ever_dpd
+    ,y_due_m3_ovd_cnt
+    ,y_due_m3_ovd_amt
+    ,y_due_m3_5plus_cnt
+    ,y_due_m3_30plus_cnt
+    ,y_due_m3_ever_ovd_cnt
+    ,y_due_m3_ever_ovd_amt
+    ,y_due_m3_ever_5plus_cnt
+    ,y_due_m3_ever_30plus_cnt
     ,y_fpd3_obs_cnt
     ,y_fpd3_ovd_cnt
     ,y_fpd7_obs_cnt

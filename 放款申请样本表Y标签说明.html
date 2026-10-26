@@ -121,9 +121,9 @@
 </head>
 <body>
 <main>
-  <h1>Y 标签说明：54 个核心列 + mob 两个新口径</h1>
-  <p class="sub">目标表 <code>model.tmp_eliam_wagego_dwd_loan_apply_label</code>，一行一条借款申请。下面用真实借据 <code>LN00000033</code>，把核心 54 个 <code>y_*</code> 一列一列讲；mob 新增的两个口径共 60 列，在最后汇总。</p>
-  <p class="n">核心 54 列 = due 10 + fpd 10 + obs 4 + mob 30 ｜ 新增 mob 60 列 = 到期日 30 + 固定天数 30 ｜ 合计 114 个 <code>y_*</code> ｜ 观察日 obs_dt = 2026-10-22</p>
+  <h1>Y 标签说明：54 个核心列 + 延伸口径</h1>
+  <p class="sub">目标表 <code>model.tmp_eliam_wagego_dwd_loan_apply_label</code>，一行一条借款申请。下面用真实借据 <code>LN00000033</code>，把核心 54 个 <code>y_*</code> 一列一列讲；mob 新增 60 列、due 新增 20 列，在最后汇总。</p>
+  <p class="n">核心 54 列 = due 10 + fpd 10 + obs 4 + mob 30 ｜ 延伸 80 列 = mob 60 + due 20 ｜ 合计 134 个 <code>y_*</code> ｜ 观察日 obs_dt = 2026-10-22</p>
 
   <h2>先看这条样本借据</h2>
   <div class="card">
@@ -135,6 +135,7 @@
         <tr><td>2026-08-31</td><td>MOB1 月末</td><td class="num">0</td><td class="num">7</td></tr>
         <tr><td>2026-09-02</td><td>due + 31（到期 08-02 加 31 天）</td><td class="num">0</td><td class="num">7</td></tr>
         <tr><td>2026-09-30</td><td>MOB2 月末</td><td class="num">0</td><td class="num">7</td></tr>
+        <tr><td>2026-10-02</td><td>due + 2 个月（到期 08-02 加 2 个月）</td><td class="num">0</td><td class="num">7</td></tr>
         <tr><td>2026-10-22</td><td>obs_dt 全局观察日</td><td class="num">0</td><td class="num">7</td></tr>
         <tr><td>2026-10-31</td><td>MOB3 月末（还没到）</td><td class="num null">—</td><td class="num null">—</td></tr>
       </tbody>
@@ -164,6 +165,21 @@
     </table>
     </div>
     <p class="note">整族前提 <code>is_due_matured = 1</code>：due + 31 落在放款日和 obs_dt 之间。不满足时 10 列全是 NULL，不能当好人。注意 <b>5plus 是 ≥ 5，30plus 是 &gt; 30</b>。</p>
+  </div>
+
+  <div class="fam-h"><span class="badge due">due+</span><h2>due 的两个延伸观察窗</h2></div>
+  <div class="card due">
+    <p class="fam-lede">10 个指标与上面的 due 完全一样，只换观察日：到期后第 N 个月的同一天，<code>ADD_MONTHS(init_due_date, N)</code>，N = 2 / 3。不是自然月末；月末口径在 <code>y_mob_due2/3</code>。</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>口径</th><th>观察日公式</th><th>列名前缀</th><th>本例观察日</th></tr></thead>
+      <tbody>
+        <tr><td>到期后第 2 个月</td><td><code>ADD_MONTHS(init_due_date, 2)</code></td><td><code>y_due_m2_*</code></td><td>10-02，已成熟</td></tr>
+        <tr><td>到期后第 3 个月</td><td><code>ADD_MONTHS(init_due_date, 3)</code></td><td><code>y_due_m3_*</code></td><td>11-02，未成熟</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">每个口径 10 列，后缀与 due 一样：dpd、ever_dpd、ovd、ever_ovd、5plus、30plus，各带 cnt / amt。本例 m2 快照 current 0 / hist 7 → <code>y_due_m2_ovd_cnt = 0</code>、<code>y_due_m2_ever_5plus_cnt = 1</code>；m3 = 11-02 还没到 obs_dt，10 列全 NULL。m2 = 10-02 与 <code>y_mob_due2</code> 的 10-31 不是同一天。</p>
   </div>
 
   <div class="fam-h"><span class="badge fpd">fpd</span><h2>首期在到期后 X 天内还没还？</h2></div>
@@ -282,7 +298,7 @@
   <h2>用之前记住 4 件事</h2>
   <div class="card">
     <ul class="notes">
-      <li><b>算坏率先分分子分母。</b>FPD / MOB（含新增的 due / day 口径）用 <code>obs_cnt</code> 作分母、坏标签作分子；due 族先筛 <code>is_due_matured = 1</code>。不要把 NULL 当 0。</li>
+      <li><b>算坏率先分分子分母。</b>FPD / MOB（含 mob 的 due / day 口径）用 <code>obs_cnt</code> 作分母、坏标签作分子；due 族（含 m2 / m3）先确认对应观察日已成熟。不要把 NULL 当 0。</li>
       <li><b>due 和 obs 都分“当天”和“曾经”。</b>current 看当天，hist 看历史最深；本例就是当天 0、曾经 1。</li>
       <li><b>阈值边界：5plus 是 ≥ 5，30plus 是 &gt; 30。</b>刚好 30 天不算 30+。</li>
       <li><b>金额标签：坏样本记 <code>real_amount</code>，好样本记 0。</b>唯一例外是所有 mob 的 <code>obs_amt</code>（<code>y_mobN</code> / <code>y_mob_dueN</code> / <code>y_mob_dayXN</code>），它是分母金额。</li>
