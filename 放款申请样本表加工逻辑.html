@@ -362,9 +362,9 @@ CASE WHEN apply_status = 'DISBURSE_SUCCESS' THEN 1 ELSE 0 END
           <li><code>first_disburse</code>：按用户取 <code>MIN(disburse_time)</code>，只算放款成功的申请。</li>
           <li><code>latest</code>：按 listing_id 关联发标信息，按 <code>stat_date = obs_dt</code> 关联当天借据快照。</li>
           <li>本金直接取 <code>real_amount</code>，只有放款成功的申请才记录。</li>
-          <li><code>label_obs_dt = init_due_date + 31</code>；满足“成功 + is_deal=1 + 有快照 + due+31 在放款日和 obs_dt 之间”才记 <code>is_due_matured = 1</code>。</li>
+          <li><code>due_label_obs_dt = init_due_date + 31</code>；满足“成功 + is_deal=1 + 有快照 + due+31 在放款日和 obs_dt 之间”才记 <code>is_due_matured = 1</code>。</li>
         </ul>
-        <pre><code>DATE_ADD(s.init_due_date, 31) AS label_obs_dt
+        <pre><code>DATE_ADD(s.init_due_date, 31) AS due_label_obs_dt
 
 CASE WHEN a.is_disburse_success = 1
      THEN CAST(l.real_amount AS DOUBLE) END AS principal</code></pre>
@@ -377,7 +377,7 @@ CASE WHEN a.is_disburse_success = 1
             <tr><td>term_quantity / term_unit</td><td>1 / F</td></tr>
             <tr><td>is_deal</td><td>1</td></tr>
             <tr><td>list_due_date / init_due_date</td><td>2026-09-18 / 2026-09-18</td></tr>
-            <tr><td>label_obs_dt</td><td>2026-10-19</td></tr>
+            <tr><td>due_label_obs_dt</td><td>2026-10-19</td></tr>
             <tr><td>is_due_matured</td><td>1</td></tr>
             <tr><td>obs_dt 当天快照</td><td>已结清，首还 10-16，余额 0</td></tr>
           </tbody>
@@ -393,7 +393,7 @@ CASE WHEN a.is_disburse_success = 1
         <p class="purpose"><b>目的：</b>在 due+31 再取一次借据，得到最终标签日；同时判断 FPD3/7/14/15/30 每一档是否已经可以下结论。</p>
         <div class="io"><span>输入</span><code>latest</code> <code>stg_debt_snp</code><span class="arrow">→</span><span>输出</span><code>base</code></div>
         <ul>
-          <li>按 <code>stat_date = label_obs_dt</code> 关联借据快照，得到 label_* 字段。</li>
+          <li>按 <code>stat_date = due_label_obs_dt</code> 关联借据快照，得到 label_* 字段。</li>
           <li><code>label_obs_day</code>：优先取 due+31 快照里的首还日；缺失则取 obs_dt 前已记录的首还日；再缺取 due+31。</li>
           <li>FPD-X 成熟：<code>LEAST(首还日, due+X) &lt; obs_dt</code>，成熟记 obs_cnt = 1；未成熟 obs_cnt = 0，坏标签为 NULL。</li>
         </ul>
@@ -546,7 +546,7 @@ CASE WHEN first_disburse_time IS NULL THEN 'New'
             <tr><td>戳额</td><td class="num">4</td><td>strategy_time、retry_count、last_limit_time、last_limit_flow_id</td></tr>
             <tr><td>放款与借据</td><td class="num">15</td><td>real_amount、is_deal、init_due_date、debt_status…</td></tr>
             <tr><td>观察点快照</td><td class="num">9</td><td>obs_dt 当天的状态、逾期天数、本金与余额</td></tr>
-            <tr><td>标签快照</td><td class="num">6</td><td>label_obs_dt、label_user_actual_repay_time、label_debt_status…</td></tr>
+            <tr><td>标签快照</td><td class="num">6</td><td>due_label_obs_dt、label_user_actual_repay_time、label_debt_status…</td></tr>
             <tr><td>到期 / FPD / 时点 / 期限</td><td class="num">27</td><td>y_due_* 10、y_fpd* 10、y_obs_* 4、期限与提前结清 3</td></tr>
             <tr><td>MOB 标签与追踪</td><td class="num">45</td><td>y_mob1~3 的 obs / 5+ / 30+（cnt + amt）30；剩余本金与 DPD 15</td></tr>
             <tr><td>时间维度</td><td class="num">5</td><td>disburse_month、disburse_quarter、days_on_book、user_type、first_disburse_time</td></tr>

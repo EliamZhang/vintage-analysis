@@ -279,7 +279,7 @@ latest AS (
         ,CAST(l.fail_bid_time AS TIMESTAMP)                   AS fail_bid_time
         ,s.listing_id                                         AS debt_listing_id
         ,s.init_due_date
-        ,CASE WHEN s.init_due_date IS NOT NULL THEN DATE_ADD(s.init_due_date, 31) END AS label_obs_dt
+        ,CASE WHEN s.init_due_date IS NOT NULL THEN DATE_ADD(s.init_due_date, 31) END AS due_label_obs_dt
         ,s.first_repay_time
         ,s.user_actual_repay_time
         ,s.debt_status
@@ -318,9 +318,9 @@ base AS (
         ,CASE WHEN l.is_due_matured = 1 THEN x.hist_overdue_days END    AS label_hist_dpd
         ,COALESCE(
              TO_DATE(x.first_repay_time)
-            ,CASE WHEN l.first_repay_time IS NOT NULL AND TO_DATE(l.first_repay_time) <= l.label_obs_dt
+            ,CASE WHEN l.first_repay_time IS NOT NULL AND TO_DATE(l.first_repay_time) <= l.due_label_obs_dt
                   THEN TO_DATE(l.first_repay_time) END
-            ,l.label_obs_dt
+            ,l.due_label_obs_dt
          )                                                    AS label_obs_day
         ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
                AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 3)) < l.obs_dt
@@ -349,7 +349,7 @@ base AS (
     FROM latest l
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp x
       ON l.listing_id = x.listing_id
-     AND x.stat_date = l.label_obs_dt
+     AND x.stat_date = l.due_label_obs_dt
 ),
 mob_obs AS (
     SELECT
@@ -590,7 +590,7 @@ SELECT
     ,repay_amount
     ,owing_amount
     ,obs_dt
-    ,label_obs_dt
+    ,due_label_obs_dt
     ,label_user_actual_repay_time
     ,label_debt_status
     ,label_current_overdue_days
