@@ -228,7 +228,7 @@ latest AS (
         ,s.hist_overdue_days
         ,s.current_overdue_days
         ,CASE WHEN a.is_disburse_success = 1
-              THEN COALESCE(NULLIF(CAST(l.real_amount AS DOUBLE), 0), s.principal) END AS principal
+              THEN CAST(l.real_amount AS DOUBLE) END           AS principal
         ,s.repay_amount
         ,s.owing_amount
         ,p.obs_dt

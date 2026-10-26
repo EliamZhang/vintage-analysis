@@ -361,13 +361,13 @@ CASE WHEN apply_status = 'DISBURSE_SUCCESS' THEN 1 ELSE 0 END
         <ul>
           <li><code>first_disburse</code>：按用户取 <code>MIN(disburse_time)</code>，只算放款成功的申请。</li>
           <li><code>latest</code>：按 listing_id 关联发标信息，按 <code>stat_date = obs_dt</code> 关联当天借据快照。</li>
-          <li>本金优先 <code>real_amount</code>，为 0 时回退借据快照的 <code>principal</code>。</li>
+          <li>本金直接取 <code>real_amount</code>，只有放款成功的申请才记录。</li>
           <li><code>label_obs_dt = init_due_date + 31</code>；满足“成功 + is_deal=1 + 有快照 + due+31 在放款日和 obs_dt 之间”才记 <code>is_due_matured = 1</code>。</li>
         </ul>
         <pre><code>DATE_ADD(s.init_due_date, 31) AS label_obs_dt
 
-COALESCE(NULLIF(CAST(l.real_amount AS DOUBLE), 0), s.principal)
-  AS principal</code></pre>
+CASE WHEN a.is_disburse_success = 1
+     THEN CAST(l.real_amount AS DOUBLE) END AS principal</code></pre>
         <div class="table-wrap">
         <table class="mini">
           <thead><tr><th>字段</th><th>本例值</th></tr></thead>
