@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vintage Y 标签选型分析</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --series: #2a78d6;
+    --c1: #2a78d6;
+    --c2: #eb6834;
+    --c3: #1baf7a;
+    --ring: rgba(11,11,11,0.10);
+    --wash: rgba(42,120,214,0.07);
+    --highlight: rgba(42,120,214,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --series: #3987e5;
+      --c1: #3987e5;
+      --c2: #d95926;
+      --c3: #199e70;
+      --ring: rgba(255,255,255,0.10);
+      --wash: rgba(57,135,229,0.12);
+      --highlight: rgba(57,135,229,0.16);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px 56px;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 26px; line-height: 1.3; margin: 0 0 6px; }
+  .sub { color: var(--ink-2); margin: 0 0 28px; }
+  h2 { font-size: 17px; margin: 32px 0 12px; }
+  .steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (max-width: 680px) { .steps { grid-template-columns: 1fr; } }
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .step b { display: block; font-size: 14px; margin-bottom: 4px; }
+  .step span { color: var(--ink-2); font-size: 13.5px; }
+  .step em { font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-radius: 12px;
+    padding: 18px 18px 10px;
+  }
+  .card h3 { font-size: 15px; margin: 0 0 2px; font-weight: 600; }
+  .card .cap { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
+  .chart-wrap { position: relative; }
+  svg { display: block; width: 100%; height: auto; }
+  .tip {
+    position: absolute; pointer-events: none; opacity: 0;
+    transform: translate(-50%, -115%);
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    padding: 7px 10px; font-size: 12.5px; line-height: 1.5;
+    white-space: nowrap; color: var(--ink);
+    transition: opacity .12s;
+  }
+  .tip b { font-variant-numeric: tabular-nums; }
+  .tip span { color: var(--ink-2); }
+  .tip.down { transform: translate(-50%, 0); }
+  .tip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 20px; font-size: 12.5px; color: var(--ink-2); margin: 0 0 6px 2px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .n { color: var(--muted); font-size: 12px; }
+  .card table { margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+  tr.pick td { background: var(--highlight); font-weight: 600; }
+  tr.pick td:first-child::after { content: " ← 拐点"; color: var(--ink-2); font-weight: 400; font-size: 12px; }
+  tbody tr:last-child td { border-bottom: none; }
+  .callout {
+    display: flex; gap: 14px; align-items: baseline;
+    background: var(--surface); border: 1px solid var(--ring);
+    border-left: 3px solid var(--series);
+    border-radius: 10px; padding: 14px 18px; margin-top: 20px;
+  }
+  .callout b { font-size: 18px; white-space: nowrap; }
+  .callout span { color: var(--ink-2); font-size: 13.5px; }
+  ul.notes { margin: 10px 0 0; padding-left: 20px; color: var(--ink-2); font-size: 13px; }
+  ul.notes li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Vintage Y 标签选型分析</h1>
+  <p class="sub">先用未还清曲线找拐点，再从信息增量、区分度、稳定性、最终风险四个维度复核，确定模型 Y 标签。</p>
+  <p class="n" style="margin:-18px 0 24px">数据源：model.tmp_eliam_wagego_dwd_loan_apply_label ｜ SQL：wagego_09_Y标签选型评估.sql</p>
+
+  <div class="steps">
+    <div class="step"><b><em>1</em>定口径</b><span>FPD-X = 到期后第 X 天仍未还清首期；分母只算已观察到第 X 天的借据（成熟样本）。</span></div>
+    <div class="step"><b><em>2</em>画曲线</b><span>全量和分放款月，逐天算“仍未还清”占比，X 从 1 天拉到 45 天。</span></div>
+    <div class="step"><b><em>3</em>找拐点</b><span>曲线由陡变平的位置：逐窗口降幅收敛到 0.5pp 以内，之后基本不再变化。</span></div>
+    <div class="step"><b><em>4</em>验增量</b><span>固定 cohort 做两两 2x2：短窗坏样本后来还了吗？两个标签的 phi 有多高？</span></div>
+    <div class="step"><b><em>5</em>看区分度</b><span>同一批样本逐窗口算 AUC/KS，再分放款月、新老客复核稳定性。</span></div>
+    <div class="step"><b><em>6</em>对齐最终风险</b><span>FPD15 坏样本到 due+31 有多少变成 30+，好样本有多少只是晚还几天。</span></div>
+  </div>
+
+  <h2>本次结果</h2>
+  <div class="card">
+    <h3>到期后第 X 天仍未还清的比例（全量）</h3>
+    <p class="cap">2026-08-01 至 2026-10-23 放款，观察日 2026-10-23；未还清比例天然随 X 下降，等价于还款完成率上升趋平。</p>
+    <div class="chart-wrap">
+      <svg id="curve" viewBox="0 0 760 320" role="img" aria-label="到期后第 1 到 45 天仍未还清比例曲线，第 15 天起趋平"></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li>2026-07、2026-08 放款量极少（14 / 163 笔），曲线实际由 2026-09、2026-10 两个放款月主导。</li>
+    <li>30 天以后的点只覆盖早期 9 月借据；45 天之后只剩十几到几十笔，属于噪声，不要据此判断趋势。</li>
+    <li>窗口越长，能观察到该窗口的借据越少（右删失），所以每档的“借款数”不同，跨档比较看降幅、不看绝对值。</li>
+  </ul>
+
+  <h2>关键窗口对比</h2>
+  <div class="card" style="padding-bottom:6px">
+    <table>
+      <thead>
+        <tr><th>窗口</th><th>借款数</th><th>坏样本</th><th>坏率（笔数）</th><th>95% CI</th><th>坏率（金额）</th><th>较上一档</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>FPD3</td><td>17,798</td><td>2,499</td><td>14.04%</td><td>13.54–14.56%</td><td>12.54%</td><td>—</td></tr>
+        <tr><td>FPD7</td><td>17,119</td><td>1,903</td><td>11.12%</td><td>10.65–11.60%</td><td>9.82%</td><td>−2.92pp</td></tr>
+        <tr><td>FPD14</td><td>11,617</td><td>1,024</td><td>8.81%</td><td>8.31–9.34%</td><td>7.86%</td><td>−2.31pp</td></tr>
+        <tr class="pick"><td>FPD15</td><td>10,513</td><td>892</td><td>8.48%</td><td>7.97–9.03%</td><td>7.54%</td><td>−0.33pp</td></tr>
+        <tr><td>FPD30</td><td>2,796</td><td>220</td><td>7.87%</td><td>6.93–8.93%</td><td>7.21%</td><td>−0.61pp</td></tr>
+      </tbody>
+    </table>
+    <p class="cap" style="margin:10px 2px 4px">评估口径：is_deal = 1 且 due + X &lt; obs_dt；成熟样本量与上方曲线第 X+1 天对齐，坏样本按“due + X 前是否还清首期”判定。</p>
+  </div>
+
+  <div class="callout">
+    <b>选 FPD15</b>
+    <span>14→15 只再降 0.33pp，曲线已平；15→30 再降 0.61pp，但成熟样本只剩 27%。FPD30 在当前数据里不值得多等两周。</span>
+  </div>
+
+  <h2>信息增量：短窗坏样本后来还了吗？</h2>
+  <div class="card" style="padding-bottom:6px">
+    <table>
+      <thead>
+        <tr><th>对比</th><th>样本</th><th>短窗坏</th><th>长窗坏</th><th>坏样本保留率</th><th>短窗治愈率</th><th>phi</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>FPD7 → FPD14</td><td>11,617</td><td>1,386</td><td>1,024</td><td>73.9%</td><td>26.1%</td><td>0.845</td></tr>
+        <tr><td>FPD7 → FPD15</td><td>10,513</td><td>1,290</td><td>892</td><td>69.2%</td><td>30.9%</td><td>0.814</td></tr>
+        <tr><td>FPD14 → FPD15</td><td>10,513</td><td>953</td><td>892</td><td>93.6%</td><td>6.4%</td><td>0.964</td></tr>
+        <tr><td>FPD15 → FPD30</td><td>2,796</td><td>282</td><td>220</td><td>78.0%</td><td>22.0%</td><td>0.873</td></tr>
+        <tr><td>FPD14 → FPD30</td><td>2,796</td><td>292</td><td>220</td><td>75.3%</td><td>24.7%</td><td>0.856</td></tr>
+      </tbody>
+    </table>
+    <p class="cap" style="margin:10px 2px 4px">每个对比用长窗口的日历 cohort；FPD 窗口嵌套，长窗坏一定是短窗坏，所以“漏判率”结构性为 0，只看保留率和 phi。</p>
+  </div>
+  <ul class="notes">
+    <li>FPD14 与 FPD15 的 phi 为 0.964，93.6% 的 14 天坏样本到 15 天仍坏；两者基本可互换，只差 6.4% 的“晚一天还清”。</li>
+    <li>FPD7 → FPD15 的保留率只有 69.2%：FPD7 会多出 30.9% 的短期逾期噪声，这些样本到第 15 天已经还清。</li>
+    <li>FPD15 → FPD30 保留 78.0%：22% 的 FPD15 坏样本在第 16~30 天还清。若业务只认 30+，FPD15 是提前代理，会带入这部分误伤。</li>
+    <li>ever 5+（due+31 时累计）与 FPD15 的 phi 仅 0.786：FPD15 坏样本 99.65% 曾 5+，但 ever 5+ 额外包含 146 笔（多 52%）15 天内已还清的晚还样本，不宜单独做主标签。</li>
+  </ul>
+
+  <h2>区分度与稳定性</h2>
+  <div class="card">
+    <h3>同一批样本，换窗口不改变模型排序</h3>
+    <p class="cap">固定 due+30 日历 cohort（2,796 笔），分别打 FPD3/7/14/15/30 标签，用同一模型分算 AUC / KS。</p>
+    <table>
+      <thead>
+        <tr><th>标签窗口</th><th>坏率</th><th>AUC</th><th>KS</th><th>Gini</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>FPD3</td><td>16.31%</td><td>0.6036</td><td>0.1582</td><td>0.2072</td></tr>
+        <tr><td>FPD7</td><td>13.34%</td><td>0.6102</td><td>0.1765</td><td>0.2204</td></tr>
+        <tr><td>FPD14</td><td>10.44%</td><td>0.6173</td><td>0.1688</td><td>0.2346</td></tr>
+        <tr><td>FPD15</td><td>10.09%</td><td>0.6109</td><td>0.1663</td><td>0.2218</td></tr>
+        <tr><td>FPD30</td><td>7.87%</td><td>0.6178</td><td>0.1796</td><td>0.2356</td></tr>
+      </tbody>
+    </table>
+    <p class="cap" style="margin:10px 2px 4px">AUC 全部落在 0.60~0.62，FPD30 也只比 FPD14 高 0.0005；窗口不是当前瓶颈，模型分本身的区分度偏弱。</p>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <h3>分放款月与分新老客</h3>
+    <p class="cap">FPD15 的月度 AUC 与坏率；7 月仅 14 笔，8 月 163 笔，单月结论参考意义有限。</p>
+    <table>
+      <thead>
+        <tr><th>放款月</th><th>FPD7 AUC</th><th>FPD14 AUC</th><th>FPD15 AUC</th><th>FPD15 新客坏率</th><th>FPD15 老客坏率</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-08</td><td>0.611</td><td>0.621</td><td>0.621</td><td>10.56% <span class="n">(142)</span></td><td>9.52% <span class="n">(21)</span></td></tr>
+        <tr><td>2026-09</td><td>0.623</td><td>0.622</td><td>0.626</td><td>10.72% <span class="n">(4,953)</span></td><td>5.09% <span class="n">(3,577)</span></td></tr>
+        <tr><td>2026-10</td><td>0.621</td><td>0.633</td><td>0.613</td><td>10.27% <span class="n">(1,129)</span></td><td>6.20% <span class="n">(677)</span></td></tr>
+      </tbody>
+    </table>
+    <p class="cap" style="margin:10px 2px 4px">FPD15 月度 AUC 0.613~0.626，稳定；新客坏率约为老客的 1.5~2 倍，3/7/14/15/30 五个窗口方向一致。</p>
+  </div>
+
+  <h2>最终风险对齐：FPD15 坏样本最后有多坏？</h2>
+  <div class="card" style="padding-bottom:6px">
+    <p class="cap" style="margin:0 0 8px">FPD15 成熟且已到 due+31 的样本（2,796 笔），按 FPD15 好坏拆开看后续表现。</p>
+    <table>
+      <thead>
+        <tr><th>指标（截至 due+31）</th><th>FPD15 好（2,514 笔）</th><th>FPD15 坏（282 笔）</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>首期已实际还款</td><td>100%</td><td>22.0%</td></tr>
+        <tr><td>平均首期还款延迟</td><td>0.4 天</td><td>23.6 天</td></tr>
+        <tr><td>已无应还金额（结清）</td><td>100%</td><td>22.0%</td></tr>
+        <tr><td>曾出现 5+ 逾期</td><td>5.8%</td><td>99.6%</td></tr>
+        <tr><td>曾出现 30+ 逾期</td><td>0%</td><td>75.9%</td></tr>
+      </tbody>
+    </table>
+    <p class="cap" style="margin:10px 2px 4px">好样本的 30+ 为 0 是结构性的：due+15 前已还清的借据不可能在 due+31 变成 30+；真正可比的是坏样本的 75.9% 与好样本的 5.8% 曾 5+。</p>
+  </div>
+  <ul class="notes">
+    <li>FPD15 坏样本里 78% 到 due+31 仍未还首期，其中 75.9% 已 30+，对“最终严重逾期”的精度较高。</li>
+    <li>剩下 22% 是“晚还但最终还清”，平均晚 23.6 天；这是 FPD15 时点口径的主要噪声。</li>
+    <li>好样本只有 5.8% 曾 5+，且都在 15 天内还清；FPD15 漏掉“5 天内已还”的短期摩擦，这类样本对损失预测价值有限。</li>
+  </ul>
+
+  <h2>结论</h2>
+  <div class="callout">
+    <b>主标签：FPD15</b>
+    <span>金额口径坏率 7.54%、笔数 8.48%，量级一致；建议主标签用笔数，金额口径做稳健性校验。</span>
+  </div>
+  <ul class="notes">
+    <li><b>拐点：</b>FPD14 → 15 只降 0.33pp；FPD15 → 30 再降 0.61pp，但成熟样本从 10,513 掉到 2,796（剩 27%）。</li>
+    <li><b>增量：</b>FPD14 与 FPD15 基本可互换（保留 93.6%、phi 0.964）；FPD30 会剔除 22% 的 FPD15 坏样本，AUC 只高 0.007，仍在噪声内。</li>
+    <li><b>区分度：</b>五个窗口固定 cohort AUC 0.604~0.618，8~10 月分月 0.61~0.63；换标签不改变模型排序，当前瓶颈在特征和模型分本身。</li>
+    <li><b>最终风险：</b>FPD15 坏样本 75.9% 到 due+31 已 30+；22% 在第 16~30 天还清。若业务严格按 30+ 定义损失，可用 FPD30 做回溯校验，但不要用它做日常迭代标签。</li>
+    <li><b>不建议：</b>FPD7（多出 30.9% 的短期逾期噪声）、FPD30（多等 15 天、样本少 73%）。需要 14 天口径时用 FPD14。</li>
+  </ul>
+
+  <h2>补充：账龄 vintage（放款后第 N 天）</h2>
+  <p class="sub" style="margin-bottom:14px">前面的曲线锚在到期日；账龄口径锚在放款日，按放款月分 cohort，是存量监控里更常见的 vintage 视角。</p>
+  <div class="card">
+    <h3>累计 5+ 逾期率随账龄的变化</h3>
+    <p class="cap">累计 5+ = 截至该账龄曾出现 ≥5 天逾期（只升不降）；取自当日快照，观察日 2026-10-22。</p>
+    <div class="legend">
+      <span><i style="background:var(--c1)"></i>2026-08（163 笔）</span>
+      <span><i style="background:var(--c2)"></i>2026-09（9,501 笔）</span>
+      <span><i style="background:var(--c3)"></i>2026-10（18,059 笔）</span>
+    </div>
+    <div class="chart-wrap">
+      <svg id="aging" viewBox="0 0 760 340" role="img" aria-label="按放款月的累计 5+ 逾期率随放款后天数变化曲线，第 21 到 28 天后趋平"></svg>
+      <div class="tip down" id="agingTip"></div>
+    </div>
+    <p class="cap" style="margin:14px 0 4px">各账龄点明细（括号内为当日有快照的借据数）</p>
+    <table>
+      <thead>
+        <tr><th>账龄（天）</th><th>2026-08</th><th>2026-09</th><th>2026-10</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>7</td><td>3.1% <span class="n">(160)</span></td><td>2.0% <span class="n">(9,501)</span></td><td>1.7% <span class="n">(12,512)</span></td></tr>
+        <tr><td>14</td><td>13.5% <span class="n">(163)</span></td><td>10.8% <span class="n">(9,501)</span></td><td>9.2% <span class="n">(6,139)</span></td></tr>
+        <tr><td>17</td><td>14.1% <span class="n">(163)</span></td><td>12.0% <span class="n">(9,501)</span></td><td>12.3% <span class="n">(3,541)</span></td></tr>
+        <tr><td>21</td><td>14.1% <span class="n">(163)</span></td><td>13.1% <span class="n">(9,501)</span></td><td>11.3% <span class="n">(844)</span></td></tr>
+        <tr><td>28</td><td>14.7% <span class="n">(163)</span></td><td>13.4% <span class="n">(6,230)</span></td><td>—</td></tr>
+        <tr><td>35</td><td>14.7% <span class="n">(163)</span></td><td>13.9% <span class="n">(3,458)</span></td><td>—</td></tr>
+        <tr><td>42</td><td>14.7% <span class="n">(163)</span></td><td>14.4% <span class="n">(1,434)</span></td><td>—</td></tr>
+        <tr><td>49</td><td>14.7% <span class="n">(163)</span></td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <ul class="notes">
+    <li>8、9 月曲线在账龄 21~28 天后基本走平（8 月 14.7%，9 月 13.4%~14.4%），违约在放款后 3~4 周内基本出尽；10 月目前只能看到 21 天，累计 5+ 还在爬升。</li>
+    <li>MOB 月末点只是这条曲线上的几个点：本批数据 MOB1 只有 177 笔、MOB2 只有 14 笔，所以它适合存量监控，不适合当下选标签。</li>
+    <li>账龄越大，当天有快照的借据越少（右删失）：9 月第 42 天后只剩月初放款、曲线已失真，做了截断；10 月只能画到第 21 天。7 月仅 14 笔，未画线。</li>
+  </ul>
+</main>
+
+<script>
+const data = [[1,21.18,23347,4944],[2,14.87,21886,3255],[3,14.04,19177,2693],[4,13.33,17798,2372],[5,12.97,17435,2262],[6,12.71,17428,2215],[7,11.19,17425,1950],[8,10.44,17119,1788],[9,10.28,16046,1649],[10,10.55,13352,1409],[11,10.65,12112,1290],[12,10.57,11849,1253],[13,10.45,11842,1237],[14,8.88,11837,1051],[15,8.29,11617,963],[16,8.28,10513,870],[17,8.46,8558,724],[18,8.43,7607,641],[19,8.4,7607,639],[20,8.42,7291,614],[21,7.99,7285,582],[22,7.77,7153,556],[23,7.72,6516,503],[24,7.85,5284,415],[25,8.03,4585,368],[26,7.97,4352,347],[27,7.91,4347,344],[28,7.3,4341,317],[29,7.02,4230,297],[30,7.36,3708,273],[31,7.8,2796,218],[32,7.88,2335,184],[33,7.72,2175,168],[34,7.74,2171,168],[35,7.57,2167,164],[36,7.48,2098,157],[37,7.46,1809,135],[38,8.03,1320,106],[39,7.65,1007,77],[40,7.65,850,65],[41,7.55,848,64],[42,7.57,846,64],[43,7.22,789,57],[44,6.86,598,41],[45,7.62,341,26]];
+
+const W = 760, H = 320, M = { t: 20, r: 18, b: 34, l: 46 };
+const iw = W - M.l - M.r, ih = H - M.t - M.b;
+const xMax = 45, yMax = 25;
+const px = d => M.l + (d - 1) / (xMax - 1) * iw;
+const py = v => M.t + (1 - v / yMax) * ih;
+const XT = [1, 7, 14, 21, 30, 45];
+const YT = [0, 5, 10, 15, 20, 25];
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('curve');
+const el = (tag, attrs, text) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  svg.appendChild(n);
+  return n;
+};
+
+// 趋平区底纹
+el('rect', { x: px(15), y: M.t, width: px(45) - px(15), height: ih, fill: 'var(--wash)' });
+el('text', { x: px(45) - 6, y: M.t + 14, 'text-anchor': 'end', fill: 'var(--muted)', 'font-size': 11.5 }, '趋平区');
+
+// 网格与坐标
+YT.forEach(v => {
+  el('line', { x1: M.l, x2: W - M.r, y1: py(v), y2: py(v), stroke: v === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 });
+  el('text', { x: M.l - 8, y: py(v) + 4, 'text-anchor': 'end', fill: 'var(--muted)', 'font-size': 11.5 }, v + '%');
+});
+XT.forEach(d => {
+  el('text', { x: px(d), y: H - M.b + 18, 'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 11.5 }, d);
+});
+el('text', { x: W - M.r, y: H - 4, 'text-anchor': 'end', fill: 'var(--muted)', 'font-size': 11.5 }, '到期后天数');
+
+// 折线
+const path = data.map((d, i) => (i ? 'L' : 'M') + px(d[0]).toFixed(1) + ',' + py(d[1]).toFixed(1)).join('');
+el('path', { d: path, fill: 'none', stroke: 'var(--series)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+
+// 拐点标注
+const elbow = data.find(d => d[0] === 15);
+el('line', { x1: px(15), x2: px(15), y1: py(elbow[1]), y2: py(0), stroke: 'var(--axis)', 'stroke-width': 1, 'stroke-dasharray': '3 3' });
+el('circle', { cx: px(15), cy: py(elbow[1]), r: 4.5, fill: 'var(--series)', stroke: 'var(--surface)', 'stroke-width': 2 });
+el('text', { x: px(15) + 8, y: py(elbow[1]) - 10, fill: 'var(--ink)', 'font-size': 12.5, 'font-weight': 600 }, '拐点 ≈ 15 天（8.3%）');
+
+// 悬停层
+const cross = el('line', { y1: M.t, y2: M.t + ih, stroke: 'var(--axis)', 'stroke-width': 1, opacity: 0 });
+const dot = el('circle', { r: 4.5, fill: 'var(--series)', stroke: 'var(--surface)', 'stroke-width': 2, opacity: 0 });
+const hit = el('rect', { x: M.l, y: M.t, width: iw, height: ih, fill: 'transparent' });
+const tip = document.getElementById('tip');
+
+function show(evt) {
+  const box = svg.getBoundingClientRect();
+  const sx = (evt.clientX - box.left) / box.width * W;
+  const day = Math.round(1 + (sx - M.l) / iw * (xMax - 1));
+  const d = data[Math.max(0, Math.min(data.length - 1, day - 1))];
+  cross.setAttribute('x1', px(d[0])); cross.setAttribute('x2', px(d[0]));
+  cross.setAttribute('opacity', 1);
+  dot.setAttribute('cx', px(d[0])); dot.setAttribute('cy', py(d[1]));
+  dot.setAttribute('opacity', 1);
+  tip.innerHTML = `<b>第 ${d[0]} 天 · 未还清 ${d[1].toFixed(2)}%</b><br><span>借款 ${d[2].toLocaleString()} 笔 · 未还 ${d[3].toLocaleString()} 笔</span>`;
+  const scale = box.width / W;
+  tip.style.left = Math.max(105, Math.min(box.width - 105, px(d[0]) * scale)) + 'px';
+  tip.style.top = (py(d[1]) * scale) + 'px';
+  tip.style.opacity = 1;
+}
+hit.addEventListener('mousemove', show);
+hit.addEventListener('mouseleave', () => {
+  cross.setAttribute('opacity', 0);
+  dot.setAttribute('opacity', 0);
+  tip.style.opacity = 0;
+});
+
+// ---------- 账龄 vintage ----------
+const agingData = {
+  '2026-08': [[1,0.0,153],[2,0.0,153],[3,0.0,153],[4,0.0,153],[5,0.0,153],[6,0.0,157],[7,3.12,160],[8,5.52,163],[9,6.13,163],[10,7.98,163],[11,11.04,163],[12,12.88,163],[13,13.5,163],[14,13.5,163],[15,13.5,163],[16,14.11,163],[17,14.11,163],[18,14.11,163],[19,14.11,163],[20,14.11,163],[21,14.11,163],[22,14.72,163],[23,14.72,163],[24,14.72,163],[25,14.72,163],[26,14.72,163],[27,14.72,163],[28,14.72,163],[29,14.72,163],[30,14.72,163],[31,14.72,163],[32,14.72,163],[33,14.72,163],[34,14.72,163],[35,14.72,163],[36,14.72,163],[37,14.72,163],[38,14.72,163],[39,14.72,163],[40,14.72,163],[41,14.72,163],[42,14.72,163],[43,14.72,163],[44,14.72,163],[45,14.72,163],[46,14.72,163],[47,14.72,163],[48,14.72,163],[49,14.72,163],[50,14.72,163],[51,14.72,163],[52,14.72,163]],
+  '2026-09': [[1,0.0,9501],[2,0.0,9501],[3,0.0,9501],[4,0.0,9501],[5,0.0,9501],[6,0.97,9501],[7,2.03,9501],[8,3.2,9501],[9,4.68,9501],[10,6.45,9501],[11,8.39,9501],[12,10.0,9501],[13,10.45,9501],[14,10.82,9501],[15,11.1,9501],[16,11.47,9501],[17,11.95,9501],[18,12.59,9501],[19,13.01,9501],[20,13.04,9501],[21,13.07,9501],[22,13.09,9501],[23,13.35,8729],[24,13.47,8198],[25,13.59,7779],[26,13.6,7359],[27,13.4,6849],[28,13.39,6230],[29,13.56,5596],[30,13.75,5092],[31,14.03,4717],[32,13.95,4415],[33,13.96,4175],[34,13.83,3875],[35,13.88,3458],[36,13.91,3013],[37,14.26,2644],[38,14.31,2348],[39,14.15,2149],[40,14.46,1930],[41,14.18,1685],[42,14.37,1434],[43,15.53,1159],[44,16.25,960],[45,15.82,784],[46,15.12,648],[47,14.84,512],[48,17.06,381],[49,17.18,227]],
+  '2026-10': [[1,0.0,18059],[2,0.0,16711],[3,0.0,15834],[4,0.0,15237],[5,0.07,14607],[6,0.87,13670],[7,1.73,12512],[8,2.92,11225],[9,4.36,9955],[10,6.16,9182],[11,7.47,8635],[12,8.52,8037],[13,8.73,7124],[14,9.22,6139],[15,9.95,5105],[16,11.31,4207],[17,12.28,3541],[18,11.97,3007],[19,11.79,2418],[20,12.51,1663],[21,11.26,844]]
+};
+
+const AG = { w: 760, h: 340, t: 18, r: 96, b: 36, l: 48 };
+const agI = AG.w - AG.l - AG.r, agH = AG.h - AG.t - AG.b;
+const agXMax = 53, agYMax = 16;
+const ax = d => AG.l + (d - 1) / (agXMax - 1) * agI;
+const ay = v => AG.t + (1 - v / agYMax) * agH;
+const agSvg = document.getElementById('aging');
+const agEl = (tag, attrs, text) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  agSvg.appendChild(n);
+  return n;
+};
+
+[0, 4, 8, 12, 16].forEach(v => {
+  agEl('line', { x1: AG.l, x2: AG.w - AG.r, y1: ay(v), y2: ay(v), stroke: v === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 });
+  agEl('text', { x: AG.l - 8, y: ay(v) + 4, 'text-anchor': 'end', fill: 'var(--muted)', 'font-size': 11.5 }, v + '%');
+});
+[1, 7, 14, 21, 28, 35, 42, 49].forEach(d => {
+  agEl('text', { x: ax(d), y: AG.h - AG.b + 18, 'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 11.5 }, d);
+});
+agEl('text', { x: AG.w - AG.r, y: AG.h - 4, 'text-anchor': 'end', fill: 'var(--muted)', 'font-size': 11.5 }, '放款后天数');
+
+const cohorts = [
+  { name: '2026-08', color: 'var(--c1)', cut: 52 },
+  { name: '2026-09', color: 'var(--c2)', cut: 42 },
+  { name: '2026-10', color: 'var(--c3)', cut: 21 }
+].map(c => {
+  const pts = agingData[c.name].filter(d => d[0] <= c.cut);
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + ax(p[0]).toFixed(1) + ',' + ay(p[1]).toFixed(1)).join('');
+  agEl('path', { d, fill: 'none', stroke: c.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+  const last = pts[pts.length - 1];
+  agEl('circle', { cx: ax(last[0]), cy: ay(last[1]), r: 3.5, fill: c.color, stroke: 'var(--surface)', 'stroke-width': 1.5 });
+  agEl('text', { x: ax(last[0]) + 8, y: ay(last[1]) + 4, fill: 'var(--ink)', 'font-size': 12, 'font-weight': 600 }, c.name);
+  return { ...c, pts };
+});
+
+const agCross = agEl('line', { y1: AG.t, y2: AG.t + agH, stroke: 'var(--axis)', 'stroke-width': 1, opacity: 0 });
+const agDots = cohorts.map(c => agEl('circle', { r: 4, fill: c.color, stroke: 'var(--surface)', 'stroke-width': 2, opacity: 0 }));
+const agHit = agEl('rect', { x: AG.l, y: AG.t, width: agI, height: agH, fill: 'transparent' });
+const agTip = document.getElementById('agingTip');
+
+function agingShow(evt) {
+  const box = agSvg.getBoundingClientRect();
+  const sx = (evt.clientX - box.left) / box.width * AG.w;
+  const age = Math.max(1, Math.min(agXMax, Math.round(1 + (sx - AG.l) / agI * (agXMax - 1))));
+  const rows = [];
+  cohorts.forEach((c, i) => {
+    const p = c.pts.find(d => d[0] === age);
+    const dotEl = agDots[i];
+    if (!p) { dotEl.setAttribute('opacity', 0); return; }
+    dotEl.setAttribute('cx', ax(age)); dotEl.setAttribute('cy', ay(p[1]));
+    dotEl.setAttribute('opacity', 1);
+    rows.push({ color: c.color, name: c.name, rate: p[1], n: p[2] });
+  });
+  agCross.setAttribute('x1', ax(age)); agCross.setAttribute('x2', ax(age));
+  agCross.setAttribute('opacity', 1);
+  if (!rows.length) { agTip.style.opacity = 0; return; }
+  agTip.innerHTML = `<b>账龄第 ${age} 天</b>` + rows.map(r =>
+    `<div><i style="background:${r.color}"></i>${r.name} <b>${r.rate.toFixed(1)}%</b> <span>(${r.n.toLocaleString()})</span></div>`
+  ).join('');
+  const scale = box.width / AG.w;
+  agTip.style.left = Math.max(120, Math.min(box.width - 120, ax(age) * scale)) + 'px';
+  agTip.style.top = '6px';
+  agTip.style.opacity = 1;
+}
+agHit.addEventListener('mousemove', agingShow);
+agHit.addEventListener('mouseleave', () => {
+  agCross.setAttribute('opacity', 0);
+  agDots.forEach(d => d.setAttribute('opacity', 0));
+  agTip.style.opacity = 0;
+});
+</script>
+</body>
+</html>
