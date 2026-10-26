@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WageGo Vintage 分析</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --series: #2a78d6;
+    --c1: #2a78d6;
+    --c2: #eb6834;
+    --ring: rgba(11,11,11,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --series: #3987e5;
+      --c1: #3987e5;
+      --c2: #d95926;
+      --ring: rgba(255,255,255,0.10);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px 56px;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 26px; line-height: 1.3; margin: 0 0 6px; }
+  .sub { color: var(--ink-2); margin: 0 0 8px; }
+  .n { color: var(--muted); font-size: 12px; margin: 0 0 26px; }
+  h2 { font-size: 17px; margin: 30px 0 10px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-radius: 12px;
+    padding: 14px 16px 8px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+  tbody tr:last-child td { border-bottom: none; }
+  .note { color: var(--muted); font-size: 12.5px; margin: 10px 2px 6px; }
+  .table-wrap { overflow-x: auto; }
+  .chart-wrap { position: relative; margin: 6px 0 8px; }
+  .chart-wrap svg { display: block; width: 100%; height: auto; }
+  .fig-title { font-size: 14px; font-weight: 600; color: var(--ink-2); margin: 20px 0 6px; }
+  .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 12px; }
+  .mini-title { font-size: 11.5px; color: var(--muted); margin: 0 0 2px 2px; font-variant-numeric: tabular-nums; }
+  .mini svg { display: block; width: 100%; height: auto; }
+  @media (max-width: 700px) { .mini-grid { grid-template-columns: repeat(2, 1fr); } }
+  .legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0 2px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .tip {
+    position: absolute; z-index: 2; pointer-events: none; display: none;
+    transform: translate(-50%, -115%);
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    padding: 7px 10px; font-size: 12.5px; line-height: 1.5;
+    white-space: nowrap; color: var(--ink);
+  }
+  .tip b { font-variant-numeric: tabular-nums; }
+  .tip span { color: var(--ink-2); }
+  .tip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .tip.down { transform: translate(-50%, 12px); }
+  .callout {
+    display: flex; gap: 14px; align-items: baseline;
+    background: var(--surface); border: 1px solid var(--ring);
+    border-left: 3px solid var(--series);
+    border-radius: 10px; padding: 14px 18px; margin: 18px 0 4px;
+  }
+  .callout b { font-size: 18px; white-space: nowrap; }
+  .callout span { color: var(--ink-2); font-size: 13.5px; }
+  ul.notes { margin: 8px 0 0; padding-left: 20px; color: var(--ink-2); font-size: 13px; }
+  ul.notes li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>WageGo Vintage 分析</h1>
+  <p class="sub">基于重构后的放款申请样本表，按放款周划分 vintage，观察首期逾期率（FPD）随到期后天数的变化。</p>
+  <p class="n">数据源：model.tmp_eliam_wagego_dwd_loan_apply_label ｜ SQL：wagego_04_vintage分析.sql ｜ 观察日：债务快照最新日期</p>
+
+  <div class="callout">
+    <b>FPD15 坏率 8.31%</b>
+    <span>六个 FPD15 成熟的 vintage 在 7.08%~11.10%；新客 10.36% vs 老客 5.39%；各周曲线都在 14→15 天走平。</span>
+  </div>
+
+  <h2>整体表现：14→15 天走平</h2>
+  <div class="card">
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>观察窗口</th><th>成熟样本</th><th>坏样本</th><th>坏率（笔数）</th><th>坏率（金额）</th><th>较上一窗口</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>FPD3</td><td>23,347</td><td>3,186</td><td>13.65%</td><td>12.16%</td><td>—</td></tr>
+        <tr><td>FPD7</td><td>17,435</td><td>1,948</td><td>11.17%</td><td>9.86%</td><td>−2.47pp</td></tr>
+        <tr><td>FPD14</td><td>11,849</td><td>1,052</td><td>8.88%</td><td>7.94%</td><td>−2.29pp</td></tr>
+        <tr><td>FPD15</td><td>11,842</td><td>984</td><td>8.31%</td><td>7.39%</td><td>−0.57pp</td></tr>
+        <tr><td>FPD30</td><td>4,341</td><td>300</td><td>6.91%</td><td>6.16%</td><td>−1.40pp</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">口径：is_deal = 1 且 due + X &lt; obs_dt。FPD30 成熟样本仅为 FPD15 的 36.7%，30 天点只作参考；FPD14 由 stg_debt_snp 的首期实还日补算。</p>
+
+    <h3 class="fig-title">按新老客：水平不同，形状一致</h3>
+    <div class="legend">
+      <span><i style="background:var(--c1)"></i>新客</span>
+      <span><i style="background:var(--c2)"></i>老客</span>
+    </div>
+    <div class="chart-wrap">
+      <svg id="segmentChart" viewBox="0 0 760 300" role="img" aria-label="新客与老客在各 FPD 窗口的笔数坏率曲线"></svg>
+      <div class="tip" id="segmentTip"></div>
+    </div>
+    <p class="note">新客 14→15 天只降 0.67pp，老客降 0.42pp（14/15 样本几乎相同）；30 天点为空心：成熟样本 新 2,914 / 老 1,427，仅为 FPD15 的 42% / 29%，只作参考。</p>
+
+    <h3 class="fig-title">按放款周：各 vintage 的曲线形状一致</h3>
+    <div class="chart-wrap">
+      <div class="mini-grid" id="weekCurves"></div>
+      <div class="tip" id="weekCurveTip"></div>
+    </div>
+    <p class="note">每格一条周曲线，横轴为 FPD 窗口、纵轴 0~18%；每周 14→15 的样本几乎相同，曲线形状判断不受 cohort 变化影响。曲线止于 15 天表示该周 30 天样本不足；09-14 的 30 天点为空心（78% 成熟）；10-05 仅 12% 借据到 due+15，未纳入曲线。</p>
+  </div>
+
+  <h2>新老客：新客坏率约为老客的 1.6~1.9 倍</h2>
+  <div class="card">
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>观察窗口</th><th>新客样本</th><th>新客坏率</th><th>老客样本</th><th>老客坏率</th><th>差值</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>FPD3</td><td>11,886</td><td>16.56%</td><td>11,461</td><td>10.63%</td><td>+5.93pp</td></tr>
+        <tr><td>FPD7</td><td>9,626</td><td>13.93%</td><td>7,809</td><td>7.77%</td><td>+6.16pp</td></tr>
+        <tr><td>FPD14</td><td>6,964</td><td>11.03%</td><td>4,885</td><td>5.81%</td><td>+5.22pp</td></tr>
+        <tr><td>FPD15</td><td>6,959</td><td>10.36%</td><td>4,883</td><td>5.39%</td><td>+4.97pp</td></tr>
+        <tr><td>FPD30</td><td>2,914</td><td>8.13%</td><td>1,427</td><td>4.41%</td><td>+3.72pp</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">新客坏率比老客高 3.7~6.2pp；金额口径方向一致，FPD15 新客 9.29% vs 老客 4.92%。FPD30 样本仅为 FPD15 的 42%（新）/ 29%（老），30 天点只作参考。</p>
+  </div>
+
+  <h2>放款周：各观察窗口坏率与成熟样本</h2>
+  <div class="card">
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>放款周</th><th>FPD15 样本</th><th>FPD3</th><th>FPD7</th><th>FPD14</th><th>FPD15</th><th>FPD30</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-08-24</td><td>95</td><td>13.68%</td><td>11.58%</td><td>9.47%</td><td>9.47%</td><td>5.26%</td></tr>
+        <tr><td>2026-08-31</td><td>694</td><td>16.71%</td><td>13.83%</td><td>11.24%</td><td>11.10%</td><td>9.21%</td></tr>
+        <tr><td>2026-09-07</td><td>1,497</td><td>14.52%</td><td>12.06%</td><td>9.08%</td><td>8.68%</td><td>6.64%</td></tr>
+        <tr><td>2026-09-14</td><td>2,178</td><td>14.52%</td><td>11.88%</td><td>9.14%</td><td>8.31%</td><td>6.50%*</td></tr>
+        <tr><td>2026-09-21</td><td>3,211</td><td>14.22%</td><td>11.82%</td><td>9.00%</td><td>8.28%</td><td>—</td></tr>
+        <tr><td>2026-09-28</td><td>3,462</td><td>13.34%</td><td>10.35%</td><td>7.57%</td><td>7.08%</td><td>—</td></tr>
+        <tr><td>2026-10-05*</td><td>669</td><td>12.37%</td><td>10.19%</td><td>10.67%</td><td>10.31%</td><td>—</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">各窗口用各自日历 cohort，FPD3/7 的样本大于 FPD15。FPD30 原则上只列成熟度 ≥90% 的周，09-14 例外（78%*，仅参考）。10-05 的 FPD15 成熟度 12%*，仅列示、不参与曲线；10-12 后无 FPD15 成熟样本。</p>
+  </div>
+
+  <h2>口径</h2>
+  <ul class="notes">
+    <li>Vintage 按放款时间所在自然周划分（周一为周起始）；每个点是该周放款 cohort 在对应观察窗口的坏率。</li>
+    <li>FPD-X = due + X 天前未还清首期；成熟样本为 is_deal = 1 且 due + X &lt; obs_dt。</li>
+    <li>FPD14 主表无独立字段，用 stg_debt_snp 的首期实还日补算。</li>
+    <li>金额坏率 = 坏样本 real_amount / 全部放款金额，未逾期记 0；作为笔数口径的稳健性校验。</li>
+    <li>跨窗口比较统一用日历 cohort；相邻窗口用长窗口 cohort，保证两个观察窗都完全成熟。</li>
+    <li>新老客按 user_type（首笔放款口径）拆分。</li>
+    <li>30 天窗口成熟度不足时只作参考：图中空心点表示该点未满 90% 成熟，周曲线只画成熟度 ≥90% 的窗口。</li>
+    <li>放款集中在 2026-09~10，MOB 观察窗尚未成熟，本期以 FPD 呈现。</li>
+  </ul>
+</main>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+
+// ---- 新老客曲线 ----
+const segData = [
+  { day: 3,  label: 'FPD3',  newRate: 16.56, newAmt: 14.91, newN: 11886, oldRate: 10.63, oldAmt: 9.58,  oldN: 11461 },
+  { day: 7,  label: 'FPD7',  newRate: 13.93, newAmt: 12.39, newN: 9626,  oldRate: 7.77,  oldAmt: 6.98,  oldN: 7809 },
+  { day: 14, label: 'FPD14', newRate: 11.03, newAmt: 9.92,  newN: 6964,  oldRate: 5.81,  oldAmt: 5.36,  oldN: 4885 },
+  { day: 15, label: 'FPD15', newRate: 10.36, newAmt: 9.29,  newN: 6959,  oldRate: 5.39,  oldAmt: 4.92,  oldN: 4883 },
+  { day: 30, label: 'FPD30', newRate: 8.13,  newAmt: 7.32,  newN: 2914,  oldRate: 4.41,  oldAmt: 3.87,  oldN: 1427, partial: true }
+];
+const SW = 760, SH = 300;
+const SM = { t: 30, r: 30, b: 48, l: 48 };
+const siw = SW - SM.l - SM.r;
+const sih = SH - SM.t - SM.b;
+const sMax = 20, sDayMax = 33;
+const sX = d => SM.l + d / sDayMax * siw;
+const sY = v => SM.t + (1 - v / sMax) * sih;
+const sSvg = document.getElementById('segmentChart');
+const sEl = (tag, attrs, text) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  sSvg.appendChild(n);
+  return n;
+};
+
+[0, 5, 10, 15, 20].forEach(v => {
+  sEl('line', { x1: SM.l, x2: SW - SM.r, y1: sY(v), y2: sY(v), stroke: v === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 });
+  sEl('text', { x: SM.l - 8, y: sY(v) + 1, 'text-anchor': 'end', fill: 'var(--muted)', 'font-size': 11.5 }, v + '%');
+});
+segData.forEach(d => {
+  const anchor = d.day === 14 ? 'end' : d.day === 15 ? 'start' : 'middle';
+  const dx = d.day === 14 ? -4 : d.day === 15 ? 4 : 0;
+  sEl('text', { x: sX(d.day) + dx, y: SH - SM.b + 18, 'text-anchor': anchor, fill: 'var(--muted)', 'font-size': 11.5 }, d.label);
+});
+sEl('text', { x: SW - SM.r, y: SH - 6, 'text-anchor': 'end', fill: 'var(--muted)', 'font-size': 11.5 }, '到期后天数（FPD）');
+
+function segLine(key, color) {
+  const d = segData.map((p, i) => (i ? 'L' : 'M') + sX(p.day).toFixed(1) + ',' + sY(p[key]).toFixed(1)).join('');
+  sEl('path', { d, fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+}
+segLine('newRate', 'var(--c1)');
+segLine('oldRate', 'var(--c2)');
+
+segData.forEach(d => {
+  const partial = !!d.partial;
+  sEl('circle', { cx: sX(d.day), cy: sY(d.newRate), r: 4.5, fill: partial ? 'var(--surface)' : 'var(--c1)', stroke: partial ? 'var(--c1)' : 'var(--surface)', 'stroke-width': 2 });
+  sEl('circle', { cx: sX(d.day), cy: sY(d.oldRate), r: 4.5, fill: partial ? 'var(--surface)' : 'var(--c2)', stroke: partial ? 'var(--c2)' : 'var(--surface)', 'stroke-width': 2 });
+});
+
+sEl('text', { x: sX(15), y: sY(10.36) - 10, 'text-anchor': 'middle', fill: 'var(--ink)', 'font-size': 12, 'font-weight': 600 }, '10.36%');
+sEl('text', { x: sX(15), y: sY(5.39) - 10, 'text-anchor': 'middle', fill: 'var(--ink)', 'font-size': 12, 'font-weight': 600 }, '5.39%');
+sEl('text', { x: sX(30), y: sY(8.13) - 10, 'text-anchor': 'middle', fill: 'var(--ink)', 'font-size': 11.5, 'font-weight': 600 }, '8.13%');
+sEl('text', { x: sX(30), y: sY(4.41) + 20, 'text-anchor': 'middle', fill: 'var(--ink)', 'font-size': 11.5, 'font-weight': 600 }, '4.41%');
+
+const sCross = sEl('line', { y1: SM.t, y2: SM.t + sih, stroke: 'var(--axis)', 'stroke-width': 1, opacity: 0 });
+const sDots = [
+  sEl('circle', { r: 6, fill: 'var(--c1)', stroke: 'var(--surface)', 'stroke-width': 2, opacity: 0 }),
+  sEl('circle', { r: 6, fill: 'var(--c2)', stroke: 'var(--surface)', 'stroke-width': 2, opacity: 0 })
+];
+const sHit = sEl('rect', { x: SM.l - 12, y: SM.t, width: siw + 24, height: sih, fill: 'transparent' });
+const sTip = document.getElementById('segmentTip');
+
+sHit.addEventListener('mousemove', evt => {
+  const box = sSvg.getBoundingClientRect();
+  const sx = (evt.clientX - box.left) / box.width * SW;
+  let d = segData[0];
+  for (const p of segData) if (Math.abs(sX(p.day) - sx) < Math.abs(sX(d.day) - sx)) d = p;
+  sCross.setAttribute('x1', sX(d.day)); sCross.setAttribute('x2', sX(d.day)); sCross.setAttribute('opacity', 1);
+  sDots[0].setAttribute('cx', sX(d.day)); sDots[0].setAttribute('cy', sY(d.newRate)); sDots[0].setAttribute('opacity', 1);
+  sDots[1].setAttribute('cx', sX(d.day)); sDots[1].setAttribute('cy', sY(d.oldRate)); sDots[1].setAttribute('opacity', 1);
+  sTip.innerHTML = `<b>${d.label} · 新客 ${d.newRate.toFixed(2)}% · 老客 ${d.oldRate.toFixed(2)}%</b><br><span>样本 ${d.newN.toLocaleString()} / ${d.oldN.toLocaleString()} · 金额 ${d.newAmt.toFixed(2)}% / ${d.oldAmt.toFixed(2)}%${d.partial ? ' · 30 天成熟 42% / 29%' : ''}</span>`;
+  const scale = box.width / SW;
+  const top = Math.min(sY(d.newRate), sY(d.oldRate)) * scale;
+  sTip.classList.toggle('down', top < 120);
+  sTip.style.left = Math.max(180, Math.min(box.width - 180, sX(d.day) * scale)) + 'px';
+  sTip.style.top = top + 'px';
+  sTip.style.display = 'block';
+});
+sHit.addEventListener('mouseleave', () => {
+  sCross.setAttribute('opacity', 0);
+  sDots.forEach(d => d.setAttribute('opacity', 0));
+  sTip.style.display = 'none';
+});
+
+// ---- 按放款周 ----
+const weekCurves = [
+  { week: '08-24', n: 95,   rates: [13.68, 11.58, 9.47, 9.47, 5.26], counts: [95, 95, 95, 95, 95] },
+  { week: '08-31', n: 694,  rates: [16.71, 13.83, 11.24, 11.10, 9.21], counts: [694, 694, 694, 694, 684] },
+  { week: '09-07', n: 1497, rates: [14.52, 12.06, 9.08, 8.68, 6.64], counts: [1501, 1501, 1497, 1497, 1490] },
+  { week: '09-14', n: 2178, rates: [14.52, 11.88, 9.14, 8.31, 6.50], counts: [2266, 2264, 2178, 2178, 1693], partialLast: true },
+  { week: '09-21', n: 3211, rates: [14.22, 11.82, 9.00, 8.28, null], counts: [3355, 3350, 3211, 3211, null] },
+  { week: '09-28', n: 3462, rates: [13.34, 10.35, 7.57, 7.08, null], counts: [4686, 4685, 3463, 3462, null] }
+];
+const mWins = [3, 7, 14, 15, 30];
+const MW = 240, MH = 140;
+const MM = { t: 18, r: 10, b: 26, l: 30 };
+const miw = MW - MM.l - MM.r;
+const mih = MH - MM.t - MM.b;
+const mMax = 18;
+const mY = v => MM.t + (1 - v / mMax) * mih;
+const mX = i => MM.l + i / 4 * miw;
+const weekGrid = document.getElementById('weekCurves');
+const weekWrap = weekGrid.parentElement;
+const weekTip = document.getElementById('weekCurveTip');
+
+weekCurves.forEach((w, wi) => {
+  const cell = document.createElement('div');
+  cell.className = 'mini';
+  const title = document.createElement('div');
+  title.className = 'mini-title';
+  title.textContent = `${w.week} · FPD15 n=${w.n.toLocaleString()}`;
+  cell.appendChild(title);
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${MW} ${MH}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `${w.week} 当周各 FPD 窗口坏率`);
+  cell.appendChild(svg);
+  weekGrid.appendChild(cell);
+  const el = (tag, attrs, text) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    svg.appendChild(n);
+    return n;
+  };
+
+  const showY = wi % 3 === 0;
+  [0, 6, 12, 18].forEach(v => {
+    el('line', { x1: MM.l, x2: MW - MM.r, y1: mY(v), y2: mY(v), stroke: v === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 });
+    if (showY) el('text', { x: MM.l - 5, y: mY(v) + 1, 'text-anchor': 'end', fill: 'var(--muted)', 'font-size': 9 }, v + '%');
+  });
+  mWins.forEach((win, i) => {
+    el('text', { x: mX(i), y: MH - MM.b + 16, 'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 9 }, win);
+  });
+
+  const pts = w.rates.map((r, i) => r == null ? null : [mX(i), mY(r)]).filter(Boolean);
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('');
+  el('path', { d, fill: 'none', stroke: 'var(--c1)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+
+  w.rates.forEach((r, i) => {
+    if (r == null) return;
+    const partial = w.partialLast && i === 4;
+    el('circle', { cx: mX(i), cy: mY(r), r: 3.5, fill: partial ? 'var(--surface)' : 'var(--c1)', stroke: partial ? 'var(--c1)' : 'var(--surface)', 'stroke-width': 2 });
+    if (i === 3) el('text', { x: mX(i), y: mY(r) - 8, 'text-anchor': 'middle', fill: 'var(--ink)', 'font-size': 9.5, 'font-weight': 600 }, r.toFixed(2) + '%');
+    const hit = el('circle', { cx: mX(i), cy: mY(r), r: 12, fill: 'transparent' });
+    hit.addEventListener('mousemove', evt => {
+      const gr = weekWrap.getBoundingClientRect();
+      weekTip.innerHTML = `<b>${w.week} · FPD${mWins[i]}</b><br><span>坏率 <b>${r.toFixed(2)}%</b> · 样本 ${w.counts[i].toLocaleString()}${partial ? ' · 30 天成熟 78%' : ''}</span>`;
+      const px = evt.clientX - gr.left;
+      const py = evt.clientY - gr.top;
+      weekTip.classList.toggle('down', py < 60);
+      weekTip.style.left = Math.max(140, Math.min(gr.width - 140, px)) + 'px';
+      weekTip.style.top = py + 'px';
+      weekTip.style.display = 'block';
+    });
+    hit.addEventListener('mouseleave', () => { weekTip.style.display = 'none'; });
+  });
+});
+</script>
+</body>
+</html>
