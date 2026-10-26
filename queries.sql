@@ -307,19 +307,19 @@ base AS (
         ,COALESCE(TO_DATE(l.first_repay_time), l.obs_dt)      AS label_obs_day
         ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
                AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 7)) < l.obs_dt
-              THEN 1 ELSE 0 END                               AS y_fpd7_obs_cnt
+              THEN 1 ELSE 0 END                               AS y_fpd7_obs
         ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
                AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 15)) < l.obs_dt
-              THEN 1 ELSE 0 END                               AS y_fpd15_obs_cnt
+              THEN 1 ELSE 0 END                               AS y_fpd15_obs
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 1)) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob1_obs_cnt
+         END                                                  AS y_mob1_obs
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 2)) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob2_obs_cnt
+         END                                                  AS y_mob2_obs
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 3)) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob3_obs_cnt
+         END                                                  AS y_mob3_obs
     FROM latest l
 ),
 mob_obs AS (
@@ -376,18 +376,18 @@ mob_snapshot_detail AS (
 mob_label_wide AS (
     SELECT
          loan_no
-        ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS y_mob1_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS y_mob1_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_5plus END) AS y_mob1_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_30plus END) AS y_mob1_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS y_mob2_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS y_mob2_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_5plus END) AS y_mob2_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_30plus END) AS y_mob2_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS y_mob3_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS y_mob3_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_5plus END) AS y_mob3_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_30plus END) AS y_mob3_ever_30plus_cnt
+        ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS y_mob1_5plus
+        ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS y_mob1_30plus
+        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_5plus END) AS y_mob1_ever_5plus
+        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_30plus END) AS y_mob1_ever_30plus
+        ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS y_mob2_5plus
+        ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS y_mob2_30plus
+        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_5plus END) AS y_mob2_ever_5plus
+        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_30plus END) AS y_mob2_ever_30plus
+        ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS y_mob3_5plus
+        ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS y_mob3_30plus
+        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_5plus END) AS y_mob3_ever_5plus
+        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_30plus END) AS y_mob3_ever_30plus
     FROM mob_snapshot_detail
     GROUP BY loan_no
 ),
@@ -429,8 +429,8 @@ model_log AS (
 labeled AS (
     SELECT
          b.*
-        ,CASE WHEN b.y_fpd7_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd_cnt
-        ,CASE WHEN b.y_fpd15_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END END AS y_fpd15_ovd_cnt
+        ,CASE WHEN b.y_fpd7_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd
+        ,CASE WHEN b.y_fpd15_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END END AS y_fpd15_ovd
         ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN DATEDIFF(TO_DATE(b.user_actual_repay_time), TO_DATE(b.disburse_time)) END AS loan_term_actual_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN CASE WHEN TO_DATE(b.user_actual_repay_time) < b.init_due_date THEN 1 ELSE 0 END END AS is_early_settlement
@@ -441,18 +441,18 @@ labeled AS (
               WHEN COALESCE(b.disburse_time, b.apply_time) <= b.first_disburse_time THEN 'New'
               ELSE 'Old'
          END                                                  AS user_type
-        ,m.y_mob1_5plus_cnt
-        ,m.y_mob1_30plus_cnt
-        ,m.y_mob1_ever_5plus_cnt
-        ,m.y_mob1_ever_30plus_cnt
-        ,m.y_mob2_5plus_cnt
-        ,m.y_mob2_30plus_cnt
-        ,m.y_mob2_ever_5plus_cnt
-        ,m.y_mob2_ever_30plus_cnt
-        ,m.y_mob3_5plus_cnt
-        ,m.y_mob3_30plus_cnt
-        ,m.y_mob3_ever_5plus_cnt
-        ,m.y_mob3_ever_30plus_cnt
+        ,m.y_mob1_5plus
+        ,m.y_mob1_30plus
+        ,m.y_mob1_ever_5plus
+        ,m.y_mob1_ever_30plus
+        ,m.y_mob2_5plus
+        ,m.y_mob2_30plus
+        ,m.y_mob2_ever_5plus
+        ,m.y_mob2_ever_30plus
+        ,m.y_mob3_5plus
+        ,m.y_mob3_30plus
+        ,m.y_mob3_ever_5plus
+        ,m.y_mob3_ever_30plus
         ,t.estimate_principal_remaining_mob0
         ,t.dpd_days_mob0
         ,t.dpd_days_ever_mob0
@@ -523,10 +523,10 @@ SELECT
     ,repay_amount
     ,owing_amount
     ,obs_dt
-    ,y_fpd7_obs_cnt
-    ,y_fpd7_ovd_cnt
-    ,y_fpd15_obs_cnt
-    ,y_fpd15_ovd_cnt
+    ,y_fpd7_obs
+    ,y_fpd7_ovd
+    ,y_fpd15_obs
+    ,y_fpd15_ovd
     ,loan_term_contract_days
     ,loan_term_actual_days
     ,is_early_settlement
@@ -535,21 +535,21 @@ SELECT
     ,days_on_book
     ,user_type
     ,first_disburse_time
-    ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
-    ,y_mob1_30plus_cnt
-    ,y_mob1_ever_5plus_cnt
-    ,y_mob1_ever_30plus_cnt
-    ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
-    ,y_mob2_30plus_cnt
-    ,y_mob2_ever_5plus_cnt
-    ,y_mob2_ever_30plus_cnt
-    ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
-    ,y_mob3_30plus_cnt
-    ,y_mob3_ever_5plus_cnt
-    ,y_mob3_ever_30plus_cnt
+    ,y_mob1_obs
+    ,y_mob1_5plus
+    ,y_mob1_30plus
+    ,y_mob1_ever_5plus
+    ,y_mob1_ever_30plus
+    ,y_mob2_obs
+    ,y_mob2_5plus
+    ,y_mob2_30plus
+    ,y_mob2_ever_5plus
+    ,y_mob2_ever_30plus
+    ,y_mob3_obs
+    ,y_mob3_5plus
+    ,y_mob3_30plus
+    ,y_mob3_ever_5plus
+    ,y_mob3_ever_30plus
     ,estimate_principal_remaining_mob0
     ,dpd_days_mob0
     ,dpd_days_ever_mob0
@@ -600,25 +600,25 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_fpd7_obs_cnt
-    ,y_fpd7_ovd_cnt
-    ,y_fpd15_obs_cnt
-    ,y_fpd15_ovd_cnt
-    ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
-    ,y_mob1_30plus_cnt
-    ,y_mob1_ever_5plus_cnt
-    ,y_mob1_ever_30plus_cnt
-    ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
-    ,y_mob2_30plus_cnt
-    ,y_mob2_ever_5plus_cnt
-    ,y_mob2_ever_30plus_cnt
-    ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
-    ,y_mob3_30plus_cnt
-    ,y_mob3_ever_5plus_cnt
-    ,y_mob3_ever_30plus_cnt
+    ,y_fpd7_obs
+    ,y_fpd7_ovd
+    ,y_fpd15_obs
+    ,y_fpd15_ovd
+    ,y_mob1_obs
+    ,y_mob1_5plus
+    ,y_mob1_30plus
+    ,y_mob1_ever_5plus
+    ,y_mob1_ever_30plus
+    ,y_mob2_obs
+    ,y_mob2_5plus
+    ,y_mob2_30plus
+    ,y_mob2_ever_5plus
+    ,y_mob2_ever_30plus
+    ,y_mob3_obs
+    ,y_mob3_5plus
+    ,y_mob3_30plus
+    ,y_mob3_ever_5plus
+    ,y_mob3_ever_30plus
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE apply_seq = 1
   AND last_limit_time >= TO_DATE('2026-08-01')
@@ -653,25 +653,25 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_fpd7_obs_cnt
-    ,y_fpd7_ovd_cnt
-    ,y_fpd15_obs_cnt
-    ,y_fpd15_ovd_cnt
-    ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
-    ,y_mob1_30plus_cnt
-    ,y_mob1_ever_5plus_cnt
-    ,y_mob1_ever_30plus_cnt
-    ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
-    ,y_mob2_30plus_cnt
-    ,y_mob2_ever_5plus_cnt
-    ,y_mob2_ever_30plus_cnt
-    ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
-    ,y_mob3_30plus_cnt
-    ,y_mob3_ever_5plus_cnt
-    ,y_mob3_ever_30plus_cnt
+    ,y_fpd7_obs
+    ,y_fpd7_ovd
+    ,y_fpd15_obs
+    ,y_fpd15_ovd
+    ,y_mob1_obs
+    ,y_mob1_5plus
+    ,y_mob1_30plus
+    ,y_mob1_ever_5plus
+    ,y_mob1_ever_30plus
+    ,y_mob2_obs
+    ,y_mob2_5plus
+    ,y_mob2_30plus
+    ,y_mob2_ever_5plus
+    ,y_mob2_ever_30plus
+    ,y_mob3_obs
+    ,y_mob3_5plus
+    ,y_mob3_30plus
+    ,y_mob3_ever_5plus
+    ,y_mob3_ever_30plus
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE application_rank = 1
   AND last_limit_time >= TO_DATE('2026-08-01')
@@ -720,25 +720,25 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_fpd7_obs_cnt
-    ,y_fpd7_ovd_cnt
-    ,y_fpd15_obs_cnt
-    ,y_fpd15_ovd_cnt
-    ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
-    ,y_mob1_30plus_cnt
-    ,y_mob1_ever_5plus_cnt
-    ,y_mob1_ever_30plus_cnt
-    ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
-    ,y_mob2_30plus_cnt
-    ,y_mob2_ever_5plus_cnt
-    ,y_mob2_ever_30plus_cnt
-    ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
-    ,y_mob3_30plus_cnt
-    ,y_mob3_ever_5plus_cnt
-    ,y_mob3_ever_30plus_cnt
+    ,y_fpd7_obs
+    ,y_fpd7_ovd
+    ,y_fpd15_obs
+    ,y_fpd15_ovd
+    ,y_mob1_obs
+    ,y_mob1_5plus
+    ,y_mob1_30plus
+    ,y_mob1_ever_5plus
+    ,y_mob1_ever_30plus
+    ,y_mob2_obs
+    ,y_mob2_5plus
+    ,y_mob2_30plus
+    ,y_mob2_ever_5plus
+    ,y_mob2_ever_30plus
+    ,y_mob3_obs
+    ,y_mob3_5plus
+    ,y_mob3_30plus
+    ,y_mob3_ever_5plus
+    ,y_mob3_ever_30plus
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'New'
   AND apply_date >= TO_DATE('2026-08-01')
@@ -787,25 +787,25 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_fpd7_obs_cnt
-    ,y_fpd7_ovd_cnt
-    ,y_fpd15_obs_cnt
-    ,y_fpd15_ovd_cnt
-    ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
-    ,y_mob1_30plus_cnt
-    ,y_mob1_ever_5plus_cnt
-    ,y_mob1_ever_30plus_cnt
-    ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
-    ,y_mob2_30plus_cnt
-    ,y_mob2_ever_5plus_cnt
-    ,y_mob2_ever_30plus_cnt
-    ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
-    ,y_mob3_30plus_cnt
-    ,y_mob3_ever_5plus_cnt
-    ,y_mob3_ever_30plus_cnt
+    ,y_fpd7_obs
+    ,y_fpd7_ovd
+    ,y_fpd15_obs
+    ,y_fpd15_ovd
+    ,y_mob1_obs
+    ,y_mob1_5plus
+    ,y_mob1_30plus
+    ,y_mob1_ever_5plus
+    ,y_mob1_ever_30plus
+    ,y_mob2_obs
+    ,y_mob2_5plus
+    ,y_mob2_30plus
+    ,y_mob2_ever_5plus
+    ,y_mob2_ever_30plus
+    ,y_mob3_obs
+    ,y_mob3_5plus
+    ,y_mob3_30plus
+    ,y_mob3_ever_5plus
+    ,y_mob3_ever_30plus
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'New'
   AND is_disburse_success = 1
@@ -855,25 +855,25 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_fpd7_obs_cnt
-    ,y_fpd7_ovd_cnt
-    ,y_fpd15_obs_cnt
-    ,y_fpd15_ovd_cnt
-    ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
-    ,y_mob1_30plus_cnt
-    ,y_mob1_ever_5plus_cnt
-    ,y_mob1_ever_30plus_cnt
-    ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
-    ,y_mob2_30plus_cnt
-    ,y_mob2_ever_5plus_cnt
-    ,y_mob2_ever_30plus_cnt
-    ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
-    ,y_mob3_30plus_cnt
-    ,y_mob3_ever_5plus_cnt
-    ,y_mob3_ever_30plus_cnt
+    ,y_fpd7_obs
+    ,y_fpd7_ovd
+    ,y_fpd15_obs
+    ,y_fpd15_ovd
+    ,y_mob1_obs
+    ,y_mob1_5plus
+    ,y_mob1_30plus
+    ,y_mob1_ever_5plus
+    ,y_mob1_ever_30plus
+    ,y_mob2_obs
+    ,y_mob2_5plus
+    ,y_mob2_30plus
+    ,y_mob2_ever_5plus
+    ,y_mob2_ever_30plus
+    ,y_mob3_obs
+    ,y_mob3_5plus
+    ,y_mob3_30plus
+    ,y_mob3_ever_5plus
+    ,y_mob3_ever_30plus
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'Old'
   AND apply_date >= TO_DATE('2026-08-01')
@@ -922,25 +922,25 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_fpd7_obs_cnt
-    ,y_fpd7_ovd_cnt
-    ,y_fpd15_obs_cnt
-    ,y_fpd15_ovd_cnt
-    ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
-    ,y_mob1_30plus_cnt
-    ,y_mob1_ever_5plus_cnt
-    ,y_mob1_ever_30plus_cnt
-    ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
-    ,y_mob2_30plus_cnt
-    ,y_mob2_ever_5plus_cnt
-    ,y_mob2_ever_30plus_cnt
-    ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
-    ,y_mob3_30plus_cnt
-    ,y_mob3_ever_5plus_cnt
-    ,y_mob3_ever_30plus_cnt
+    ,y_fpd7_obs
+    ,y_fpd7_ovd
+    ,y_fpd15_obs
+    ,y_fpd15_ovd
+    ,y_mob1_obs
+    ,y_mob1_5plus
+    ,y_mob1_30plus
+    ,y_mob1_ever_5plus
+    ,y_mob1_ever_30plus
+    ,y_mob2_obs
+    ,y_mob2_5plus
+    ,y_mob2_30plus
+    ,y_mob2_ever_5plus
+    ,y_mob2_ever_30plus
+    ,y_mob3_obs
+    ,y_mob3_5plus
+    ,y_mob3_30plus
+    ,y_mob3_ever_5plus
+    ,y_mob3_ever_30plus
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'Old'
   AND is_disburse_success = 1
