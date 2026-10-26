@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Y 标签与金额逾期率指标说明</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f6f6f3;
+    --surface: #fcfcfb;
+    --surface-2: #f9f9f7;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --ring: rgba(11,11,11,0.10);
+    --fpd: #2a78d6;
+    --fpd-soft: rgba(42,120,214,0.10);
+    --fpd-line: rgba(42,120,214,0.55);
+    --mob: #eb6834;
+    --mob-soft: rgba(235,104,52,0.10);
+    --mob-line: rgba(235,104,52,0.55);
+    --future: rgba(137,135,129,0.08);
+    --shadow: 0 1px 2px rgba(11,11,11,0.04), 0 10px 28px rgba(11,11,11,0.035);
+    --radius: 16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --surface-2: #171716;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --ring: rgba(255,255,255,0.10);
+      --fpd: #3987e5;
+      --fpd-soft: rgba(57,135,229,0.16);
+      --fpd-line: rgba(57,135,229,0.68);
+      --mob: #d95926;
+      --mob-soft: rgba(217,89,38,0.18);
+      --mob-line: rgba(217,89,38,0.68);
+      --future: rgba(137,135,129,0.12);
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 12px 32px rgba(0,0,0,0.20);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    padding: 46px 22px 60px;
+    background:
+      radial-gradient(900px 420px at 8% -8%, var(--fpd-soft), transparent 62%),
+      radial-gradient(800px 380px at 100% -12%, var(--mob-soft), transparent 58%),
+      var(--page);
+    color: var(--ink);
+    font: 15px/1.7 "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 1040px; margin: 0 auto; }
+  .eyebrow {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 8px 0 10px;
+    font-size: clamp(28px, 4.4vw, 40px);
+    line-height: 1.16;
+    letter-spacing: -0.025em;
+  }
+  .sub { margin: 0; max-width: 840px; color: var(--ink-2); font-size: 15px; }
+  .sub b { color: var(--ink); }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+  .meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--ring);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 4px 10px;
+    color: var(--ink-2);
+    font-size: 12px;
+  }
+  .meta b { color: var(--ink); font-weight: 600; }
+  .toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 0; }
+  .toc a {
+    color: var(--ink-2);
+    text-decoration: none;
+    font-size: 12.5px;
+    border: 1px solid var(--ring);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 4px 10px;
+  }
+  .toc a:hover { color: var(--ink); border-color: var(--muted); }
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin: 22px 0 0;
+  }
+  .kpi {
+    position: relative;
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-radius: 14px;
+    padding: 14px 16px 13px;
+    box-shadow: var(--shadow);
+  }
+  .kpi::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--kpi, var(--grid));
+  }
+  .kpi-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .kpi strong {
+    display: block;
+    margin: 5px 0 1px;
+    font-size: 32px;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+  }
+  .kpi-note { color: var(--ink-2); font-size: 12px; }
+  .dot {
+    display: inline-block;
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .dot.fpd { color: var(--fpd); }
+  .dot.mob { color: var(--mob); }
+  .dot.future { color: var(--muted); }
+  .dot.hollow { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+  section { margin-top: 38px; scroll-margin-top: 24px; }
+  .section-head {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    margin: 0 0 13px;
+  }
+  .section-no {
+    color: var(--muted);
+    font: 600 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+    letter-spacing: 0.08em;
+    padding-top: 5px;
+  }
+  h2 { margin: 0 0 4px; font-size: 20px; line-height: 1.3; letter-spacing: -0.015em; }
+  .section-desc { margin: 0; max-width: 820px; color: var(--ink-2); font-size: 13.5px; }
+  .section-desc code { font-size: 0.92em; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-radius: var(--radius);
+    padding: 18px 18px 14px;
+    box-shadow: var(--shadow);
+  }
+  .card + .card { margin-top: 12px; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+    color: var(--ink-2);
+    background: var(--surface-2);
+    border: 1px solid var(--ring);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { color: var(--muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
+  td { color: var(--ink-2); }
+  td:first-child { color: var(--ink); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--surface-2); }
+  td code { white-space: normal; overflow-wrap: anywhere; }
+  tr.grp td {
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 7px 10px;
+  }
+  .note { margin: 10px 2px 2px; color: var(--ink-2); font-size: 12.5px; }
+  .note b { color: var(--ink); font-weight: 600; }
+  .matrix-card { padding: 16px 16px 11px; }
+  .anatomy {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--ring);
+    border-radius: 10px;
+  }
+  .an-seg {
+    padding: 3px 7px;
+    border: 1px solid var(--ring);
+    border-radius: 5px;
+    background: var(--surface);
+    color: var(--ink);
+    font: 700 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .an-seg.window { background: var(--mob-soft); border-color: var(--mob-line); }
+  .an-sep { color: var(--muted); font: 700 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .an-caption { margin-left: auto; color: var(--muted); font-size: 11.5px; }
+  .matrix-scroll { overflow-x: auto; }
+  .label-matrix {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: separate;
+    border-spacing: 4px;
+    font-size: 12.5px;
+    font-variant-numeric: normal;
+  }
+  .label-matrix th {
+    border: 0;
+    padding: 4px 6px;
+    text-align: center;
+    white-space: nowrap;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  .label-matrix thead th span { display: block; color: var(--ink-2); font-size: 12px; font-weight: 700; }
+  .label-matrix thead th small { display: block; margin-top: 1px; color: var(--muted); font-size: 10.5px; font-weight: 500; }
+  .label-matrix tbody th {
+    padding: 4px 8px 4px 2px;
+    text-align: left;
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .label-matrix tbody th .dot { margin-right: 6px; }
+  .label-matrix tbody th small { margin-left: 6px; color: var(--muted); font-size: 10.5px; font-weight: 500; }
+  .label-matrix td { border: 0; padding: 0; text-align: center; }
+  .mx {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+  .mx.fpd { background: var(--fpd-soft); }
+  .mx.mob { background: var(--mob-soft); }
+  .mx.gate { background: transparent; box-shadow: inset 0 0 0 1px var(--fpd-line); }
+  .mx.gate.mob { box-shadow: inset 0 0 0 1px var(--mob-line); }
+  .label-matrix td.empty { color: var(--muted); font-size: 12px; }
+  .matrix-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    margin-top: 12px;
+    padding-top: 11px;
+    border-top: 1px solid var(--grid);
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .matrix-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .matrix-legend .dot { width: 7px; height: 7px; }
+  .matrix-legend .mx { min-height: 20px; padding: 0 7px; border-radius: 5px; font-size: 10px; }
+  .matrix-legend .legend-total { margin-left: auto; color: var(--ink-2); font-weight: 600; }
+  .viz-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .viz-title { margin: 0; font-size: 14px; font-weight: 700; }
+  .viz-sub { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+  .viz-legend { display: flex; flex-wrap: wrap; gap: 10px 14px; color: var(--muted); font-size: 11.5px; }
+  .viz-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .cutoff-key { display: inline-block; width: 1px; height: 14px; background: var(--muted); }
+  .viz-scroll { overflow-x: auto; margin: 0 -2px; padding: 2px 2px 6px; }
+  .timeline { display: block; width: 100%; min-width: 700px; height: auto; }
+  .mobile-timeline { display: none; }
+  .mt-lane {
+    padding: 11px 12px 8px;
+    border: 1px solid var(--ring);
+    border-radius: 11px;
+    background: var(--surface-2);
+  }
+  .mt-lane + .mt-lane { margin-top: 10px; }
+  .mt-lane.fpd { --accent: var(--fpd); }
+  .mt-lane.mob { --accent: var(--mob); }
+  .mt-lane-head { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+  .mt-lane-head b { font-size: 12.5px; }
+  .mt-lane-head small { margin-left: auto; color: var(--muted); font-size: 10.5px; }
+  .mt-events { list-style: none; margin: 0; padding: 0 0 0 6px; }
+  .mt-events li {
+    position: relative;
+    display: grid;
+    grid-template-columns: 16px 52px minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+    min-height: 29px;
+    color: var(--ink-2);
+    font-size: 12.5px;
+  }
+  .mt-events li::before {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--grid);
+  }
+  .mt-events li:first-child::before { top: 50%; }
+  .mt-events li:last-child::before { bottom: 50%; }
+  .mt-dot {
+    position: relative;
+    z-index: 1;
+    width: 8px;
+    height: 8px;
+    margin-left: 3px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--surface-2);
+  }
+  .mt-events li.neutral { --accent: var(--muted); }
+  .mt-events li.cutoff .mt-dot { border-radius: 1px; transform: rotate(45deg); }
+  .mt-events li.hollow .mt-dot {
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 0 2px var(--surface-2);
+  }
+  .mt-events time { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .mt-note { margin: 8px 2px 0; color: var(--muted); font-size: 11px; }
+  .scroll-hint { display: none; margin: 6px 2px 0; color: var(--muted); font-size: 11px; }
+  .timeline text { font-family: inherit; }
+  .tl-axis, .tl-tick, .tl-sep, .tl-cutoff { vector-effect: non-scaling-stroke; }
+  .tl-axis, .tl-tick, .tl-sep { stroke: var(--grid); stroke-width: 1; }
+  .tl-cutoff { stroke: var(--muted); stroke-width: 1.4; }
+  .tl-band { fill: var(--fpd-soft); }
+  .tl-future { fill: var(--future); }
+  .tl-fpd { fill: var(--fpd); stroke: var(--surface); stroke-width: 2; }
+  .tl-mob { fill: var(--mob); stroke: var(--surface); stroke-width: 2; }
+  .tl-neutral { fill: var(--muted); stroke: var(--surface); stroke-width: 2; }
+  .tl-hollow-mob { fill: var(--surface); stroke: var(--mob); stroke-width: 2; }
+  .tl-name { fill: var(--ink-2); font-size: 12.5px; font-weight: 600; }
+  .tl-lane { fill: var(--ink); font-size: 13.5px; font-weight: 700; }
+  .tl-sub { fill: var(--muted); font-size: 11.5px; }
+  .tl-band-label { fill: var(--ink-2); font-size: 11.5px; font-weight: 600; }
+  .metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .metric-card {
+    --accent: var(--grid);
+    --accent-soft: var(--surface-2);
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-top: 3px solid var(--accent);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+  .metric-card.fpd { --accent: var(--fpd); --accent-soft: var(--fpd-soft); }
+  .metric-card.mob { --accent: var(--mob); --accent-soft: var(--mob-soft); }
+  .metric-top { display: flex; align-items: center; gap: 8px; }
+  .metric-top h3 { margin: 0; font-size: 15px; }
+  .metric-tag {
+    margin-left: auto;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--ink-2);
+    font: 600 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .formula {
+    margin: 12px 0;
+    padding: 10px 11px;
+    border: 1px solid var(--ring);
+    border-radius: 9px;
+    background: var(--surface-2);
+    color: var(--ink-2);
+    font: 11.5px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+    overflow-wrap: anywhere;
+  }
+  .metric-example { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--grid); color: var(--ink-2); font-size: 12.5px; }
+  .metric-example b { color: var(--ink); }
+  .footer { margin: 26px 0 0; padding-top: 14px; border-top: 1px solid var(--grid); color: var(--muted); font-size: 12px; }
+  @media (max-width: 820px) {
+    .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .metric-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    .desktop-timeline { display: none; }
+    .mobile-timeline { display: block; }
+    .scroll-hint { display: block; }
+  }
+  @media (max-width: 640px) {
+    body { padding: 30px 14px 44px; }
+    .section-head { grid-template-columns: 32px minmax(0, 1fr); gap: 6px; }
+    h1 { font-size: 28px; }
+    .card { padding: 14px 13px 11px; border-radius: 13px; }
+    .matrix-card { padding: 12px 10px 9px; }
+    .an-caption { margin-left: 0; }
+    .kpi-row { gap: 8px; }
+    .kpi { padding: 12px 13px; }
+    .kpi strong { font-size: 28px; }
+    th, td { padding: 7px 8px; }
+    .matrix-legend .legend-total { margin-left: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+  @media print {
+    body { padding: 0; background: #fff; }
+    .toc { display: none; }
+    .card, .kpi, .metric-card { box-shadow: none; break-inside: avoid; }
+    .viz-scroll, .matrix-scroll, .table-wrap { overflow: visible; }
+    .timeline, .label-matrix { min-width: 0; }
+    .desktop-timeline { display: block !important; }
+    .mobile-timeline, .scroll-hint { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">WageGo Vintage · 标签口径</p>
+    <h1>Y 标签与金额逾期率指标说明</h1>
+    <p class="sub">目标表 <code>model.tmp_eliam_wagego_dwd_loan_apply_label</code>，一行一条借款申请。Y 标签共 <b>25 个</b>，全部是 0/1 笔数标记；金额逾期率另用 1 个放款金额列和 15 个 MOB 中间指标列。先看时间轴，再看字段清单。</p>
+    <div class="meta">
+      <span><b>obs_dt</b> 债务快照最新日期</span>
+      <span><b>主表</b> 94 列</span>
+    </div>
+    <nav class="toc" aria-label="页面目录">
+      <a href="#timeline">观察时间轴</a>
+      <a href="#labels">标签清单</a>
+      <a href="#amount">金额逾期率</a>
+    </nav>
+    <div class="kpi-row" aria-label="关键数字">
+      <div class="kpi" style="--kpi: var(--fpd)">
+        <div class="kpi-label"><span class="dot fpd" aria-hidden="true"></span>Y 标签</div>
+        <strong>25</strong>
+        <span class="kpi-note">全部 0/1，SUM 即笔数</span>
+      </div>
+      <div class="kpi" style="--kpi: var(--fpd)">
+        <div class="kpi-label"><span class="dot fpd" aria-hidden="true"></span>FPD</div>
+        <strong>10</strong>
+        <span class="kpi-note">1 / 3 / 7 / 15 / 30 天 · obs + ovd</span>
+      </div>
+      <div class="kpi" style="--kpi: var(--mob)">
+        <div class="kpi-label"><span class="dot mob" aria-hidden="true"></span>MOB</div>
+        <strong>15</strong>
+        <span class="kpi-note">1 / 2 / 3 月 · 每月 5 个</span>
+      </div>
+      <div class="kpi" style="--kpi: var(--grid)">
+        <div class="kpi-label">金额指标</div>
+        <strong>16</strong>
+        <span class="kpi-note">principal + MOB0–4</span>
+      </div>
+    </div>
+  </header>
+
+  <section id="timeline">
+    <div class="section-head">
+      <div class="section-no">01</div>
+      <div>
+        <h2>一张时间轴看懂 25 个 Y 标签</h2>
+        <p class="section-desc">FPD 从到期日算，MOB 从放款日算。每个观察点先出 <code>obs</code>（到了没有），到了才判坏标签。</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="viz-head">
+        <div>
+          <h3 class="viz-title">标签观察时间轴</h3>
+          <p class="viz-sub">上：FPD 首期窗口；下：MOB 月末观察</p>
+        </div>
+        <div class="viz-legend">
+          <span><span class="dot fpd" aria-hidden="true"></span>FPD</span>
+          <span><span class="dot mob" aria-hidden="true"></span>MOB</span>
+          <span><span class="dot hollow future" aria-hidden="true"></span>空心 = 未到</span>
+          <span><span class="cutoff-key" aria-hidden="true"></span>obs_dt</span>
+        </div>
+      </div>
+      <div class="viz-scroll desktop-timeline">
+        <svg class="timeline" viewBox="0 0 960 340" role="img" aria-labelledby="tl-title tl-desc">
+          <title id="tl-title">Y 标签观察时间轴</title>
+          <desc id="tl-desc">上：FPD 从到期日 due 起，due+1 / +3 / +7 / +15 / +30 各有一组 y_fpdN_obs 和 y_fpdN_ovd。下：MOB 从放款日起，第 1 / 2 / 3 个自然月末各有一组 y_mobN_obs、5plus / 30plus、ever_5plus / ever_30plus；obs_dt 之后的月末未到。</desc>
+
+          <circle cx="16" cy="18" r="4" style="fill: var(--fpd)"/>
+          <text x="28" y="22" class="tl-lane">FPD · 首期窗口</text>
+          <text x="28" y="40" class="tl-sub">从到期日 due 算 · due+1 / +3 / +7 / +15 / +30</text>
+
+          <line x1="70" y1="94" x2="890" y2="94" class="tl-axis"/>
+          <rect x="70" y="58" width="820" height="30" rx="6" class="tl-band"/>
+          <text x="97.3" y="78" text-anchor="middle" class="tl-band-label">+1</text>
+          <text x="152" y="78" text-anchor="middle" class="tl-band-label">+3</text>
+          <text x="261.3" y="78" text-anchor="middle" class="tl-band-label">+7</text>
+          <text x="480" y="78" text-anchor="middle" class="tl-band-label">+15</text>
+          <text x="890" y="78" text-anchor="middle" class="tl-band-label">+30</text>
+
+          <line x1="70" y1="86" x2="70" y2="102" class="tl-tick"/>
+          <circle cx="70" cy="94" r="5" class="tl-fpd"/>
+          <line x1="97.3" y1="86" x2="97.3" y2="102" class="tl-tick"/>
+          <circle cx="97.3" cy="94" r="4.5" class="tl-fpd"/>
+          <line x1="152" y1="86" x2="152" y2="102" class="tl-tick"/>
+          <circle cx="152" cy="94" r="4.5" class="tl-fpd"/>
+          <line x1="261.3" y1="86" x2="261.3" y2="102" class="tl-tick"/>
+          <circle cx="261.3" cy="94" r="4.5" class="tl-fpd"/>
+          <line x1="480" y1="86" x2="480" y2="102" class="tl-tick"/>
+          <circle cx="480" cy="94" r="4.5" class="tl-fpd"/>
+          <line x1="890" y1="86" x2="890" y2="102" class="tl-tick"/>
+          <circle cx="890" cy="94" r="4.5" class="tl-fpd"/>
+
+          <text x="70" y="124" class="tl-name">到期日 due</text>
+          <text x="70" y="142" class="tl-sub">每个点：y_fpdN_obs（窗口到了）+ y_fpdN_ovd（首还 / 截止日晚于 due+N）</text>
+
+          <line x1="0" y1="160" x2="960" y2="160" class="tl-sep"/>
+
+          <circle cx="16" cy="184" r="4" style="fill: var(--mob)"/>
+          <text x="28" y="188" class="tl-lane">MOB · 月末观察</text>
+          <text x="28" y="206" class="tl-sub">从放款日算 · 第 1 / 2 / 3 个自然月末</text>
+
+          <rect x="800" y="206" width="90" height="100" rx="6" class="tl-future"/>
+          <line x1="70" y1="250" x2="890" y2="250" class="tl-axis"/>
+          <line x1="800" y1="206" x2="800" y2="306" class="tl-cutoff"/>
+
+          <line x1="70" y1="242" x2="70" y2="258" class="tl-tick"/>
+          <circle cx="70" cy="250" r="4" class="tl-neutral"/>
+          <line x1="363.3" y1="242" x2="363.3" y2="258" class="tl-tick"/>
+          <circle cx="363.3" cy="250" r="4.5" class="tl-mob"/>
+          <line x1="656.7" y1="242" x2="656.7" y2="258" class="tl-tick"/>
+          <circle cx="656.7" cy="250" r="4.5" class="tl-mob"/>
+          <polygon points="800,243 807,250 800,257 793,250" class="tl-neutral"/>
+          <line x1="890" y1="242" x2="890" y2="258" class="tl-tick"/>
+          <circle cx="890" cy="250" r="4.5" class="tl-hollow-mob"/>
+
+          <text x="70" y="238" class="tl-name">放款</text>
+          <text x="363.3" y="238" text-anchor="middle" class="tl-name">MOB1 月末</text>
+          <text x="656.7" y="238" text-anchor="middle" class="tl-name">MOB2 月末</text>
+          <text x="804" y="222" text-anchor="end" class="tl-name">obs_dt</text>
+          <text x="890" y="282" text-anchor="end" class="tl-name">MOB3 月末</text>
+          <text x="890" y="300" text-anchor="end" class="tl-sub">未到 → obs = 0</text>
+          <text x="70" y="330" class="tl-sub">每个月末：y_mobN_obs + 5plus / 30plus（当天）+ ever_5plus / ever_30plus（截至当天）</text>
+        </svg>
+      </div>
+      <div class="mobile-timeline" aria-label="Y 标签观察时间轴（移动版）">
+        <div class="mt-lane fpd">
+          <div class="mt-lane-head"><span class="dot fpd" aria-hidden="true"></span><b>FPD 首期窗口</b><small>从 due 算</small></div>
+          <ol class="mt-events">
+            <li class="neutral"><span class="mt-dot" aria-hidden="true"></span><time>due</time><span>到期日</span></li>
+            <li><span class="mt-dot" aria-hidden="true"></span><time>+1</time><span>y_fpd1_obs / y_fpd1_ovd</span></li>
+            <li><span class="mt-dot" aria-hidden="true"></span><time>+3</time><span>y_fpd3_obs / y_fpd3_ovd</span></li>
+            <li><span class="mt-dot" aria-hidden="true"></span><time>+7</time><span>y_fpd7_obs / y_fpd7_ovd</span></li>
+            <li><span class="mt-dot" aria-hidden="true"></span><time>+15</time><span>y_fpd15_obs / y_fpd15_ovd</span></li>
+            <li><span class="mt-dot" aria-hidden="true"></span><time>+30</time><span>y_fpd30_obs / y_fpd30_ovd</span></li>
+          </ol>
+        </div>
+        <div class="mt-lane mob">
+          <div class="mt-lane-head"><span class="dot mob" aria-hidden="true"></span><b>MOB 月末观察</b><small>从放款日算</small></div>
+          <ol class="mt-events">
+            <li class="neutral"><span class="mt-dot" aria-hidden="true"></span><time>放款</time><span>开始计时</span></li>
+            <li><span class="mt-dot" aria-hidden="true"></span><time>MOB1</time><span>第 1 个自然月末</span></li>
+            <li><span class="mt-dot" aria-hidden="true"></span><time>MOB2</time><span>第 2 个自然月末</span></li>
+            <li class="neutral cutoff"><span class="mt-dot" aria-hidden="true"></span><time>obs_dt</time><span>数据截止</span></li>
+            <li class="hollow"><span class="mt-dot" aria-hidden="true"></span><time>MOB3</time><span>未到 → obs = 0</span></li>
+          </ol>
+        </div>
+        <p class="mt-note">按事件顺序排列，不按比例；颜色与桌面时间轴一致。</p>
+      </div>
+      <p class="note"><b>FPD</b>：<code>y_fpdN_obs</code> = 窗口到了，能判断；<code>y_fpdN_ovd</code> = 首还日或 <code>obs_dt</code> 晚于 due+N。<b>MOB</b>：<code>y_mobN_obs</code> = 月末到了；<code>y_mobN_5plus / 30plus</code> 看当天仍逾期 ≥ 5 / &gt; 30 天；<code>y_mobN_ever_5plus / ever_30plus</code> 看截至当天曾逾期 ≥ 5 / &gt; 30 天。</p>
+    </div>
+  </section>
+
+  <section id="labels">
+    <div class="section-head">
+      <div class="section-no">02</div>
+      <div>
+        <h2>标签清单</h2>
+        <p class="section-desc">行是窗口，列是指标；完整字段名 = <code>y_&lt;窗口&gt;_&lt;指标&gt;</code>。FPD 只有 obs / ovd，MOB 每月 5 个。</p>
+      </div>
+    </div>
+    <div class="card matrix-card">
+      <div class="anatomy" aria-label="字段名由前缀、窗口、指标三段组成">
+        <span class="an-seg">y</span>
+        <span class="an-sep">_</span>
+        <span class="an-seg window">mob1</span>
+        <span class="an-sep">_</span>
+        <span class="an-seg">ever_30plus</span>
+        <span class="an-caption">前缀 · 窗口 · 指标</span>
+      </div>
+      <div class="matrix-scroll">
+        <table class="label-matrix" aria-label="Y 标签结构矩阵">
+          <thead>
+            <tr>
+              <th scope="col">窗口</th>
+              <th scope="col"><span>obs</span><small>成熟门控</small></th>
+              <th scope="col"><span>ovd</span><small>FPD 逾期</small></th>
+              <th scope="col"><span>5plus</span><small>current ≥ 5</small></th>
+              <th scope="col"><span>30plus</span><small>current &gt; 30</small></th>
+              <th scope="col"><span>ever_5plus</span><small>ever ≥ 5</small></th>
+              <th scope="col"><span>ever_30plus</span><small>ever &gt; 30</small></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><span class="dot fpd" aria-hidden="true"></span>FPD1<small>2</small></th>
+              <td><span class="mx gate fpd" title="y_fpd1_obs">obs</span></td>
+              <td><span class="mx fpd" title="y_fpd1_ovd">ovd</span></td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="dot fpd" aria-hidden="true"></span>FPD3<small>2</small></th>
+              <td><span class="mx gate fpd" title="y_fpd3_obs">obs</span></td>
+              <td><span class="mx fpd" title="y_fpd3_ovd">ovd</span></td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="dot fpd" aria-hidden="true"></span>FPD7<small>2</small></th>
+              <td><span class="mx gate fpd" title="y_fpd7_obs">obs</span></td>
+              <td><span class="mx fpd" title="y_fpd7_ovd">ovd</span></td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="dot fpd" aria-hidden="true"></span>FPD15<small>2</small></th>
+              <td><span class="mx gate fpd" title="y_fpd15_obs">obs</span></td>
+              <td><span class="mx fpd" title="y_fpd15_ovd">ovd</span></td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="dot fpd" aria-hidden="true"></span>FPD30<small>2</small></th>
+              <td><span class="mx gate fpd" title="y_fpd30_obs">obs</span></td>
+              <td><span class="mx fpd" title="y_fpd30_ovd">ovd</span></td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="dot mob" aria-hidden="true"></span>MOB1<small>5</small></th>
+              <td><span class="mx gate mob" title="y_mob1_obs">obs</span></td>
+              <td class="empty">—</td>
+              <td><span class="mx mob" title="y_mob1_5plus">5plus</span></td>
+              <td><span class="mx mob" title="y_mob1_30plus">30plus</span></td>
+              <td><span class="mx mob" title="y_mob1_ever_5plus">ever_5plus</span></td>
+              <td><span class="mx mob" title="y_mob1_ever_30plus">ever_30plus</span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="dot mob" aria-hidden="true"></span>MOB2<small>5</small></th>
+              <td><span class="mx gate mob" title="y_mob2_obs">obs</span></td>
+              <td class="empty">—</td>
+              <td><span class="mx mob" title="y_mob2_5plus">5plus</span></td>
+              <td><span class="mx mob" title="y_mob2_30plus">30plus</span></td>
+              <td><span class="mx mob" title="y_mob2_ever_5plus">ever_5plus</span></td>
+              <td><span class="mx mob" title="y_mob2_ever_30plus">ever_30plus</span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="dot mob" aria-hidden="true"></span>MOB3<small>5</small></th>
+              <td><span class="mx gate mob" title="y_mob3_obs">obs</span></td>
+              <td class="empty">—</td>
+              <td><span class="mx mob" title="y_mob3_5plus">5plus</span></td>
+              <td><span class="mx mob" title="y_mob3_30plus">30plus</span></td>
+              <td><span class="mx mob" title="y_mob3_ever_5plus">ever_5plus</span></td>
+              <td><span class="mx mob" title="y_mob3_ever_30plus">ever_30plus</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="scroll-hint">左右滑动查看全部列 →</p>
+      <div class="matrix-legend">
+        <span><span class="dot fpd" aria-hidden="true"></span>FPD</span>
+        <span><span class="dot mob" aria-hidden="true"></span>MOB</span>
+        <span><span class="mx legend gate fpd">obs</span>描边 = 成熟门控</span>
+        <span><span class="mx legend fpd">ovd</span>实底 = 逾期标签</span>
+        <span class="legend-total">FPD 10 + MOB 15 = 25</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>字段</th><th>含义</th><th>怎么算</th></tr></thead>
+          <tbody>
+            <tr class="grp"><td colspan="3">FPD · 首期 · due+1 / +3 / +7 / +15 / +30（N = 1 / 3 / 7 / 15 / 30）</td></tr>
+            <tr><td><code>y_fpdN_obs</code></td><td>首期窗口已过，能判断有没有逾期</td><td><code>LEAST(首还日或 obs_dt, due+N) &lt; obs_dt</code>，且 <code>is_deal = 1</code>、有借据</td></tr>
+            <tr><td><code>y_fpdN_ovd</code></td><td>首期还款晚于到期后 N 天</td><td><code>obs = 1</code> 时，<code>label_obs_day &gt; due+N</code></td></tr>
+
+            <tr class="grp"><td colspan="3">MOB1 / MOB2 / MOB3 · 放款后第 1 / 2 / 3 个自然月末（N = 1 / 2 / 3）</td></tr>
+            <tr><td><code>y_mobN_obs</code></td><td>这个月末到了没有</td><td><code>LAST_DAY(ADD_MONTHS(放款日, N)) &lt;= obs_dt</code></td></tr>
+            <tr><td><code>y_mobN_5plus</code> / <code>y_mobN_30plus</code></td><td>月末还欠着，逾期满 5 天 / 超过 30 天</td><td><code>current &gt;= 5</code> / <code>current &gt; 30</code></td></tr>
+            <tr><td><code>y_mobN_ever_5plus</code> / <code>y_mobN_ever_30plus</code></td><td>到月末为止，曾经逾期满 5 天 / 超过 30 天</td><td><code>hist &gt;= 5</code> / <code>hist &gt; 30</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="scroll-hint">左右滑动查看完整表格 →</p>
+      <p class="note">MOB 取自然月末，不是放款后 30 天。<code>obs</code> 是成熟标志兼笔数率分母；窗口未到时坏标签为 NULL，不要当 0。阈值边界：<b>5plus 是 ≥ 5，30plus 是 &gt; 30</b>。</p>
+    </div>
+  </section>
+
+  <section id="amount">
+    <div class="section-head">
+      <div class="section-no">03</div>
+      <div>
+        <h2>金额逾期率</h2>
+        <p class="section-desc">FPD 用放款本金，MOB 用时点剩余本金；Y 标签走笔数口径，金额率用对应的中间列。</p>
+      </div>
+    </div>
+    <div class="metric-grid">
+      <div class="metric-card fpd">
+        <div class="metric-top">
+          <span class="dot fpd" aria-hidden="true"></span>
+          <h3>FPD 金额率</h3>
+          <span class="metric-tag">principal</span>
+        </div>
+        <div class="formula">SUM(CASE WHEN y_fpdN_ovd = 1 THEN principal ELSE 0 END) / SUM(CASE WHEN y_fpdN_obs = 1 THEN principal ELSE 0 END)</div>
+        <p class="metric-example">分母是窗口成熟（<code>obs = 1</code>）的放款本金，分子是其中首还晚于 <code>due+N</code> 的本金。</p>
+      </div>
+      <div class="metric-card mob">
+        <div class="metric-top">
+          <span class="dot mob" aria-hidden="true"></span>
+          <h3>MOB 金额率</h3>
+          <span class="metric-tag">余额 + DPD</span>
+        </div>
+        <div class="formula">SUM(CASE WHEN dpd_days_mobN &gt;= 5 THEN estimate_principal_remaining_mobN ELSE 0 END) / SUM(estimate_principal_remaining_mobN)</div>
+        <p class="metric-example">快照：MOB1–4 取月末当天，MOB0 允许月末后 7 天。ever 把 <code>dpd_days_mobN</code> 换成 <code>dpd_days_ever_mobN</code>。</p>
+      </div>
+    </div>
+    <p class="note"><code>principal</code> 在放款成功时等于 <code>real_amount</code>；MOB 的 <code>dpd_days_*</code> 是快照原始 DPD，NULL 记 0，没有快照时整组 NULL。<b>MOB1–3 与 Y 标签同快照，可直接对比笔数率与金额率。</b>MOB0 和 MOB4 只有金额指标，没有 Y 标。</p>
+  </section>
+
+  <p class="footer">字段口径以 <code>wagego_01_放款申请样本表及Y标签.sql</code> 为准。</p>
+</main>
+</body>
+</html>

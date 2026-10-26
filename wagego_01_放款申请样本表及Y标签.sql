@@ -1,3 +1,24 @@
+-- ============================================================================
+-- 输出：model.tmp_eliam_wagego_dwd_loan_apply_label（一行一条借款申请，共 95 列）
+-- 观察日：obs_dt = 债务快照表最新日期
+-- 代码顺序：obs_dt → 借据日快照 → 申请/放款 → 成熟门控 → MOB 快照 → 标签/金额 → 输出
+--
+-- Y 标签 25 个（全部 0/1 标记，SUM 即笔数）
+--   FPD 10：y_fpd{1,3,7,15,30}_obs   窗口成熟，可判定
+--           y_fpd{1,3,7,15,30}_ovd   首期实还日 > due+N
+--   MOB 15：y_mob{1,2,3}_obs              月末已到
+--           y_mob{1,2,3}_5plus             月末 current DPD >= 5
+--           y_mob{1,2,3}_30plus            月末 current DPD > 30
+--           y_mob{1,2,3}_ever_5plus        截至月末 hist DPD >= 5
+--           y_mob{1,2,3}_ever_30plus       截至月末 hist DPD > 30
+--
+-- 关键口径：
+--   FPD 是单时点事件，没有 ever；label_obs_day = COALESCE(首还日, obs_dt)，obs=1 才判 ovd
+--   MOB1-3 的标签与金额指标共用月末当天快照；缺快照 -> NULL
+--   MOB0/4 只有金额指标；MOB0 允许月末后 7 天内的快照
+--   金额率分母 estimate_principal_remaining_mobN；current/ever 分子分别用
+--   dpd_days_mobN / dpd_days_ever_mobN
+-- ============================================================================
 SET spark.sql.session.timeZone = Australia/Sydney;
 
 -- 观察日参数表：取债务快照表的最新日期，作为全流程统一的观察时点（一行）
@@ -220,21 +241,19 @@ latest AS (
         ,CAST(l.fail_bid_time AS TIMESTAMP)                   AS fail_bid_time
         ,s.listing_id                                         AS debt_listing_id
         ,s.init_due_date
-        ,CASE WHEN s.init_due_date IS NOT NULL THEN DATE_ADD(s.init_due_date, 31) END AS label_obs_dt
         ,s.first_repay_time
         ,s.user_actual_repay_time
         ,s.debt_status
         ,s.debt_status_desc
         ,s.hist_overdue_days
         ,s.current_overdue_days
+        ,CASE WHEN l.is_deal = 1 AND s.listing_id IS NOT NULL THEN 1 ELSE 0 END AS is_fpd_eligible
+        ,COALESCE(TO_DATE(s.first_repay_time), p.obs_dt)       AS label_obs_day
         ,CASE WHEN a.is_disburse_success = 1
-              THEN COALESCE(NULLIF(CAST(l.real_amount AS DOUBLE), 0), s.principal) END AS principal
+              THEN CAST(l.real_amount AS DOUBLE) END           AS principal
         ,s.repay_amount
         ,s.owing_amount
         ,p.obs_dt
-        ,CASE WHEN a.is_disburse_success = 1 AND CAST(l.is_deal AS INT) = 1 AND s.listing_id IS NOT NULL
-               AND DATE_ADD(s.init_due_date, 31) BETWEEN TO_DATE(a.disburse_time) AND p.obs_dt
-              THEN 1 ELSE 0 END                               AS is_due_matured
         ,f.first_disburse_time
     FROM loan_apply a
     CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
@@ -246,52 +265,37 @@ latest AS (
       ON a.listing_id = s.listing_id
      AND s.stat_date = p.obs_dt
 ),
-base AS (
+-- 成熟门控：FPD 看窗口，MOB 看月末是否已到
+obs_labels AS (
     SELECT
          l.*
-        ,x.first_repay_time                                   AS label_first_repay_time
-        ,x.user_actual_repay_time                             AS label_user_actual_repay_time
-        ,x.debt_status                                        AS label_debt_status
-        ,x.hist_overdue_days                                  AS label_hist_overdue_days
-        ,x.current_overdue_days                               AS label_current_overdue_days
-        ,x.owing_amount                                       AS label_owing_amount
-        ,CASE WHEN l.is_due_matured = 1 THEN x.current_overdue_days END AS label_dpd
-        ,CASE WHEN l.is_due_matured = 1 THEN x.hist_overdue_days END    AS label_hist_dpd
-        ,COALESCE(
-             TO_DATE(x.first_repay_time)
-            ,CASE WHEN l.first_repay_time IS NOT NULL AND TO_DATE(l.first_repay_time) <= l.label_obs_dt
-                  THEN TO_DATE(l.first_repay_time) END
-            ,l.label_obs_dt
-         )                                                    AS label_obs_day
-        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
-               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 3)) < l.obs_dt
-              THEN 1 ELSE 0 END                               AS y_fpd3_obs_cnt
-        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
-               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 7)) < l.obs_dt
-              THEN 1 ELSE 0 END                               AS y_fpd7_obs_cnt
-        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
-               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 14)) < l.obs_dt
-              THEN 1 ELSE 0 END                               AS y_fpd14_obs_cnt
-        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
-               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 15)) < l.obs_dt
-              THEN 1 ELSE 0 END                               AS y_fpd15_obs_cnt
-        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
-               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 30)) < l.obs_dt
-              THEN 1 ELSE 0 END                               AS y_fpd30_obs_cnt
+        ,CASE WHEN l.is_fpd_eligible = 1
+               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 1)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd1_obs
+        ,CASE WHEN l.is_fpd_eligible = 1
+               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 3)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd3_obs
+        ,CASE WHEN l.is_fpd_eligible = 1
+               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 7)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd7_obs
+        ,CASE WHEN l.is_fpd_eligible = 1
+               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 15)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd15_obs
+        ,CASE WHEN l.is_fpd_eligible = 1
+               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 30)) < l.obs_dt
+              THEN 1 ELSE 0 END                               AS y_fpd30_obs
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 1)) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob1_obs_cnt
+         END                                                  AS y_mob1_obs
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 2)) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob2_obs_cnt
+         END                                                  AS y_mob2_obs
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 3)) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob3_obs_cnt
+         END                                                  AS y_mob3_obs
     FROM latest l
-    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp x
-      ON l.listing_id = x.listing_id
-     AND x.stat_date = l.label_obs_dt
 ),
+-- MOB 观察点：放款后 0-4 个自然月末，只保留已到观察日的
 mob_obs AS (
     SELECT
          b.loan_no
@@ -299,50 +303,24 @@ mob_obs AS (
         ,TO_DATE(b.disburse_time)                             AS disburse_date
         ,m.mob_no
         ,LAST_DAY(ADD_MONTHS(TO_DATE(b.disburse_time), m.mob_no)) AS mob_obs_dt
-    FROM base b
+    FROM obs_labels b
     CROSS JOIN (SELECT EXPLODE(SEQUENCE(0, 4)) AS mob_no) m
     WHERE b.is_disburse_success = 1
       AND LAST_DAY(ADD_MONTHS(TO_DATE(b.disburse_time), m.mob_no)) <= b.obs_dt
 ),
-mob_label_detail AS (
-    SELECT
-         o.loan_no
-        ,o.mob_no
-        ,CASE WHEN d.current_overdue_days IS NOT NULL
-              THEN CASE WHEN d.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
-        ,CASE WHEN d.current_overdue_days IS NOT NULL
-              THEN CASE WHEN d.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus
-        ,CASE WHEN d.hist_overdue_days IS NOT NULL
-              THEN CASE WHEN d.hist_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_ever_5plus
-        ,CASE WHEN d.hist_overdue_days IS NOT NULL
-              THEN CASE WHEN d.hist_overdue_days > 30 THEN 1 ELSE 0 END END AS is_ever_30plus
-    FROM mob_obs o
-    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d
-      ON o.listing_id = d.listing_id
-     AND o.mob_obs_dt = d.stat_date
-),
-mob_label_wide AS (
-    SELECT
-         loan_no
-        ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS y_mob1_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_5plus END) AS y_mob1_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS y_mob2_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_5plus END) AS y_mob2_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS y_mob3_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_5plus END) AS y_mob3_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS y_mob1_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_30plus END) AS y_mob1_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS y_mob2_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_30plus END) AS y_mob2_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS y_mob3_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_30plus END) AS y_mob3_ever_30plus_cnt
-    FROM mob_label_detail
-    GROUP BY loan_no
-),
-mob_track_detail AS (
+-- 月末快照：标签和金额指标共用；N>=1 取月末当天，MOB0 允许 +7 天
+mob_snapshot_detail AS (
     SELECT
          t.loan_no
         ,t.mob_no
+        ,CASE WHEN t.current_overdue_days IS NOT NULL
+              THEN CASE WHEN t.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
+        ,CASE WHEN t.current_overdue_days IS NOT NULL
+              THEN CASE WHEN t.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus
+        ,CASE WHEN t.hist_overdue_days IS NOT NULL
+              THEN CASE WHEN t.hist_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_ever_5plus
+        ,CASE WHEN t.hist_overdue_days IS NOT NULL
+              THEN CASE WHEN t.hist_overdue_days > 30 THEN 1 ELSE 0 END END AS is_ever_30plus
         ,GREATEST(COALESCE(t.owing_principal, 0), 0) AS estimate_principal_remaining
         ,COALESCE(t.current_overdue_days, 0)         AS dpd_days
         ,COALESCE(t.hist_overdue_days, 0)            AS dpd_days_ever
@@ -355,7 +333,7 @@ mob_track_detail AS (
             ,d.hist_overdue_days
             ,ROW_NUMBER() OVER (
                  PARTITION BY o.loan_no, o.mob_no
-                 ORDER BY CASE WHEN d.stat_date <= o.mob_obs_dt THEN 0 ELSE 1 END
+                 ORDER BY CASE WHEN d.stat_date = o.mob_obs_dt THEN 0 ELSE 1 END
                          ,CASE WHEN d.stat_date <= o.mob_obs_dt THEN DATEDIFF(o.mob_obs_dt, d.stat_date)
                                ELSE DATEDIFF(d.stat_date, o.mob_obs_dt) END
              ) AS rn
@@ -363,11 +341,34 @@ mob_track_detail AS (
         JOIN model.tmp_eliam_wagego_stg_debt_snp d
           ON o.listing_id = d.listing_id
          AND d.stat_date >= o.disburse_date
-         AND d.stat_date <= DATE_ADD(o.mob_obs_dt, CASE WHEN o.mob_no = 0 THEN 7 ELSE 0 END)
+         AND (
+              (o.mob_no = 0 AND d.stat_date <= DATE_ADD(o.mob_obs_dt, 7))
+              OR (o.mob_no >= 1 AND d.stat_date = o.mob_obs_dt)
+         )
     ) t
     WHERE t.rn = 1
 ),
-mob_track_wide AS (
+-- MOB 笔数标签：current 与 ever
+mob_label_wide AS (
+    SELECT
+         loan_no
+        ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS y_mob1_5plus
+        ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS y_mob1_30plus
+        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_5plus END) AS y_mob1_ever_5plus
+        ,MAX(CASE WHEN mob_no = 1  THEN is_ever_30plus END) AS y_mob1_ever_30plus
+        ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS y_mob2_5plus
+        ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS y_mob2_30plus
+        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_5plus END) AS y_mob2_ever_5plus
+        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_30plus END) AS y_mob2_ever_30plus
+        ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS y_mob3_5plus
+        ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS y_mob3_30plus
+        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_5plus END) AS y_mob3_ever_5plus
+        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_30plus END) AS y_mob3_ever_30plus
+    FROM mob_snapshot_detail
+    GROUP BY loan_no
+),
+-- MOB 金额指标：余额 + current/ever DPD
+mob_amount_wide AS (
     SELECT
          loan_no
         ,MAX(CASE WHEN mob_no = 0 THEN estimate_principal_remaining END) AS estimate_principal_remaining_mob0
@@ -385,7 +386,7 @@ mob_track_wide AS (
         ,MAX(CASE WHEN mob_no = 4 THEN estimate_principal_remaining END) AS estimate_principal_remaining_mob4
         ,MAX(CASE WHEN mob_no = 4 THEN dpd_days END)                     AS dpd_days_mob4
         ,MAX(CASE WHEN mob_no = 4 THEN dpd_days_ever END)                AS dpd_days_ever_mob4
-    FROM mob_track_detail
+    FROM mob_snapshot_detail
     GROUP BY loan_no
 ),
 model_log AS (
@@ -405,215 +406,74 @@ model_log AS (
 labeled AS (
     SELECT
          b.*
-        ,b.label_dpd                                           AS y_due_dpd
-        ,b.label_hist_dpd                                      AS y_due_ever_dpd
-        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN 1 ELSE 0 END END AS y_due_ovd_cnt
-        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_due_ovd_amt
-        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd >= 5 THEN 1 ELSE 0 END END AS y_due_5plus_cnt
-        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 30 THEN 1 ELSE 0 END END AS y_due_30plus_cnt
-        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 0 THEN 1 ELSE 0 END END AS y_due_ever_ovd_cnt
-        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_due_ever_ovd_amt
-        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd >= 5 THEN 1 ELSE 0 END END AS y_due_ever_5plus_cnt
-        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 30 THEN 1 ELSE 0 END END AS y_due_ever_30plus_cnt
-        ,CASE WHEN b.y_fpd3_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3) THEN 1 ELSE 0 END END AS y_fpd3_ovd_cnt
-        ,CASE WHEN b.y_fpd7_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd_cnt
-        ,CASE WHEN b.y_fpd14_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END AS y_fpd14_ovd_cnt
-        ,CASE WHEN b.y_fpd15_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END END AS y_fpd15_ovd_cnt
-        ,CASE WHEN b.y_fpd30_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS y_fpd30_ovd_cnt
+        -- FPD 标签：obs 已在 obs_labels，这里补 ovd
+        ,CASE WHEN b.y_fpd1_obs = 1  THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 1)  THEN 1 ELSE 0 END END AS y_fpd1_ovd
+        ,CASE WHEN b.y_fpd3_obs = 1  THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3)  THEN 1 ELSE 0 END END AS y_fpd3_ovd
+        ,CASE WHEN b.y_fpd7_obs = 1  THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7)  THEN 1 ELSE 0 END END AS y_fpd7_ovd
+        ,CASE WHEN b.y_fpd15_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END END AS y_fpd15_ovd
+        ,CASE WHEN b.y_fpd30_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS y_fpd30_ovd
+        -- 时间 / 新老客
         ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN DATEDIFF(TO_DATE(b.user_actual_repay_time), TO_DATE(b.disburse_time)) END AS loan_term_actual_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN CASE WHEN TO_DATE(b.user_actual_repay_time) < b.init_due_date THEN 1 ELSE 0 END END AS is_early_settlement
-        ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN 1 ELSE 0 END END AS y_obs_ovd_cnt
-        ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ovd_amt
-        ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN 1 ELSE 0 END END AS y_obs_ever_ovd_cnt
-        ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ever_ovd_amt
         ,DATE_FORMAT(b.disburse_time, 'yyyy-MM')                 AS disburse_month
         ,CONCAT(CAST(YEAR(b.disburse_time) AS STRING), '-Q', CAST(QUARTER(b.disburse_time) AS STRING)) AS disburse_quarter
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(b.disburse_time)), 'yyyy-MM-dd') AS disburse_week
         ,DATEDIFF(b.obs_dt, TO_DATE(b.disburse_time))            AS days_on_book
         ,CASE WHEN b.first_disburse_time IS NULL THEN 'New'
               WHEN COALESCE(b.disburse_time, b.apply_time) <= b.first_disburse_time THEN 'New'
               ELSE 'Old'
          END                                                  AS user_type
-        ,m.y_mob1_5plus_cnt
-        ,m.y_mob1_ever_5plus_cnt
-        ,m.y_mob2_5plus_cnt
-        ,m.y_mob2_ever_5plus_cnt
-        ,m.y_mob3_5plus_cnt
-        ,m.y_mob3_ever_5plus_cnt
-        ,m.y_mob1_30plus_cnt
-        ,m.y_mob1_ever_30plus_cnt
-        ,m.y_mob2_30plus_cnt
-        ,m.y_mob2_ever_30plus_cnt
-        ,m.y_mob3_30plus_cnt
-        ,m.y_mob3_ever_30plus_cnt
-        ,CASE WHEN b.y_mob1_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob1_obs_cnt = 0 THEN 0 END AS y_mob1_obs_amt
-        ,CASE WHEN b.y_mob2_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob2_obs_cnt = 0 THEN 0 END AS y_mob2_obs_amt
-        ,CASE WHEN b.y_mob3_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob3_obs_cnt = 0 THEN 0 END AS y_mob3_obs_amt
-        ,CASE WHEN m.y_mob1_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_5plus_cnt = 0 THEN 0 END AS y_mob1_5plus_amt
-        ,CASE WHEN m.y_mob1_ever_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_ever_5plus_cnt = 0 THEN 0 END AS y_mob1_ever_5plus_amt
-        ,CASE WHEN m.y_mob2_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_5plus_cnt = 0 THEN 0 END AS y_mob2_5plus_amt
-        ,CASE WHEN m.y_mob2_ever_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_ever_5plus_cnt = 0 THEN 0 END AS y_mob2_ever_5plus_amt
-        ,CASE WHEN m.y_mob3_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_5plus_cnt = 0 THEN 0 END AS y_mob3_5plus_amt
-        ,CASE WHEN m.y_mob3_ever_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_ever_5plus_cnt = 0 THEN 0 END AS y_mob3_ever_5plus_amt
-        ,CASE WHEN m.y_mob1_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_30plus_cnt = 0 THEN 0 END AS y_mob1_30plus_amt
-        ,CASE WHEN m.y_mob1_ever_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_ever_30plus_cnt = 0 THEN 0 END AS y_mob1_ever_30plus_amt
-        ,CASE WHEN m.y_mob2_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_30plus_cnt = 0 THEN 0 END AS y_mob2_30plus_amt
-        ,CASE WHEN m.y_mob2_ever_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_ever_30plus_cnt = 0 THEN 0 END AS y_mob2_ever_30plus_amt
-        ,CASE WHEN m.y_mob3_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_30plus_cnt = 0 THEN 0 END AS y_mob3_30plus_amt
-        ,CASE WHEN m.y_mob3_ever_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_ever_30plus_cnt = 0 THEN 0 END AS y_mob3_ever_30plus_amt
-        ,t.estimate_principal_remaining_mob0
-        ,t.dpd_days_mob0
-        ,t.dpd_days_ever_mob0
-        ,t.estimate_principal_remaining_mob1
-        ,t.dpd_days_mob1
-        ,t.dpd_days_ever_mob1
-        ,t.estimate_principal_remaining_mob2
-        ,t.dpd_days_mob2
-        ,t.dpd_days_ever_mob2
-        ,t.estimate_principal_remaining_mob3
-        ,t.dpd_days_mob3
-        ,t.dpd_days_ever_mob3
-        ,t.estimate_principal_remaining_mob4
-        ,t.dpd_days_mob4
-        ,t.dpd_days_ever_mob4
+        -- MOB 标签
+        ,m.y_mob1_5plus, m.y_mob1_30plus, m.y_mob1_ever_5plus, m.y_mob1_ever_30plus
+        ,m.y_mob2_5plus, m.y_mob2_30plus, m.y_mob2_ever_5plus, m.y_mob2_ever_30plus
+        ,m.y_mob3_5plus, m.y_mob3_30plus, m.y_mob3_ever_5plus, m.y_mob3_ever_30plus
+        -- MOB 金额指标
+        ,t.estimate_principal_remaining_mob0, t.dpd_days_mob0, t.dpd_days_ever_mob0
+        ,t.estimate_principal_remaining_mob1, t.dpd_days_mob1, t.dpd_days_ever_mob1
+        ,t.estimate_principal_remaining_mob2, t.dpd_days_mob2, t.dpd_days_ever_mob2
+        ,t.estimate_principal_remaining_mob3, t.dpd_days_mob3, t.dpd_days_ever_mob3
+        ,t.estimate_principal_remaining_mob4, t.dpd_days_mob4, t.dpd_days_ever_mob4
         ,ml.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
-    FROM base b
+    FROM obs_labels b
     LEFT JOIN mob_label_wide m
       ON b.loan_no = m.loan_no
-    LEFT JOIN mob_track_wide t
+    LEFT JOIN mob_amount_wide t
       ON b.loan_no = t.loan_no
     LEFT JOIN model_log ml
       ON b.loan_no = ml.loan_no
 )
 SELECT
-     loan_no
-    ,user_id
-    ,application_id
-    ,app_id
-    ,listing_id
-    ,apply_status
-    ,apply_status_desc
-    ,is_disburse_success
-    ,is_reject
-    ,is_expired
-    ,is_disburse_failed
-    ,apply_time
-    ,apply_date
-    ,apply_month
-    ,disburse_time
-    ,apply_seq
-    ,application_rank
-    ,strategy_time
-    ,retry_count
-    ,credit_time AS last_limit_time
-    ,credit_flow_id AS last_limit_flow_id
-    ,real_amount
-    ,apply_amount
-    ,interest
-    ,service_fee
-    ,term_quantity
-    ,term_unit
-    ,total_period
-    ,bid_time
-    ,bid_status
-    ,full_bid_time
-    ,fail_bid_time
-    ,is_deal
-    ,withdraw_time
-    ,list_due_date
-    ,init_due_date
-    ,user_actual_repay_time
-    ,debt_status
-    ,debt_status_desc
-    ,hist_overdue_days
-    ,current_overdue_days
-    ,principal
-    ,repay_amount
-    ,owing_amount
-    ,obs_dt
-    ,label_obs_dt
-    ,label_user_actual_repay_time
-    ,label_debt_status
-    ,label_current_overdue_days
-    ,label_hist_overdue_days
-    ,label_owing_amount
-    ,y_due_dpd
-    ,y_due_ever_dpd
-    ,y_due_ovd_cnt
-    ,y_due_ovd_amt
-    ,y_due_5plus_cnt
-    ,y_due_30plus_cnt
-    ,y_due_ever_ovd_cnt
-    ,y_due_ever_ovd_amt
-    ,y_due_ever_5plus_cnt
-    ,y_due_ever_30plus_cnt
-    ,y_fpd3_obs_cnt
-    ,y_fpd3_ovd_cnt
-    ,y_fpd7_obs_cnt
-    ,y_fpd7_ovd_cnt
-    ,y_fpd14_obs_cnt
-    ,y_fpd14_ovd_cnt
-    ,y_fpd15_obs_cnt
-    ,y_fpd15_ovd_cnt
-    ,y_fpd30_obs_cnt
-    ,y_fpd30_ovd_cnt
-    ,loan_term_contract_days
-    ,loan_term_actual_days
-    ,is_early_settlement
-    ,y_obs_ovd_cnt
-    ,y_obs_ovd_amt
-    ,y_obs_ever_ovd_cnt
-    ,y_obs_ever_ovd_amt
-    ,disburse_month
-    ,disburse_quarter
-    ,days_on_book
-    ,user_type
+    -- 申请 / 放款
+     loan_no, user_id, application_id, app_id, listing_id
+    ,apply_status, apply_status_desc, is_disburse_success, is_reject, is_expired, is_disburse_failed
+    ,apply_time, apply_date, apply_month, disburse_time, apply_seq, application_rank
+    ,strategy_time, retry_count
+    ,credit_time AS last_limit_time, credit_flow_id AS last_limit_flow_id
+    ,real_amount, apply_amount, interest, service_fee, term_quantity, term_unit, total_period
+    ,bid_time, bid_status, full_bid_time, fail_bid_time, is_deal, withdraw_time, list_due_date
+    ,init_due_date, user_actual_repay_time, debt_status, debt_status_desc
+    ,hist_overdue_days, current_overdue_days
+    ,principal, repay_amount, owing_amount, obs_dt
+    -- FPD 标签
+    ,y_fpd1_obs, y_fpd1_ovd, y_fpd3_obs, y_fpd3_ovd
+    ,y_fpd7_obs, y_fpd7_ovd, y_fpd15_obs, y_fpd15_ovd
+    ,y_fpd30_obs, y_fpd30_ovd
+    -- 时间 / 新老客
+    ,loan_term_contract_days, loan_term_actual_days, is_early_settlement
+    ,disburse_month, disburse_quarter, disburse_week, days_on_book, user_type
     ,first_disburse_time
-    ,y_mob1_obs_cnt
-    ,y_mob1_obs_amt
-    ,y_mob1_5plus_cnt
-    ,y_mob1_5plus_amt
-    ,y_mob1_ever_5plus_cnt
-    ,y_mob1_ever_5plus_amt
-    ,y_mob1_30plus_cnt
-    ,y_mob1_30plus_amt
-    ,y_mob1_ever_30plus_cnt
-    ,y_mob1_ever_30plus_amt
-    ,y_mob2_obs_cnt
-    ,y_mob2_obs_amt
-    ,y_mob2_5plus_cnt
-    ,y_mob2_5plus_amt
-    ,y_mob2_ever_5plus_cnt
-    ,y_mob2_ever_5plus_amt
-    ,y_mob2_30plus_cnt
-    ,y_mob2_30plus_amt
-    ,y_mob2_ever_30plus_cnt
-    ,y_mob2_ever_30plus_amt
-    ,y_mob3_obs_cnt
-    ,y_mob3_obs_amt
-    ,y_mob3_5plus_cnt
-    ,y_mob3_5plus_amt
-    ,y_mob3_ever_5plus_cnt
-    ,y_mob3_ever_5plus_amt
-    ,y_mob3_30plus_cnt
-    ,y_mob3_30plus_amt
-    ,y_mob3_ever_30plus_cnt
-    ,y_mob3_ever_30plus_amt
-    ,estimate_principal_remaining_mob0
-    ,dpd_days_mob0
-    ,dpd_days_ever_mob0
-    ,estimate_principal_remaining_mob1
-    ,dpd_days_mob1
-    ,dpd_days_ever_mob1
-    ,estimate_principal_remaining_mob2
-    ,dpd_days_mob2
-    ,dpd_days_ever_mob2
-    ,estimate_principal_remaining_mob3
-    ,dpd_days_mob3
-    ,dpd_days_ever_mob3
-    ,estimate_principal_remaining_mob4
-    ,dpd_days_mob4
-    ,dpd_days_ever_mob4
+    -- MOB 标签
+    ,y_mob1_obs, y_mob1_5plus, y_mob1_30plus, y_mob1_ever_5plus, y_mob1_ever_30plus
+    ,y_mob2_obs, y_mob2_5plus, y_mob2_30plus, y_mob2_ever_5plus, y_mob2_ever_30plus
+    ,y_mob3_obs, y_mob3_5plus, y_mob3_30plus, y_mob3_ever_5plus, y_mob3_ever_30plus
+    -- MOB 金额指标
+    ,estimate_principal_remaining_mob0, dpd_days_mob0, dpd_days_ever_mob0
+    ,estimate_principal_remaining_mob1, dpd_days_mob1, dpd_days_ever_mob1
+    ,estimate_principal_remaining_mob2, dpd_days_mob2, dpd_days_ever_mob2
+    ,estimate_principal_remaining_mob3, dpd_days_mob3, dpd_days_ever_mob3
+    ,estimate_principal_remaining_mob4, dpd_days_mob4, dpd_days_ever_mob4
+    -- 模型分
     ,aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
 FROM labeled
 ;

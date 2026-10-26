@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WageGo Vintage 监控看板</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --c1: #2a78d6;
+    --c2: #eb6834;
+    --ring: rgba(11,11,11,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --c1: #3987e5;
+      --c2: #d95926;
+      --ring: rgba(255,255,255,0.10);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 36px 20px 52px;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1120px; margin: 0 auto; }
+  .hero {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    gap: 24px; margin-bottom: 4px;
+  }
+  .eyebrow {
+    margin: 0 0 5px; color: var(--muted); font-size: 10.5px;
+    letter-spacing: .10em; text-transform: uppercase;
+  }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 5px; }
+  .sub { color: var(--ink-2); margin: 0; font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+  .chip {
+    border: 1px solid var(--ring); background: var(--surface);
+    border-radius: 999px; padding: 5px 10px; font-size: 11.5px; color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .kpis {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin: 20px 0 14px;
+  }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--ring);
+    border-radius: 12px; padding: 13px 15px;
+  }
+  .kpi .label { display: block; color: var(--muted); font-size: 11.5px; }
+  .kpi b {
+    display: block; font-size: 27px; line-height: 1.2;
+    margin: 4px 0 1px; font-variant-numeric: tabular-nums;
+  }
+  .kpi b.split { font-size: 21px; }
+  .kpi .sub { display: block; color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
+  .card {
+    background: var(--surface); border: 1px solid var(--ring);
+    border-radius: 12px; padding: 16px 18px 11px; margin: 13px 0;
+  }
+  .card h2 { font-size: 17px; margin: 0 0 1px; }
+  .desc { color: var(--ink-2); font-size: 12.5px; margin: 0 0 6px; }
+  .chart-wrap { position: relative; margin: 3px 0 2px; }
+  .chart-wrap svg { display: block; width: 100%; height: auto; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    font-size: 12px; color: var(--ink-2); margin: 4px 0 0 2px;
+  }
+  .legend i {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    margin-right: 6px; vertical-align: -1px;
+  }
+  .legend i.dash {
+    width: 16px; height: 0; border-radius: 0; border-top: 2px dashed var(--muted);
+    vertical-align: 3px;
+  }
+  .tip {
+    position: absolute; z-index: 2; pointer-events: none; display: none;
+    transform: translate(-50%, -115%);
+    background: var(--surface); border: 1px solid var(--ring);
+    border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    padding: 7px 10px; font-size: 12px; line-height: 1.5;
+    white-space: normal; max-width: 290px; color: var(--ink);
+  }
+  .tip b { font-variant-numeric: tabular-nums; }
+  .tip span { color: var(--ink-2); }
+  .tip i {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 5px; vertical-align: -1px;
+  }
+  .tip.down { transform: translate(-50%, 12px); }
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td { text-align: right; padding: 7px 9px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; font-size: 11.5px; }
+  tbody tr:last-child td { border-bottom: none; }
+  table.compact { font-size: 12.5px; }
+  table.compact th, table.compact td { padding: 6px 7px; }
+  td.dim { color: var(--muted); }
+  td.soft { color: var(--ink-2); }
+  td.range { color: var(--ink-2); font-size: 11.5px; white-space: nowrap; }
+  td .n { display: block; color: var(--muted); font-size: 10.5px; line-height: 1.3; }
+  sup { font-size: 9px; color: var(--c2); margin-left: 1px; }
+  .subhead {
+    color: var(--muted); font-size: 11.5px; font-weight: 600;
+    margin: 10px 1px 3px;
+  }
+  .note {
+    color: var(--muted); font-size: 12px; line-height: 1.65;
+    margin: 8px 2px 4px;
+  }
+  .split {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 18px; align-items: start;
+  }
+  .split > div { min-width: 0; }
+  .rank-split { grid-template-columns: 1.05fr .95fr; }
+  .quality {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 12px; margin-top: 8px;
+  }
+  .quality > div {
+    border: 1px solid var(--grid); border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .quality .q-label { display: block; color: var(--muted); font-size: 11.5px; }
+  .quality b {
+    display: block; font-size: 20px; line-height: 1.3;
+    margin: 3px 0 2px; font-variant-numeric: tabular-nums;
+  }
+  .quality span:last-child { display: block; color: var(--ink-2); font-size: 11.5px; line-height: 1.5; }
+  .foot { margin-top: 18px; }
+  ul.notes { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 12px; }
+  ul.notes li { margin: 4px 0; }
+  @media (max-width: 900px) {
+    .hero { flex-direction: column; align-items: flex-start; }
+    .chips { justify-content: flex-start; }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .split { grid-template-columns: 1fr; }
+    .quality { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    h1 { font-size: 24px; }
+    .kpis { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header class="hero">
+  <div class="hero-copy">
+    <p class="eyebrow">WAGEGO · RISK MONITORING</p>
+    <h1>Vintage 监控看板</h1>
+    <p class="sub">按放款周看首期逾期率（FPD），并用模型分五分位和复借期数拆分。</p>
+  </div>
+  <div class="chips"><span class="chip">放款周 2026-08-24 ~ 2026-10-19</span><span class="chip">FPD15 最新可用周 2026-09-28（74% 成熟）</span><span class="chip">分数覆盖 99.99%</span></div>
+</header>
+
+
+<section class="kpis">
+  <div class="kpi">
+    <span class="label">整体 FPD15</span>
+    <b>8.31%</b>
+    <span class="sub">n=11,842 · 金额 7.39%</span>
+  </div>
+  <div class="kpi">
+    <span class="label">最新可用周</span>
+    <b>7.08%</b>
+    <span class="sub">2026-09-28 · 74% 成熟 · 较前周 −1.20pp</span>
+  </div>
+  <div class="kpi">
+    <span class="label">新客 / 老客 FPD15</span>
+    <b class="split">10.36% / 5.39%</b>
+    <span class="sub">gap +4.97pp · n=6,959 / 4,883</span>
+  </div>
+  <div class="kpi">
+    <span class="label">模型 Q5 / Q1</span>
+    <b>3.10x</b>
+    <span class="sub">Q5 13.72% · Q1 4.43% · 覆盖 99.99%</span>
+  </div>
+</section>
+
+
+<section class="card">
+  <h2>整体与分客群：FPD 曲线</h2>
+  <p class="desc">横轴为观察窗口，纵轴为笔数坏率；FPD30 为空心点。</p>
+  <div class="chart-wrap">
+    <svg id="fpdCurve" viewBox="0 0 1040 300" role="img" aria-label="整体、新客、老客在各 FPD 窗口的坏率"></svg>
+    <div class="tip" id="fpdTip"></div>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--ink-2)"></i>整体</span>
+    <span><i style="background:var(--c1)"></i>新客</span>
+    <span><i style="background:var(--c2)"></i>老客</span>
+  </div>
+  
+<div class="table-wrap">
+<table>
+  <thead><tr><th>观察窗口</th><th>成熟样本</th><th>坏样本</th><th>坏率（笔数）</th><th>坏率（金额）</th><th>较上一窗口</th></tr></thead>
+  <tbody><tr><td>FPD3</td><td class='num'>23,347</td><td class='num'>3,186</td><td class='num'>13.65%</td><td class='num'>12.16%</td><td class='num'>—</td></tr><tr><td>FPD7</td><td class='num'>17,435</td><td class='num'>1,948</td><td class='num'>11.17%</td><td class='num'>9.86%</td><td class='num'>−2.47pp</td></tr><tr><td>FPD14</td><td class='num'>11,849</td><td class='num'>1,052</td><td class='num'>8.88%</td><td class='num'>7.94%</td><td class='num'>−2.29pp</td></tr><tr><td>FPD15</td><td class='num'>11,842</td><td class='num'>984</td><td class='num'>8.31%</td><td class='num'>7.39%</td><td class='num'>−0.57pp</td></tr><tr><td>FPD30</td><td class='num'>4,341</td><td class='num'>300</td><td class='num'>6.91%</td><td class='num'>6.16%</td><td class='num'>−1.40pp</td></tr></tbody>
+</table>
+</div>
+
+  <p class="note">FPD15 整体 8.31%，新客 10.36% / 老客 5.39%。FPD30 为空心点：整体成熟样本仅为 FPD15 的 37%（新 42% / 老 29%），只作参考；共同 cohort 上 FPD15 9.33% → FPD30 6.91%。</p>
+</section>
+
+
+<section class="card">
+  <h2>按放款周：FPD15 与早期信号</h2>
+  <p class="desc">FPD15 是确认指标，FPD3 是早期信号；空心点表示成熟度不足或周未完整。</p>
+  <div class="chart-wrap">
+    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15 与 FPD3 坏率"></svg>
+    <div class="tip" id="weekTip"></div>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--c1)"></i>FPD15</span>
+    <span><i class="dash"></i>FPD3 早期信号</span>
+  </div>
+  
+<div class="table-wrap">
+<table>
+  <thead><tr><th>放款周</th><th>FPD15 成熟样本</th><th>FPD15 成熟度</th><th>FPD3</th><th>FPD7</th><th>FPD14</th><th>FPD15</th><th>FPD30</th></tr></thead>
+  <tbody><tr><td>2026-08-24</td><td class='num'>95</td><td class='num'>100%</td><td class="num">13.68%</td><td class="num">11.58%</td><td class="num">9.47%</td><td class="num">9.47%</td><td class="num">5.26%</td></tr><tr><td>2026-08-31</td><td class='num'>694</td><td class='num'>100%</td><td class="num">16.71%</td><td class="num">13.83%</td><td class="num">11.24%</td><td class="num">11.10%</td><td class="num">9.21%</td></tr><tr><td>2026-09-07</td><td class='num'>1,497</td><td class='num'>100%</td><td class="num">14.52%</td><td class="num">12.06%</td><td class="num">9.08%</td><td class="num">8.68%</td><td class="num">6.64%</td></tr><tr><td>2026-09-14</td><td class='num'>2,178</td><td class='num'>96%</td><td class="num">14.52%</td><td class="num">11.88%</td><td class="num">9.14%</td><td class="num">8.31%</td><td class="num soft" title="成熟度 75%，仅参考">6.50%<sup>*</sup></td></tr><tr><td>2026-09-21</td><td class='num'>3,211</td><td class='num'>96%</td><td class="num">14.22%</td><td class="num">11.82%</td><td class="num">9.00%</td><td class="num">8.28%</td><td class="num dim" title="成熟度 10%，低于 70%，不展示">—</td></tr><tr><td>2026-09-28</td><td class='num'>3,462</td><td class='num soft'>74%</td><td class="num">13.34%</td><td class="num">10.35%</td><td class="num soft" title="成熟度 74%，仅参考">7.57%<sup>*</sup></td><td class="num soft" title="成熟度 74%，仅参考">7.08%<sup>*</sup></td><td class="num dim">—</td></tr><tr><td>2026-10-05</td><td class='num'>669</td><td class='num dim'>12%</td><td class="num">12.37%</td><td class="num soft" title="成熟度 74%，仅参考">10.19%<sup>*</sup></td><td class="num dim" title="成熟度 12%，低于 70%，不展示">—</td><td class="num dim" title="成熟度 12%，低于 70%，不展示">—</td><td class="num dim">—</td></tr><tr><td>2026-10-12</td><td class='num'>—</td><td class='num'>—</td><td class="num">13.70%</td><td class="num dim" title="成熟度 15%，低于 70%，不展示">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr><tr><td>2026-10-19</td><td class='num'>—</td><td class='num'>—</td><td class="num soft" title="放款周未完整；FPD3 样本 583">14.41%<sup>†</sup></td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr></tbody>
+</table>
+</div>
+
+  <p class="note">成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示（FPD30 采用 90% 阈值）。≥90% 成熟的最后一周：FPD15 2026-09-21（8.28%）；2026-09-28 为 74% 成熟（7.08%*）。2026-10-05 的 FPD15 10.31%（12% 成熟）未纳入；2026-10-19 周 FPD3 14.41%†（FPD3 样本 583 vs 前周 4,570），仅参考。2026-07-20~2026-08-17 的 4 周样本仅 6–12 笔，已排除。</p>
+</section>
+
+
+<section class="card">
+  <h2>模型分五分位</h2>
+  <p class="desc">Q1 最低分 → Q5 最高分；整体、新客、老客的 FPD15 坏率。</p>
+  <div class="chart-wrap">
+    <svg id="scoreChart" viewBox="0 0 1040 300" role="img" aria-label="模型分五分位的整体、新客、老客 FPD15 坏率"></svg>
+    <div class="tip" id="scoreTip"></div>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--ink-2)"></i>整体</span>
+    <span><i style="background:var(--c1)"></i>新客</span>
+    <span><i style="background:var(--c2)"></i>老客</span>
+  </div>
+  <div class="split">
+    
+<div class="table-wrap">
+<div class="subhead">分档汇总</div>
+<table class="compact">
+  <thead><tr><th>分档</th><th>分数区间</th><th>整体</th><th>新客</th><th>老客</th></tr></thead>
+  <tbody><tr><td>Q1</td><td class='range'>≤ 0.05856</td><td class='num'><b>4.43%</b><span class='n'>n=2,369</span></td><td class='num'><b>4.95%</b><span class='n'>n=1,394</span></td><td class='num'><b>3.69%</b><span class='n'>n=975</span></td></tr><tr><td>Q2</td><td class='range'>0.05857–0.07774</td><td class='num'><b>5.57%</b><span class='n'>n=2,368</span></td><td class='num'><b>7.68%</b><span class='n'>n=1,406</span></td><td class='num'><b>2.49%</b><span class='n'>n=962</span></td></tr><tr><td>Q3</td><td class='range'>0.07775–0.09825</td><td class='num'><b>8.78%</b><span class='n'>n=2,368</span></td><td class='num'><b>10.52%</b><span class='n'>n=1,398</span></td><td class='num'><b>6.29%</b><span class='n'>n=970</span></td></tr><tr><td>Q4</td><td class='range'>0.09825–0.12331</td><td class='num'><b>9.04%</b><span class='n'>n=2,368</span></td><td class='num'><b>11.79%</b><span class='n'>n=1,408</span></td><td class='num'><b>5.00%</b><span class='n'>n=960</span></td></tr><tr><td>Q5</td><td class='range'>> 0.12334</td><td class='num'><b>13.72%</b><span class='n'>n=2,368</span></td><td class='num'><b>17.09%</b><span class='n'>n=1,352</span></td><td class='num'><b>9.25%</b><span class='n'>n=1,016</span></td></tr></tbody>
+</table>
+</div>
+
+    
+<div class="table-wrap">
+<div class="subhead">分档 × 放款周（FPD15 坏率）</div>
+<table class="compact">
+  <thead><tr><th>分档</th><th>09-07</th><th>09-14</th><th>09-21</th><th>09-28</th><th>10-05</th></tr></thead>
+  <tbody><tr><td>Q1</td><td class="num">4.60%</td><td class="num">3.77%</td><td class="num">4.51%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">3.65%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 12%，仅参考">4.48%</td></tr><tr><td>Q2</td><td class="num">5.69%</td><td class="num">6.16%</td><td class="num">5.25%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">5.24%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 12%，仅参考">7.19%</td></tr><tr><td>Q3</td><td class="num">8.52%</td><td class="num">8.57%</td><td class="num">9.10%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">7.13%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 12%，仅参考">10.74%</td></tr><tr><td>Q4</td><td class="num">9.60%</td><td class="num">9.38%</td><td class="num">8.57%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">7.77%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 12%，仅参考">13.85%</td></tr><tr><td>Q5</td><td class="num">14.24%</td><td class="num">13.52%</td><td class="num">14.06%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">11.82%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 12%，仅参考">15.17%</td></tr></tbody>
+</table>
+</div>
+
+  </div>
+  <p class="note">Q1 最低分，Q5 最高分。整体 Q5/Q1 = 3.10x，新客 3.45x，老客 2.51x。整体与新客基本单调；老客 Q2/Q4 低于前一档，排序弱于新客。覆盖 99.99%（11,841/11,842），缺分 1。分档×周表从 09-07 起，更早周每档样本不足，未纳入；09-28 标 *（70–90% 成熟）；10-05（12% 成熟） 灰显，仅参考。Q1 分数下限 -1.0，疑似缺分哨兵；分档按原查询结果展示，未单独剔除。</p>
+</section>
+
+
+<section class="card">
+  <h2>复借期数</h2>
+  <p class="desc">首借风险最高，复借 4 次以上最低。</p>
+  <div class="split rank-split">
+    <div class="chart-wrap">
+      <svg id="rankChart" viewBox="0 0 520 300" role="img" aria-label="首借与复借期数的 FPD15 坏率"></svg>
+      <div class="tip" id="rankTip"></div>
+    </div>
+    <div>
+<div class="table-wrap">
+<table class="compact">
+  <thead><tr><th>复借期数</th><th>客群</th><th>样本</th><th>坏样本</th><th>FPD15 坏率</th></tr></thead>
+  <tbody><tr><td>1st</td><td>New</td><td class='num'>6,959</td><td class='num'>721</td><td class='num'>10.36%</td></tr><tr><td>2nd</td><td>Old</td><td class='num'>2,742</td><td class='num'>166</td><td class='num'>6.05%</td></tr><tr><td>3rd</td><td>Old</td><td class='num'>1,163</td><td class='num'>66</td><td class='num'>5.67%</td></tr><tr><td>4th+</td><td>Old</td><td class='num'>978</td><td class='num'>31</td><td class='num'>3.17%</td></tr></tbody>
+</table>
+</div>
+</div>
+  </div>
+  <p class="note">首借 = New；2nd 起为 Old；4th+ 含 4 次及以上。老客中 2nd 最高（6.05%），4th+ 最低（3.17%）；复借越多坏率越低。</p>
+</section>
+
+
+<section class="card">
+  <h2>数据质量与口径</h2>
+  <div class="quality">
+    <div>
+      <span class="q-label">FPD15 → FPD30（共同 cohort）</span>
+      <b>74.07%</b>
+      <span>4,341 笔；FPD15 9.33% → FPD30 6.91%，
+      25.93% 在 due+30 前还清。</span>
+    </div>
+    <div>
+      <span class="q-label">模型分覆盖</span>
+      <b>99.99%</b>
+      <span>11,841 / 11,842 有分，缺分 1。Q1 下限 -1.0，疑似缺分哨兵。</span>
+    </div>
+    <div>
+      <span class="q-label">周样本</span>
+      <b>9 周</b>
+      <span>2026-08-24 ~ 2026-10-19；2026-07-20~2026-08-17 的 4 周样本 6–12 笔，已排除；2026-10-19 周未完整
+      （FPD3 583 vs 前周 4,570）。</span>
+    </div>
+  </div>
+</section>
+
+
+<footer class="foot">
+  <ul class="notes">
+    <li>FPD-X：首期应还日 due + X 天前未还清首期；成熟样本为 is_deal = 1 且 due + X &lt; obs_dt。FPD14 由 stg_debt_snp 首期实还日补算。</li>
+    <li>成熟度：该窗口成熟样本 / 当周 FPD3 样本；星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示；FPD30 采用 90% 阈值。</li>
+    <li>新老客：user_type 按首笔放款；复借期数 application_rank，1st = 首借，2nd 起为 Old，4th+ 含 4 次及以上。</li>
+    <li>模型分：FPD15 成熟样本内 pooled 五分位，Q1 最低分、Q5 最高分；分数越高越坏。</li>
+    <li>数据源：vintage_data.zip（8 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：2026-10-26 18:21 China Standard Time。</li>
+  </ul>
+</footer>
+
+</main>
+<script>
+const DATA = {"fpdCurve": {"labels": ["FPD3", "FPD7", "FPD14", "FPD15", "FPD30"], "series": [{"name": "整体", "key": "ALL", "color": "var(--ink-2)", "points": [{"rate": 13.65, "obs": 23347, "bad": 3186, "partial": false, "maturity": null}, {"rate": 11.17, "obs": 17435, "bad": 1948, "partial": false, "maturity": null}, {"rate": 8.88, "obs": 11849, "bad": 1052, "partial": false, "maturity": null}, {"rate": 8.31, "obs": 11842, "bad": 984, "partial": false, "maturity": null}, {"rate": 6.91, "obs": 4341, "bad": 300, "partial": true, "maturity": 0.36657659179192703}]}, {"name": "新客", "key": "New", "color": "var(--c1)", "points": [{"rate": 16.56, "obs": 11886, "bad": 1968, "partial": false, "maturity": null}, {"rate": 13.93, "obs": 9626, "bad": 1341, "partial": false, "maturity": null}, {"rate": 11.03, "obs": 6964, "bad": 768, "partial": false, "maturity": null}, {"rate": 10.36, "obs": 6959, "bad": 721, "partial": false, "maturity": null}, {"rate": 8.13, "obs": 2914, "bad": 237, "partial": true, "maturity": 0.4187383244719069}]}, {"name": "老客", "key": "Old", "color": "var(--c2)", "points": [{"rate": 10.63, "obs": 11461, "bad": 1218, "partial": false, "maturity": null}, {"rate": 7.77, "obs": 7809, "bad": 607, "partial": false, "maturity": null}, {"rate": 5.81, "obs": 4885, "bad": 284, "partial": false, "maturity": null}, {"rate": 5.39, "obs": 4883, "bad": 263, "partial": false, "maturity": null}, {"rate": 4.41, "obs": 1427, "bad": 63, "partial": true, "maturity": 0.292238378046283}]}]}, "weekChart": {"labels": ["08-24", "08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12", "10-19"], "weeks": ["2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19"], "fpd3": [{"rate": 13.68, "obs": 95, "partial": false}, {"rate": 16.71, "obs": 694, "partial": false}, {"rate": 14.52, "obs": 1501, "partial": false}, {"rate": 14.52, "obs": 2266, "partial": false}, {"rate": 14.22, "obs": 3355, "partial": false}, {"rate": 13.34, "obs": 4686, "partial": false}, {"rate": 12.37, "obs": 5561, "partial": false}, {"rate": 13.7, "obs": 4570, "partial": false}, {"rate": 14.41, "obs": 583, "partial": true}], "fpd15": [{"rate": 9.47, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 11.1, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 8.68, "obs": 1497, "maturity": 0.9973351099267155, "partial": false}, {"rate": 8.31, "obs": 2178, "maturity": 0.9611650485436893, "partial": false}, {"rate": 8.28, "obs": 3211, "maturity": 0.9570789865871833, "partial": false}, {"rate": 7.08, "obs": 3462, "maturity": 0.7387964148527529, "partial": true}, null, null, null], "fpd15Low": [null, null, null, null, null, null, {"rate": 10.31, "obs": 669, "maturity": 0.12030210393814063}, null, null]}, "scoreChart": {"labels": ["Q1", "Q2", "Q3", "Q4", "Q5"], "series": [{"name": "整体", "key": "ALL", "color": "var(--ink-2)", "points": [{"q": 1, "min": -1.0, "max": 0.058563127290855124, "avg": 0.04, "obs": 2369, "bad": 105, "rate": 4.43}, {"q": 2, "min": 0.05856719071017084, "max": 0.07774369760833091, "avg": 0.0682, "obs": 2368, "bad": 132, "rate": 5.57}, {"q": 3, "min": 0.07774639760596491, "max": 0.09824563356474499, "avg": 0.088, "obs": 2368, "bad": 208, "rate": 8.78}, {"q": 4, "min": 0.09825347079196851, "max": 0.12331265945997924, "avg": 0.1103, "obs": 2368, "bad": 214, "rate": 9.04}, {"q": 5, "min": 0.12333744682667008, "max": 0.5372854233620126, "avg": 0.1722, "obs": 2368, "bad": 325, "rate": 13.72}]}, {"name": "新客", "key": "New", "color": "var(--c1)", "points": [{"q": 1, "min": -1.0, "max": 0.058563127290855124, "avg": 0.0414, "obs": 1394, "bad": 69, "rate": 4.95}, {"q": 2, "min": 0.05857091083362625, "max": 0.0777335591499308, "avg": 0.0682, "obs": 1406, "bad": 108, "rate": 7.68}, {"q": 3, "min": 0.07774639760596491, "max": 0.09824563356474499, "avg": 0.088, "obs": 1398, "bad": 147, "rate": 10.52}, {"q": 4, "min": 0.09825347079196851, "max": 0.12331265945997924, "avg": 0.1103, "obs": 1408, "bad": 166, "rate": 11.79}, {"q": 5, "min": 0.12335924517169472, "max": 0.5372854233620126, "avg": 0.1757, "obs": 1352, "bad": 231, "rate": 17.09}]}, {"name": "老客", "key": "Old", "color": "var(--c2)", "points": [{"q": 1, "min": -1.0, "max": 0.05855869168084995, "avg": 0.0381, "obs": 975, "bad": 36, "rate": 3.69}, {"q": 2, "min": 0.05856719071017084, "max": 0.07774369760833091, "avg": 0.0681, "obs": 962, "bad": 24, "rate": 2.49}, {"q": 3, "min": 0.0777542576689381, "max": 0.09821794854284607, "avg": 0.0881, "obs": 970, "bad": 61, "rate": 6.29}, {"q": 4, "min": 0.09825347079196851, "max": 0.12315525652239324, "avg": 0.1103, "obs": 960, "bad": 48, "rate": 5.0}, {"q": 5, "min": 0.12333744682667008, "max": 0.5372854233620126, "avg": 0.1676, "obs": 1016, "bad": 94, "rate": 9.25}]}]}, "rankChart": [{"label": "1st", "sub": "New", "rate": 10.36, "obs": 6959, "bad": 721}, {"label": "2nd", "sub": "Old", "rate": 6.05, "obs": 2742, "bad": 166}, {"label": "3rd", "sub": "Old", "rate": 5.67, "obs": 1163, "bad": 66}, {"label": "4th+", "sub": "Old", "rate": 3.17, "obs": 978, "bad": 31}]};
+const NS = 'http://www.w3.org/2000/svg';
+const fmtRate = v => (v == null ? '—' : v.toFixed(2) + '%');
+const fmtInt = n => (n == null ? '—' : n.toLocaleString('en-US'));
+
+function svgEl(svg, tag, attrs, text) {
+  const node = document.createElementNS(NS, tag);
+  for (const key in attrs) node.setAttribute(key, attrs[key]);
+  if (text != null) node.textContent = text;
+  svg.appendChild(node);
+  return node;
+}
+
+function clearSvg(svg) {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+}
+
+function makeLineChart(svgId, tipId, cfg) {
+  const svg = document.getElementById(svgId);
+  const tip = document.getElementById(tipId);
+  const { width, height, margin, labels, series, yMax, yTicks, xLabel } = cfg;
+  const innerW = width - margin.l - margin.r;
+  const innerH = height - margin.t - margin.b;
+  const n = labels.length;
+  const x = i => (n === 1 ? margin.l + innerW / 2 : margin.l + i / (n - 1) * innerW);
+  const y = v => margin.t + (1 - v / yMax) * innerH;
+  clearSvg(svg);
+
+  yTicks.forEach(v => {
+    svgEl(svg, 'line', {
+      x1: margin.l, x2: width - margin.r, y1: y(v), y2: y(v),
+      stroke: v === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1
+    });
+    svgEl(svg, 'text', {
+      x: margin.l - 8, y: y(v) + 1, 'text-anchor': 'end',
+      fill: 'var(--muted)', 'font-size': 11.5
+    }, v + '%');
+  });
+
+  labels.forEach((label, i) => {
+    svgEl(svg, 'text', {
+      x: x(i), y: height - margin.b + 18,
+      'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 11.5
+    }, label);
+  });
+  svgEl(svg, 'text', {
+    x: width - margin.r, y: height - 6, 'text-anchor': 'end',
+    fill: 'var(--muted)', 'font-size': 11.5
+  }, xLabel);
+
+  series.forEach(s => {
+    for (let i = 0; i < n - 1; i++) {
+      const a = s.points[i], b = s.points[i + 1];
+      if (!a || !b) continue;
+      const dashed = Boolean(s.dash || a.partial || b.partial);
+      svgEl(svg, 'path', {
+        d: `M${x(i)},${y(a.rate)} L${x(i + 1)},${y(b.rate)}`,
+        fill: 'none', stroke: s.color, 'stroke-width': s.width || 2,
+        'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+        'stroke-dasharray': dashed ? '5 4' : ''
+      });
+    }
+    s.points.forEach((p, i) => {
+      if (!p) return;
+      svgEl(svg, 'circle', {
+        cx: x(i), cy: y(p.rate), r: 4.5,
+        fill: p.partial ? 'var(--surface)' : s.color,
+        stroke: p.partial ? s.color : 'var(--surface)',
+        'stroke-width': 2
+      });
+    });
+  });
+
+  (cfg.directLabels || []).forEach(label => {
+    const s = series[label.series];
+    const p = s.points[label.index];
+    if (!p) return;
+    svgEl(svg, 'text', {
+      x: x(label.index) + (label.dx || 0),
+      y: y(p.rate) + (label.dy || 0),
+      'text-anchor': label.anchor || 'middle',
+      fill: 'var(--ink)', 'font-size': 11.5, 'font-weight': 600
+    }, label.text);
+  });
+
+  const cross = svgEl(svg, 'line', {
+    y1: margin.t, y2: margin.t + innerH, stroke: 'var(--axis)',
+    'stroke-width': 1, opacity: 0, 'pointer-events': 'none'
+  });
+  const dots = series.map(s => svgEl(svg, 'circle', {
+    r: 6, fill: s.color, stroke: 'var(--surface)', 'stroke-width': 2,
+    opacity: 0, 'pointer-events': 'none'
+  }));
+  const hit = svgEl(svg, 'rect', {
+    x: margin.l - 12, y: margin.t, width: innerW + 24, height: innerH,
+    fill: 'transparent'
+  });
+
+  hit.addEventListener('mousemove', event => {
+    const box = svg.getBoundingClientRect();
+    const sx = (event.clientX - box.left) / box.width * width;
+    let index = 0;
+    let best = Infinity;
+    for (let i = 0; i < n; i++) {
+      const distance = Math.abs(x(i) - sx);
+      if (distance < best) { best = distance; index = i; }
+    }
+    cross.setAttribute('x1', x(index));
+    cross.setAttribute('x2', x(index));
+    cross.setAttribute('opacity', 1);
+    series.forEach((s, seriesIndex) => {
+      const point = s.points[index];
+      if (point) {
+        dots[seriesIndex].setAttribute('cx', x(index));
+        dots[seriesIndex].setAttribute('cy', y(point.rate));
+        dots[seriesIndex].setAttribute('opacity', 1);
+      } else {
+        dots[seriesIndex].setAttribute('opacity', 0);
+      }
+    });
+    tip.innerHTML = cfg.tooltip(index);
+    const scale = box.width / width;
+    const topY = Math.min(...series.map(s => s.points[index] ? y(s.points[index].rate) : Infinity));
+    tip.classList.toggle('down', topY * scale < 110);
+    tip.style.left = Math.max(150, Math.min(box.width - 150, x(index) * scale)) + 'px';
+    tip.style.top = topY * scale + 'px';
+    tip.style.display = 'block';
+  });
+
+  hit.addEventListener('mouseleave', () => {
+    cross.setAttribute('opacity', 0);
+    dots.forEach(dot => dot.setAttribute('opacity', 0));
+    tip.style.display = 'none';
+  });
+}
+
+function makeBarChart(svgId, tipId, cfg) {
+  const svg = document.getElementById(svgId);
+  const tip = document.getElementById(tipId);
+  const { width, height, margin, data, yMax, yTicks, color, xLabel } = cfg;
+  const innerW = width - margin.l - margin.r;
+  const innerH = height - margin.t - margin.b;
+  const y = v => margin.t + (1 - v / yMax) * innerH;
+  const band = innerW / data.length;
+  const barW = Math.min(58, band * 0.52);
+  clearSvg(svg);
+
+  yTicks.forEach(v => {
+    svgEl(svg, 'line', {
+      x1: margin.l, x2: width - margin.r, y1: y(v), y2: y(v),
+      stroke: v === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1
+    });
+    svgEl(svg, 'text', {
+      x: margin.l - 8, y: y(v) + 1, 'text-anchor': 'end',
+      fill: 'var(--muted)', 'font-size': 11.5
+    }, v + '%');
+  });
+
+  data.forEach((item, index) => {
+    const cx = margin.l + band * (index + 0.5);
+    const x0 = cx - barW / 2;
+    const y0 = y(0);
+    const yTop = y(item.rate);
+    const r = 4;
+    const path = `M${x0},${y0} L${x0},${yTop + r} Q${x0},${yTop} ${x0 + r},${yTop} L${x0 + barW - r},${yTop} Q${x0 + barW},${yTop} ${x0 + barW},${yTop + r} L${x0 + barW},${y0} Z`;
+    const bar = svgEl(svg, 'path', { d: path, fill: color });
+    svgEl(svg, 'text', {
+      x: cx, y: yTop - 8, 'text-anchor': 'middle',
+      fill: 'var(--ink)', 'font-size': 12, 'font-weight': 600
+    }, fmtRate(item.rate));
+    svgEl(svg, 'text', {
+      x: cx, y: height - margin.b + 18, 'text-anchor': 'middle',
+      fill: 'var(--ink-2)', 'font-size': 11.5
+    }, item.label);
+    svgEl(svg, 'text', {
+      x: cx, y: height - margin.b + 31, 'text-anchor': 'middle',
+      fill: 'var(--muted)', 'font-size': 10.5
+    }, item.sub);
+    svgEl(svg, 'text', {
+      x: cx, y: height - margin.b + 44, 'text-anchor': 'middle',
+      fill: 'var(--muted)', 'font-size': 10.5
+    }, `n=${fmtInt(item.obs)}`);
+
+    const hit = svgEl(svg, 'rect', {
+      x: margin.l + band * index, y: margin.t, width: band, height: innerH,
+      fill: 'transparent'
+    });
+    hit.addEventListener('mousemove', event => {
+      const box = svg.getBoundingClientRect();
+      bar.setAttribute('opacity', 0.82);
+      tip.innerHTML = `<b>${item.label} · ${item.sub}</b><br><span>FPD15 <b>${fmtRate(item.rate)}</b> · n=${fmtInt(item.obs)} · 坏 ${fmtInt(item.bad)}</span>`;
+      tip.classList.toggle('down', yTop * (box.height / height) < 90);
+      tip.style.left = Math.max(100, Math.min(box.width - 100, cx * (box.width / width))) + 'px';
+      tip.style.top = yTop * (box.height / height) + 'px';
+      tip.style.display = 'block';
+    });
+    hit.addEventListener('mouseleave', () => {
+      bar.setAttribute('opacity', 1);
+      tip.style.display = 'none';
+    });
+  });
+
+  svgEl(svg, 'text', {
+    x: width - margin.r, y: height - 6, 'text-anchor': 'end',
+    fill: 'var(--muted)', 'font-size': 11.5
+  }, xLabel);
+}
+
+const fpdSeries = DATA.fpdCurve.series;
+makeLineChart('fpdCurve', 'fpdTip', {
+  width: 1040, height: 300, margin: { t: 30, r: 130, b: 46, l: 48 },
+  labels: DATA.fpdCurve.labels,
+  series: fpdSeries,
+  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '观察窗口',
+  directLabels: fpdSeries.map((series, index) => ({
+    series: index, index: 3,
+    text: `${series.name} ${fmtRate(series.points[3].rate)}`,
+    dx: 0, dy: index === 1 ? -12 : 18, anchor: 'middle'
+  })),
+  tooltip: index => {
+    const rows = fpdSeries.map(series => {
+      const point = series.points[index];
+      return `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b> · n=${fmtInt(point.obs)}</span>`;
+    }).join('<br>');
+    const age = index === 4
+      ? `<br><span>30 天成熟：整体 ${Math.round(fpdSeries[0].points[4].maturity * 100)}% · 新 ${Math.round(fpdSeries[1].points[4].maturity * 100)}% · 老 ${Math.round(fpdSeries[2].points[4].maturity * 100)}%</span>`
+      : '';
+    return `<b>${DATA.fpdCurve.labels[index]}</b><br>${rows}${age}`;
+  }
+});
+
+const weekSeries = [
+  { name: 'FPD3', key: 'fpd3', color: 'var(--muted)', points: DATA.weekChart.fpd3, dash: '5 4', width: 1.8 },
+  { name: 'FPD15', key: 'fpd15', color: 'var(--c1)', points: DATA.weekChart.fpd15, width: 2 }
+];
+const lastPointIndex = points => {
+  for (let i = points.length - 1; i >= 0; i--) if (points[i]) return i;
+  return -1;
+};
+const last15 = lastPointIndex(DATA.weekChart.fpd15);
+const last3 = lastPointIndex(DATA.weekChart.fpd3);
+makeLineChart('weekChart', 'weekTip', {
+  width: 1040, height: 300, margin: { t: 30, r: 100, b: 46, l: 48 },
+  labels: DATA.weekChart.labels,
+  series: weekSeries,
+  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）',
+  directLabels: [
+    {
+      series: 1, index: last15,
+      text: `FPD15 ${fmtRate(DATA.weekChart.fpd15[last15].rate)}${DATA.weekChart.fpd15[last15].partial ? '*' : ''}`,
+      dx: 8, dy: -10, anchor: 'start'
+    },
+    {
+      series: 0, index: last3,
+      text: `FPD3 ${fmtRate(DATA.weekChart.fpd3[last3].rate)}${DATA.weekChart.fpd3[last3].partial ? '†' : ''}`,
+      dx: -8, dy: -10, anchor: 'end'
+    }
+  ],
+  tooltip: index => {
+    const parts = [`<b>${DATA.weekChart.weeks[index]}</b>`];
+    const fpd3 = DATA.weekChart.fpd3[index];
+    const fpd15 = DATA.weekChart.fpd15[index];
+    if (fpd3) parts.push(`<span><i style="background:var(--muted)"></i>FPD3 <b>${fmtRate(fpd3.rate)}</b> · n=${fmtInt(fpd3.obs)}${fpd3.partial ? ' · 周未完整' : ''}</span>`);
+    if (fpd15) parts.push(`<span><i style="background:var(--c1)"></i>FPD15 <b>${fmtRate(fpd15.rate)}</b> · n=${fmtInt(fpd15.obs)} · ${Math.round(fpd15.maturity * 100)}% 成熟${fpd15.partial ? '*' : ''}</span>`);
+    else {
+      const low = DATA.weekChart.fpd15Low[index];
+      parts.push(low
+        ? `<span><i style="background:var(--muted)"></i>FPD15 <b>${fmtRate(low.rate)}</b> · n=${fmtInt(low.obs)} · ${Math.round(low.maturity * 100)}% 成熟（低于 70%，未入图）</span>`
+        : '<span>FPD15 尚未达到 70% 成熟</span>');
+    }
+    return parts.join('<br>');
+  }
+});
+
+const scoreSeries = DATA.scoreChart.series;
+makeLineChart('scoreChart', 'scoreTip', {
+  width: 1040, height: 300, margin: { t: 30, r: 135, b: 46, l: 48 },
+  labels: DATA.scoreChart.labels,
+  series: scoreSeries,
+  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '模型分五分位（低 → 高）',
+  directLabels: scoreSeries.map((series, index) => ({
+    series: index, index: 4,
+    text: `${series.name} ${fmtRate(series.points[4].rate)}`,
+    dx: 8, dy: -10, anchor: 'start'
+  })),
+  tooltip: index => {
+    const base = scoreSeries[0].points[index];
+    const rows = scoreSeries.map(series => {
+      const point = series.points[index];
+      return `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b> · n=${fmtInt(point.obs)}</span>`;
+    }).join('<br>');
+    return `<b>${DATA.scoreChart.labels[index]} · ${base.min.toFixed(4)} ~ ${base.max.toFixed(4)}</b><br>${rows}`;
+  }
+});
+
+makeBarChart('rankChart', 'rankTip', {
+  width: 520, height: 300, margin: { t: 30, r: 24, b: 64, l: 42 },
+  data: DATA.rankChart,
+  yMax: 12, yTicks: [0, 3, 6, 9, 12],
+  color: 'var(--c1)', xLabel: '复借期数'
+});
+</script>
+</body>
+</html>
