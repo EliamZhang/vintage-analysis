@@ -22,7 +22,7 @@ WageGo Vintage 数据同步 SQL
 - 1~3 段需按顺序执行：第 2 段使用第 1 段建的观察日参数表，第 3 段使用第 2 段的宽表。
 - 4~9 段只读取第 3 段建的主表，样本之间互不依赖；样本时间窗为 2026-08-01 至 2026-10-23，
   与表名后缀 _20260801_20261023 一致。戳额样本按戳额时间筛选，发标类样本按申请时间筛选。
-- 4~9 段每个样本表末尾附带笔数口径的 y 标签（*_cnt），取自主表同名字段；新老客标签 user_type 同样取自主表。
+- 4~9 段每个样本表末尾附带 13 个核心 y 标签，取自主表同名字段；新老客标签 user_type 同样取自主表。
 - 源脚本开头的 SET spark.sql.session.timeZone = Australia/Sydney 由执行环境负责；
   请保持同一时区执行，避免 TO_DATE / DATE_FORMAT 在跨时区会话下产生日期偏移。
 ===============================================================================
@@ -291,15 +291,6 @@ latest AS (
         ,s.repay_amount
         ,s.owing_amount
         ,p.obs_dt
-        ,CASE WHEN a.is_disburse_success = 1 AND CAST(l.is_deal AS INT) = 1 AND s.listing_id IS NOT NULL
-               AND DATE_ADD(s.init_due_date, 31) BETWEEN TO_DATE(a.disburse_time) AND p.obs_dt
-              THEN 1 ELSE 0 END                               AS is_due_matured
-        ,CASE WHEN a.is_disburse_success = 1 AND CAST(l.is_deal AS INT) = 1 AND s.listing_id IS NOT NULL
-               AND ADD_MONTHS(s.init_due_date, 2) BETWEEN TO_DATE(a.disburse_time) AND p.obs_dt
-              THEN 1 ELSE 0 END                               AS is_due_m2_matured
-        ,CASE WHEN a.is_disburse_success = 1 AND CAST(l.is_deal AS INT) = 1 AND s.listing_id IS NOT NULL
-               AND ADD_MONTHS(s.init_due_date, 3) BETWEEN TO_DATE(a.disburse_time) AND p.obs_dt
-              THEN 1 ELSE 0 END                               AS is_due_m3_matured
         ,f.first_disburse_time
     FROM loan_apply a
     CROSS JOIN model.tmp_eliam_wagego_param_obs_date p
@@ -320,12 +311,6 @@ base AS (
         ,x.hist_overdue_days                                  AS label_hist_overdue_days
         ,x.current_overdue_days                               AS label_current_overdue_days
         ,x.owing_amount                                       AS label_owing_amount
-        ,CASE WHEN l.is_due_matured = 1 THEN x.current_overdue_days END AS label_dpd
-        ,CASE WHEN l.is_due_matured = 1 THEN x.hist_overdue_days END    AS label_hist_dpd
-        ,CASE WHEN l.is_due_m2_matured = 1 THEN x2.current_overdue_days END AS label_dpd_m2
-        ,CASE WHEN l.is_due_m2_matured = 1 THEN x2.hist_overdue_days END    AS label_hist_dpd_m2
-        ,CASE WHEN l.is_due_m3_matured = 1 THEN x3.current_overdue_days END AS label_dpd_m3
-        ,CASE WHEN l.is_due_m3_matured = 1 THEN x3.hist_overdue_days END    AS label_hist_dpd_m3
         ,COALESCE(
              TO_DATE(x.first_repay_time)
             ,CASE WHEN l.first_repay_time IS NOT NULL AND TO_DATE(l.first_repay_time) <= l.due_label_obs_dt
@@ -333,20 +318,11 @@ base AS (
             ,l.due_label_obs_dt
          )                                                    AS label_obs_day
         ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
-               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 3)) < l.obs_dt
-              THEN 1 ELSE 0 END                               AS y_fpd3_obs_cnt
-        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
                AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 7)) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd7_obs_cnt
         ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
-               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 14)) < l.obs_dt
-              THEN 1 ELSE 0 END                               AS y_fpd14_obs_cnt
-        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
                AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 15)) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd15_obs_cnt
-        ,CASE WHEN l.is_deal = 1 AND l.debt_listing_id IS NOT NULL
-               AND LEAST(COALESCE(TO_DATE(l.first_repay_time), l.obs_dt), DATE_ADD(l.init_due_date, 30)) < l.obs_dt
-              THEN 1 ELSE 0 END                               AS y_fpd30_obs_cnt
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 1)) <= l.obs_dt THEN 1 ELSE 0 END
          END                                                  AS y_mob1_obs_cnt
@@ -356,34 +332,10 @@ base AS (
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 3)) <= l.obs_dt THEN 1 ELSE 0 END
          END                                                  AS y_mob3_obs_cnt
-        ,CASE WHEN l.is_disburse_success = 1 AND l.init_due_date IS NOT NULL
-              THEN CASE WHEN LAST_DAY(ADD_MONTHS(l.init_due_date, 1)) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob_due1_obs_cnt
-        ,CASE WHEN l.is_disburse_success = 1 AND l.init_due_date IS NOT NULL
-              THEN CASE WHEN LAST_DAY(ADD_MONTHS(l.init_due_date, 2)) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob_due2_obs_cnt
-        ,CASE WHEN l.is_disburse_success = 1 AND l.init_due_date IS NOT NULL
-              THEN CASE WHEN LAST_DAY(ADD_MONTHS(l.init_due_date, 3)) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob_due3_obs_cnt
-        ,CASE WHEN l.is_disburse_success = 1
-              THEN CASE WHEN DATE_ADD(TO_DATE(l.disburse_time), 30) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob_day30_obs_cnt
-        ,CASE WHEN l.is_disburse_success = 1
-              THEN CASE WHEN DATE_ADD(TO_DATE(l.disburse_time), 60) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob_day60_obs_cnt
-        ,CASE WHEN l.is_disburse_success = 1
-              THEN CASE WHEN DATE_ADD(TO_DATE(l.disburse_time), 90) <= l.obs_dt THEN 1 ELSE 0 END
-         END                                                  AS y_mob_day90_obs_cnt
     FROM latest l
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp x
       ON l.listing_id = x.listing_id
      AND x.stat_date = l.due_label_obs_dt
-    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp x2
-      ON l.listing_id = x2.listing_id
-     AND x2.stat_date = ADD_MONTHS(l.init_due_date, 2)
-    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp x3
-      ON l.listing_id = x3.listing_id
-     AND x3.stat_date = ADD_MONTHS(l.init_due_date, 3)
 ),
 mob_obs AS (
     SELECT
@@ -401,10 +353,6 @@ mob_label_detail AS (
     SELECT
          o.loan_no
         ,o.mob_no
-        ,CASE WHEN d.current_overdue_days IS NOT NULL
-              THEN CASE WHEN d.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
-        ,CASE WHEN d.current_overdue_days IS NOT NULL
-              THEN CASE WHEN d.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus
         ,CASE WHEN d.hist_overdue_days IS NOT NULL
               THEN CASE WHEN d.hist_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_ever_5plus
         ,CASE WHEN d.hist_overdue_days IS NOT NULL
@@ -417,91 +365,13 @@ mob_label_detail AS (
 mob_label_wide AS (
     SELECT
          loan_no
-        ,MAX(CASE WHEN mob_no = 1  THEN is_5plus END) AS y_mob1_5plus_cnt
         ,MAX(CASE WHEN mob_no = 1  THEN is_ever_5plus END) AS y_mob1_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_5plus END) AS y_mob2_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_5plus END) AS y_mob2_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_5plus END) AS y_mob3_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_5plus END) AS y_mob3_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_no = 1  THEN is_30plus END) AS y_mob1_30plus_cnt
         ,MAX(CASE WHEN mob_no = 1  THEN is_ever_30plus END) AS y_mob1_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 2  THEN is_30plus END) AS y_mob2_30plus_cnt
+        ,MAX(CASE WHEN mob_no = 2  THEN is_ever_5plus END) AS y_mob2_ever_5plus_cnt
         ,MAX(CASE WHEN mob_no = 2  THEN is_ever_30plus END) AS y_mob2_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_no = 3  THEN is_30plus END) AS y_mob3_30plus_cnt
+        ,MAX(CASE WHEN mob_no = 3  THEN is_ever_5plus END) AS y_mob3_ever_5plus_cnt
         ,MAX(CASE WHEN mob_no = 3  THEN is_ever_30plus END) AS y_mob3_ever_30plus_cnt
     FROM mob_label_detail
-    GROUP BY loan_no
-),
--- mob 另两个口径：到期日自然月末（y_mob_due1..3_*）、放款日固定 30/60/90 天（y_mob_day30/60/90_*）
-mob_alt_obs AS (
-    SELECT
-         b.loan_no
-        ,b.listing_id
-        ,v.mob_basis
-        ,m.mob_no
-        ,CASE v.mob_basis
-              WHEN 'due_month'    THEN LAST_DAY(ADD_MONTHS(b.init_due_date, m.mob_no))
-              WHEN 'disburse_day' THEN DATE_ADD(TO_DATE(b.disburse_time), m.mob_no * 30)
-         END                                                  AS mob_obs_dt
-    FROM base b
-    CROSS JOIN (SELECT EXPLODE(SEQUENCE(1, 3)) AS mob_no) m
-    CROSS JOIN (
-        SELECT 'due_month' AS mob_basis
-        UNION ALL
-        SELECT 'disburse_day'
-    ) v
-    WHERE b.is_disburse_success = 1
-      AND CASE v.mob_basis
-              WHEN 'due_month'    THEN LAST_DAY(ADD_MONTHS(b.init_due_date, m.mob_no))
-              WHEN 'disburse_day' THEN DATE_ADD(TO_DATE(b.disburse_time), m.mob_no * 30)
-          END <= b.obs_dt
-),
-mob_alt_detail AS (
-    SELECT
-         o.loan_no
-        ,o.mob_basis
-        ,o.mob_no
-        ,CASE WHEN d.current_overdue_days IS NOT NULL
-              THEN CASE WHEN d.current_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_5plus
-        ,CASE WHEN d.current_overdue_days IS NOT NULL
-              THEN CASE WHEN d.current_overdue_days > 30 THEN 1 ELSE 0 END END AS is_30plus
-        ,CASE WHEN d.hist_overdue_days IS NOT NULL
-              THEN CASE WHEN d.hist_overdue_days >= 5  THEN 1 ELSE 0 END END AS is_ever_5plus
-        ,CASE WHEN d.hist_overdue_days IS NOT NULL
-              THEN CASE WHEN d.hist_overdue_days > 30 THEN 1 ELSE 0 END END AS is_ever_30plus
-    FROM mob_alt_obs o
-    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d
-      ON o.listing_id = d.listing_id
-     AND o.mob_obs_dt = d.stat_date
-),
-mob_alt_wide AS (
-    SELECT
-         loan_no
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 1 THEN is_5plus END)      AS y_mob_due1_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 1 THEN is_ever_5plus END) AS y_mob_due1_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 2 THEN is_5plus END)      AS y_mob_due2_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 2 THEN is_ever_5plus END) AS y_mob_due2_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 3 THEN is_5plus END)      AS y_mob_due3_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 3 THEN is_ever_5plus END) AS y_mob_due3_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 1 THEN is_30plus END)      AS y_mob_due1_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 1 THEN is_ever_30plus END) AS y_mob_due1_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 2 THEN is_30plus END)      AS y_mob_due2_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 2 THEN is_ever_30plus END) AS y_mob_due2_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 3 THEN is_30plus END)      AS y_mob_due3_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'due_month' AND mob_no = 3 THEN is_ever_30plus END) AS y_mob_due3_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 1 THEN is_5plus END)      AS y_mob_day30_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 1 THEN is_ever_5plus END) AS y_mob_day30_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 2 THEN is_5plus END)      AS y_mob_day60_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 2 THEN is_ever_5plus END) AS y_mob_day60_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 3 THEN is_5plus END)      AS y_mob_day90_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 3 THEN is_ever_5plus END) AS y_mob_day90_ever_5plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 1 THEN is_30plus END)      AS y_mob_day30_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 1 THEN is_ever_30plus END) AS y_mob_day30_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 2 THEN is_30plus END)      AS y_mob_day60_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 2 THEN is_ever_30plus END) AS y_mob_day60_ever_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 3 THEN is_30plus END)      AS y_mob_day90_30plus_cnt
-        ,MAX(CASE WHEN mob_basis = 'disburse_day' AND mob_no = 3 THEN is_ever_30plus END) AS y_mob_day90_ever_30plus_cnt
-    FROM mob_alt_detail
     GROUP BY loan_no
 ),
 mob_track_detail AS (
@@ -570,48 +440,11 @@ model_log AS (
 labeled AS (
     SELECT
          b.*
-        ,b.label_dpd                                           AS y_due_dpd
-        ,b.label_hist_dpd                                      AS y_due_ever_dpd
-        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN 1 ELSE 0 END END AS y_due_ovd_cnt
-        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_due_ovd_amt
-        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd >= 5 THEN 1 ELSE 0 END END AS y_due_5plus_cnt
-        ,CASE WHEN b.label_dpd IS NOT NULL THEN CASE WHEN b.label_dpd > 30 THEN 1 ELSE 0 END END AS y_due_30plus_cnt
-        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 0 THEN 1 ELSE 0 END END AS y_due_ever_ovd_cnt
-        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 0 THEN b.real_amount ELSE 0 END END AS y_due_ever_ovd_amt
-        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd >= 5 THEN 1 ELSE 0 END END AS y_due_ever_5plus_cnt
-        ,CASE WHEN b.label_hist_dpd IS NOT NULL THEN CASE WHEN b.label_hist_dpd > 30 THEN 1 ELSE 0 END END AS y_due_ever_30plus_cnt
-        ,b.label_dpd_m2                                        AS y_due_m2_dpd
-        ,b.label_hist_dpd_m2                                   AS y_due_m2_ever_dpd
-        ,CASE WHEN b.label_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_dpd_m2 > 0 THEN 1 ELSE 0 END END AS y_due_m2_ovd_cnt
-        ,CASE WHEN b.label_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_dpd_m2 > 0 THEN b.real_amount ELSE 0 END END AS y_due_m2_ovd_amt
-        ,CASE WHEN b.label_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_dpd_m2 >= 5 THEN 1 ELSE 0 END END AS y_due_m2_5plus_cnt
-        ,CASE WHEN b.label_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_dpd_m2 > 30 THEN 1 ELSE 0 END END AS y_due_m2_30plus_cnt
-        ,CASE WHEN b.label_hist_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m2 > 0 THEN 1 ELSE 0 END END AS y_due_m2_ever_ovd_cnt
-        ,CASE WHEN b.label_hist_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m2 > 0 THEN b.real_amount ELSE 0 END END AS y_due_m2_ever_ovd_amt
-        ,CASE WHEN b.label_hist_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m2 >= 5 THEN 1 ELSE 0 END END AS y_due_m2_ever_5plus_cnt
-        ,CASE WHEN b.label_hist_dpd_m2 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m2 > 30 THEN 1 ELSE 0 END END AS y_due_m2_ever_30plus_cnt
-        ,b.label_dpd_m3                                        AS y_due_m3_dpd
-        ,b.label_hist_dpd_m3                                   AS y_due_m3_ever_dpd
-        ,CASE WHEN b.label_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_dpd_m3 > 0 THEN 1 ELSE 0 END END AS y_due_m3_ovd_cnt
-        ,CASE WHEN b.label_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_dpd_m3 > 0 THEN b.real_amount ELSE 0 END END AS y_due_m3_ovd_amt
-        ,CASE WHEN b.label_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_dpd_m3 >= 5 THEN 1 ELSE 0 END END AS y_due_m3_5plus_cnt
-        ,CASE WHEN b.label_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_dpd_m3 > 30 THEN 1 ELSE 0 END END AS y_due_m3_30plus_cnt
-        ,CASE WHEN b.label_hist_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m3 > 0 THEN 1 ELSE 0 END END AS y_due_m3_ever_ovd_cnt
-        ,CASE WHEN b.label_hist_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m3 > 0 THEN b.real_amount ELSE 0 END END AS y_due_m3_ever_ovd_amt
-        ,CASE WHEN b.label_hist_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m3 >= 5 THEN 1 ELSE 0 END END AS y_due_m3_ever_5plus_cnt
-        ,CASE WHEN b.label_hist_dpd_m3 IS NOT NULL THEN CASE WHEN b.label_hist_dpd_m3 > 30 THEN 1 ELSE 0 END END AS y_due_m3_ever_30plus_cnt
-        ,CASE WHEN b.y_fpd3_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 3) THEN 1 ELSE 0 END END AS y_fpd3_ovd_cnt
         ,CASE WHEN b.y_fpd7_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7) THEN 1 ELSE 0 END END AS y_fpd7_ovd_cnt
-        ,CASE WHEN b.y_fpd14_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 14) THEN 1 ELSE 0 END END AS y_fpd14_ovd_cnt
         ,CASE WHEN b.y_fpd15_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END END AS y_fpd15_ovd_cnt
-        ,CASE WHEN b.y_fpd30_obs_cnt = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS y_fpd30_ovd_cnt
         ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN DATEDIFF(TO_DATE(b.user_actual_repay_time), TO_DATE(b.disburse_time)) END AS loan_term_actual_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN CASE WHEN TO_DATE(b.user_actual_repay_time) < b.init_due_date THEN 1 ELSE 0 END END AS is_early_settlement
-        ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN 1 ELSE 0 END END AS y_obs_ovd_cnt
-        ,CASE WHEN b.is_deal = 1 AND b.current_overdue_days IS NOT NULL THEN CASE WHEN b.current_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ovd_amt
-        ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN 1 ELSE 0 END END AS y_obs_ever_ovd_cnt
-        ,CASE WHEN b.is_deal = 1 AND b.hist_overdue_days IS NOT NULL THEN CASE WHEN b.hist_overdue_days > 0 THEN b.real_amount ELSE 0 END END AS y_obs_ever_ovd_amt
         ,DATE_FORMAT(b.disburse_time, 'yyyy-MM')                 AS disburse_month
         ,CONCAT(CAST(YEAR(b.disburse_time) AS STRING), '-Q', CAST(QUARTER(b.disburse_time) AS STRING)) AS disburse_quarter
         ,DATEDIFF(b.obs_dt, TO_DATE(b.disburse_time))            AS days_on_book
@@ -619,63 +452,12 @@ labeled AS (
               WHEN COALESCE(b.disburse_time, b.apply_time) <= b.first_disburse_time THEN 'New'
               ELSE 'Old'
          END                                                  AS user_type
-        ,m.y_mob1_5plus_cnt
         ,m.y_mob1_ever_5plus_cnt
-        ,m.y_mob2_5plus_cnt
-        ,m.y_mob2_ever_5plus_cnt
-        ,m.y_mob3_5plus_cnt
-        ,m.y_mob3_ever_5plus_cnt
-        ,m.y_mob1_30plus_cnt
         ,m.y_mob1_ever_30plus_cnt
-        ,m.y_mob2_30plus_cnt
+        ,m.y_mob2_ever_5plus_cnt
         ,m.y_mob2_ever_30plus_cnt
-        ,m.y_mob3_30plus_cnt
+        ,m.y_mob3_ever_5plus_cnt
         ,m.y_mob3_ever_30plus_cnt
-        ,CASE WHEN b.y_mob1_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob1_obs_cnt = 0 THEN 0 END AS y_mob1_obs_amt
-        ,CASE WHEN b.y_mob2_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob2_obs_cnt = 0 THEN 0 END AS y_mob2_obs_amt
-        ,CASE WHEN b.y_mob3_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob3_obs_cnt = 0 THEN 0 END AS y_mob3_obs_amt
-        ,CASE WHEN m.y_mob1_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_5plus_cnt = 0 THEN 0 END AS y_mob1_5plus_amt
-        ,CASE WHEN m.y_mob1_ever_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_ever_5plus_cnt = 0 THEN 0 END AS y_mob1_ever_5plus_amt
-        ,CASE WHEN m.y_mob2_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_5plus_cnt = 0 THEN 0 END AS y_mob2_5plus_amt
-        ,CASE WHEN m.y_mob2_ever_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_ever_5plus_cnt = 0 THEN 0 END AS y_mob2_ever_5plus_amt
-        ,CASE WHEN m.y_mob3_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_5plus_cnt = 0 THEN 0 END AS y_mob3_5plus_amt
-        ,CASE WHEN m.y_mob3_ever_5plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_ever_5plus_cnt = 0 THEN 0 END AS y_mob3_ever_5plus_amt
-        ,CASE WHEN m.y_mob1_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_30plus_cnt = 0 THEN 0 END AS y_mob1_30plus_amt
-        ,CASE WHEN m.y_mob1_ever_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob1_ever_30plus_cnt = 0 THEN 0 END AS y_mob1_ever_30plus_amt
-        ,CASE WHEN m.y_mob2_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_30plus_cnt = 0 THEN 0 END AS y_mob2_30plus_amt
-        ,CASE WHEN m.y_mob2_ever_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob2_ever_30plus_cnt = 0 THEN 0 END AS y_mob2_ever_30plus_amt
-        ,CASE WHEN m.y_mob3_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_30plus_cnt = 0 THEN 0 END AS y_mob3_30plus_amt
-        ,CASE WHEN m.y_mob3_ever_30plus_cnt = 1 THEN b.real_amount WHEN m.y_mob3_ever_30plus_cnt = 0 THEN 0 END AS y_mob3_ever_30plus_amt
-        ,CASE WHEN b.y_mob_due1_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob_due1_obs_cnt = 0 THEN 0 END AS y_mob_due1_obs_amt
-        ,CASE WHEN b.y_mob_due2_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob_due2_obs_cnt = 0 THEN 0 END AS y_mob_due2_obs_amt
-        ,CASE WHEN b.y_mob_due3_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob_due3_obs_cnt = 0 THEN 0 END AS y_mob_due3_obs_amt
-        ,CASE WHEN ma.y_mob_due1_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due1_5plus_cnt = 0 THEN 0 END AS y_mob_due1_5plus_amt
-        ,CASE WHEN ma.y_mob_due1_ever_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due1_ever_5plus_cnt = 0 THEN 0 END AS y_mob_due1_ever_5plus_amt
-        ,CASE WHEN ma.y_mob_due2_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due2_5plus_cnt = 0 THEN 0 END AS y_mob_due2_5plus_amt
-        ,CASE WHEN ma.y_mob_due2_ever_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due2_ever_5plus_cnt = 0 THEN 0 END AS y_mob_due2_ever_5plus_amt
-        ,CASE WHEN ma.y_mob_due3_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due3_5plus_cnt = 0 THEN 0 END AS y_mob_due3_5plus_amt
-        ,CASE WHEN ma.y_mob_due3_ever_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due3_ever_5plus_cnt = 0 THEN 0 END AS y_mob_due3_ever_5plus_amt
-        ,CASE WHEN ma.y_mob_due1_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due1_30plus_cnt = 0 THEN 0 END AS y_mob_due1_30plus_amt
-        ,CASE WHEN ma.y_mob_due1_ever_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due1_ever_30plus_cnt = 0 THEN 0 END AS y_mob_due1_ever_30plus_amt
-        ,CASE WHEN ma.y_mob_due2_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due2_30plus_cnt = 0 THEN 0 END AS y_mob_due2_30plus_amt
-        ,CASE WHEN ma.y_mob_due2_ever_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due2_ever_30plus_cnt = 0 THEN 0 END AS y_mob_due2_ever_30plus_amt
-        ,CASE WHEN ma.y_mob_due3_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due3_30plus_cnt = 0 THEN 0 END AS y_mob_due3_30plus_amt
-        ,CASE WHEN ma.y_mob_due3_ever_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_due3_ever_30plus_cnt = 0 THEN 0 END AS y_mob_due3_ever_30plus_amt
-        ,CASE WHEN b.y_mob_day30_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob_day30_obs_cnt = 0 THEN 0 END AS y_mob_day30_obs_amt
-        ,CASE WHEN b.y_mob_day60_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob_day60_obs_cnt = 0 THEN 0 END AS y_mob_day60_obs_amt
-        ,CASE WHEN b.y_mob_day90_obs_cnt = 1 THEN b.real_amount WHEN b.y_mob_day90_obs_cnt = 0 THEN 0 END AS y_mob_day90_obs_amt
-        ,CASE WHEN ma.y_mob_day30_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day30_5plus_cnt = 0 THEN 0 END AS y_mob_day30_5plus_amt
-        ,CASE WHEN ma.y_mob_day30_ever_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day30_ever_5plus_cnt = 0 THEN 0 END AS y_mob_day30_ever_5plus_amt
-        ,CASE WHEN ma.y_mob_day60_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day60_5plus_cnt = 0 THEN 0 END AS y_mob_day60_5plus_amt
-        ,CASE WHEN ma.y_mob_day60_ever_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day60_ever_5plus_cnt = 0 THEN 0 END AS y_mob_day60_ever_5plus_amt
-        ,CASE WHEN ma.y_mob_day90_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day90_5plus_cnt = 0 THEN 0 END AS y_mob_day90_5plus_amt
-        ,CASE WHEN ma.y_mob_day90_ever_5plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day90_ever_5plus_cnt = 0 THEN 0 END AS y_mob_day90_ever_5plus_amt
-        ,CASE WHEN ma.y_mob_day30_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day30_30plus_cnt = 0 THEN 0 END AS y_mob_day30_30plus_amt
-        ,CASE WHEN ma.y_mob_day30_ever_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day30_ever_30plus_cnt = 0 THEN 0 END AS y_mob_day30_ever_30plus_amt
-        ,CASE WHEN ma.y_mob_day60_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day60_30plus_cnt = 0 THEN 0 END AS y_mob_day60_30plus_amt
-        ,CASE WHEN ma.y_mob_day60_ever_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day60_ever_30plus_cnt = 0 THEN 0 END AS y_mob_day60_ever_30plus_amt
-        ,CASE WHEN ma.y_mob_day90_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day90_30plus_cnt = 0 THEN 0 END AS y_mob_day90_30plus_amt
-        ,CASE WHEN ma.y_mob_day90_ever_30plus_cnt = 1 THEN b.real_amount WHEN ma.y_mob_day90_ever_30plus_cnt = 0 THEN 0 END AS y_mob_day90_ever_30plus_amt
         ,t.estimate_principal_remaining_mob0
         ,t.dpd_days_mob0
         ,t.dpd_days_ever_mob0
@@ -695,8 +477,6 @@ labeled AS (
     FROM base b
     LEFT JOIN mob_label_wide m
       ON b.loan_no = m.loan_no
-    LEFT JOIN mob_alt_wide ma
-      ON b.loan_no = ma.loan_no
     LEFT JOIN mob_track_wide t
       ON b.loan_no = t.loan_no
     LEFT JOIN model_log ml
@@ -754,148 +534,27 @@ SELECT
     ,label_current_overdue_days
     ,label_hist_overdue_days
     ,label_owing_amount
-    ,y_due_dpd
-    ,y_due_ever_dpd
-    ,y_due_ovd_cnt
-    ,y_due_ovd_amt
-    ,y_due_5plus_cnt
-    ,y_due_30plus_cnt
-    ,y_due_ever_ovd_cnt
-    ,y_due_ever_ovd_amt
-    ,y_due_ever_5plus_cnt
-    ,y_due_ever_30plus_cnt
-    ,y_due_m2_dpd
-    ,y_due_m2_ever_dpd
-    ,y_due_m2_ovd_cnt
-    ,y_due_m2_ovd_amt
-    ,y_due_m2_5plus_cnt
-    ,y_due_m2_30plus_cnt
-    ,y_due_m2_ever_ovd_cnt
-    ,y_due_m2_ever_ovd_amt
-    ,y_due_m2_ever_5plus_cnt
-    ,y_due_m2_ever_30plus_cnt
-    ,y_due_m3_dpd
-    ,y_due_m3_ever_dpd
-    ,y_due_m3_ovd_cnt
-    ,y_due_m3_ovd_amt
-    ,y_due_m3_5plus_cnt
-    ,y_due_m3_30plus_cnt
-    ,y_due_m3_ever_ovd_cnt
-    ,y_due_m3_ever_ovd_amt
-    ,y_due_m3_ever_5plus_cnt
-    ,y_due_m3_ever_30plus_cnt
-    ,y_fpd3_obs_cnt
-    ,y_fpd3_ovd_cnt
     ,y_fpd7_obs_cnt
     ,y_fpd7_ovd_cnt
-    ,y_fpd14_obs_cnt
-    ,y_fpd14_ovd_cnt
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
-    ,y_fpd30_obs_cnt
-    ,y_fpd30_ovd_cnt
     ,loan_term_contract_days
     ,loan_term_actual_days
     ,is_early_settlement
-    ,y_obs_ovd_cnt
-    ,y_obs_ovd_amt
-    ,y_obs_ever_ovd_cnt
-    ,y_obs_ever_ovd_amt
     ,disburse_month
     ,disburse_quarter
     ,days_on_book
     ,user_type
     ,first_disburse_time
     ,y_mob1_obs_cnt
-    ,y_mob1_obs_amt
-    ,y_mob1_5plus_cnt
-    ,y_mob1_5plus_amt
     ,y_mob1_ever_5plus_cnt
-    ,y_mob1_ever_5plus_amt
-    ,y_mob1_30plus_cnt
-    ,y_mob1_30plus_amt
     ,y_mob1_ever_30plus_cnt
-    ,y_mob1_ever_30plus_amt
     ,y_mob2_obs_cnt
-    ,y_mob2_obs_amt
-    ,y_mob2_5plus_cnt
-    ,y_mob2_5plus_amt
     ,y_mob2_ever_5plus_cnt
-    ,y_mob2_ever_5plus_amt
-    ,y_mob2_30plus_cnt
-    ,y_mob2_30plus_amt
     ,y_mob2_ever_30plus_cnt
-    ,y_mob2_ever_30plus_amt
     ,y_mob3_obs_cnt
-    ,y_mob3_obs_amt
-    ,y_mob3_5plus_cnt
-    ,y_mob3_5plus_amt
     ,y_mob3_ever_5plus_cnt
-    ,y_mob3_ever_5plus_amt
-    ,y_mob3_30plus_cnt
-    ,y_mob3_30plus_amt
     ,y_mob3_ever_30plus_cnt
-    ,y_mob3_ever_30plus_amt
-    ,y_mob_due1_obs_cnt
-    ,y_mob_due1_obs_amt
-    ,y_mob_due1_5plus_cnt
-    ,y_mob_due1_5plus_amt
-    ,y_mob_due1_ever_5plus_cnt
-    ,y_mob_due1_ever_5plus_amt
-    ,y_mob_due1_30plus_cnt
-    ,y_mob_due1_30plus_amt
-    ,y_mob_due1_ever_30plus_cnt
-    ,y_mob_due1_ever_30plus_amt
-    ,y_mob_due2_obs_cnt
-    ,y_mob_due2_obs_amt
-    ,y_mob_due2_5plus_cnt
-    ,y_mob_due2_5plus_amt
-    ,y_mob_due2_ever_5plus_cnt
-    ,y_mob_due2_ever_5plus_amt
-    ,y_mob_due2_30plus_cnt
-    ,y_mob_due2_30plus_amt
-    ,y_mob_due2_ever_30plus_cnt
-    ,y_mob_due2_ever_30plus_amt
-    ,y_mob_due3_obs_cnt
-    ,y_mob_due3_obs_amt
-    ,y_mob_due3_5plus_cnt
-    ,y_mob_due3_5plus_amt
-    ,y_mob_due3_ever_5plus_cnt
-    ,y_mob_due3_ever_5plus_amt
-    ,y_mob_due3_30plus_cnt
-    ,y_mob_due3_30plus_amt
-    ,y_mob_due3_ever_30plus_cnt
-    ,y_mob_due3_ever_30plus_amt
-    ,y_mob_day30_obs_cnt
-    ,y_mob_day30_obs_amt
-    ,y_mob_day30_5plus_cnt
-    ,y_mob_day30_5plus_amt
-    ,y_mob_day30_ever_5plus_cnt
-    ,y_mob_day30_ever_5plus_amt
-    ,y_mob_day30_30plus_cnt
-    ,y_mob_day30_30plus_amt
-    ,y_mob_day30_ever_30plus_cnt
-    ,y_mob_day30_ever_30plus_amt
-    ,y_mob_day60_obs_cnt
-    ,y_mob_day60_obs_amt
-    ,y_mob_day60_5plus_cnt
-    ,y_mob_day60_5plus_amt
-    ,y_mob_day60_ever_5plus_cnt
-    ,y_mob_day60_ever_5plus_amt
-    ,y_mob_day60_30plus_cnt
-    ,y_mob_day60_30plus_amt
-    ,y_mob_day60_ever_30plus_cnt
-    ,y_mob_day60_ever_30plus_amt
-    ,y_mob_day90_obs_cnt
-    ,y_mob_day90_obs_amt
-    ,y_mob_day90_5plus_cnt
-    ,y_mob_day90_5plus_amt
-    ,y_mob_day90_ever_5plus_cnt
-    ,y_mob_day90_ever_5plus_amt
-    ,y_mob_day90_30plus_cnt
-    ,y_mob_day90_30plus_amt
-    ,y_mob_day90_ever_30plus_cnt
-    ,y_mob_day90_ever_30plus_amt
     ,estimate_principal_remaining_mob0
     ,dpd_days_mob0
     ,dpd_days_ever_mob0
@@ -946,38 +605,18 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_due_ovd_cnt
-    ,y_due_5plus_cnt
-    ,y_due_30plus_cnt
-    ,y_due_ever_ovd_cnt
-    ,y_due_ever_5plus_cnt
-    ,y_due_ever_30plus_cnt
-    ,y_fpd3_obs_cnt
-    ,y_fpd3_ovd_cnt
     ,y_fpd7_obs_cnt
     ,y_fpd7_ovd_cnt
-    ,y_fpd14_obs_cnt
-    ,y_fpd14_ovd_cnt
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
-    ,y_fpd30_obs_cnt
-    ,y_fpd30_ovd_cnt
-    ,y_obs_ovd_cnt
-    ,y_obs_ever_ovd_cnt
     ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
     ,y_mob1_ever_5plus_cnt
-    ,y_mob1_30plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
     ,y_mob2_ever_5plus_cnt
-    ,y_mob2_30plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
     ,y_mob3_ever_5plus_cnt
-    ,y_mob3_30plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE apply_seq = 1
@@ -1013,38 +652,18 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_due_ovd_cnt
-    ,y_due_5plus_cnt
-    ,y_due_30plus_cnt
-    ,y_due_ever_ovd_cnt
-    ,y_due_ever_5plus_cnt
-    ,y_due_ever_30plus_cnt
-    ,y_fpd3_obs_cnt
-    ,y_fpd3_ovd_cnt
     ,y_fpd7_obs_cnt
     ,y_fpd7_ovd_cnt
-    ,y_fpd14_obs_cnt
-    ,y_fpd14_ovd_cnt
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
-    ,y_fpd30_obs_cnt
-    ,y_fpd30_ovd_cnt
-    ,y_obs_ovd_cnt
-    ,y_obs_ever_ovd_cnt
     ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
     ,y_mob1_ever_5plus_cnt
-    ,y_mob1_30plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
     ,y_mob2_ever_5plus_cnt
-    ,y_mob2_30plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
     ,y_mob3_ever_5plus_cnt
-    ,y_mob3_30plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE application_rank = 1
@@ -1094,38 +713,18 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_due_ovd_cnt
-    ,y_due_5plus_cnt
-    ,y_due_30plus_cnt
-    ,y_due_ever_ovd_cnt
-    ,y_due_ever_5plus_cnt
-    ,y_due_ever_30plus_cnt
-    ,y_fpd3_obs_cnt
-    ,y_fpd3_ovd_cnt
     ,y_fpd7_obs_cnt
     ,y_fpd7_ovd_cnt
-    ,y_fpd14_obs_cnt
-    ,y_fpd14_ovd_cnt
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
-    ,y_fpd30_obs_cnt
-    ,y_fpd30_ovd_cnt
-    ,y_obs_ovd_cnt
-    ,y_obs_ever_ovd_cnt
     ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
     ,y_mob1_ever_5plus_cnt
-    ,y_mob1_30plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
     ,y_mob2_ever_5plus_cnt
-    ,y_mob2_30plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
     ,y_mob3_ever_5plus_cnt
-    ,y_mob3_30plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'New'
@@ -1175,38 +774,18 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_due_ovd_cnt
-    ,y_due_5plus_cnt
-    ,y_due_30plus_cnt
-    ,y_due_ever_ovd_cnt
-    ,y_due_ever_5plus_cnt
-    ,y_due_ever_30plus_cnt
-    ,y_fpd3_obs_cnt
-    ,y_fpd3_ovd_cnt
     ,y_fpd7_obs_cnt
     ,y_fpd7_ovd_cnt
-    ,y_fpd14_obs_cnt
-    ,y_fpd14_ovd_cnt
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
-    ,y_fpd30_obs_cnt
-    ,y_fpd30_ovd_cnt
-    ,y_obs_ovd_cnt
-    ,y_obs_ever_ovd_cnt
     ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
     ,y_mob1_ever_5plus_cnt
-    ,y_mob1_30plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
     ,y_mob2_ever_5plus_cnt
-    ,y_mob2_30plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
     ,y_mob3_ever_5plus_cnt
-    ,y_mob3_30plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'New'
@@ -1257,38 +836,18 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_due_ovd_cnt
-    ,y_due_5plus_cnt
-    ,y_due_30plus_cnt
-    ,y_due_ever_ovd_cnt
-    ,y_due_ever_5plus_cnt
-    ,y_due_ever_30plus_cnt
-    ,y_fpd3_obs_cnt
-    ,y_fpd3_ovd_cnt
     ,y_fpd7_obs_cnt
     ,y_fpd7_ovd_cnt
-    ,y_fpd14_obs_cnt
-    ,y_fpd14_ovd_cnt
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
-    ,y_fpd30_obs_cnt
-    ,y_fpd30_ovd_cnt
-    ,y_obs_ovd_cnt
-    ,y_obs_ever_ovd_cnt
     ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
     ,y_mob1_ever_5plus_cnt
-    ,y_mob1_30plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
     ,y_mob2_ever_5plus_cnt
-    ,y_mob2_30plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
     ,y_mob3_ever_5plus_cnt
-    ,y_mob3_30plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'Old'
@@ -1338,38 +897,18 @@ SELECT
     ,disburse_quarter
     ,user_type
     ,first_disburse_time
-    ,y_due_ovd_cnt
-    ,y_due_5plus_cnt
-    ,y_due_30plus_cnt
-    ,y_due_ever_ovd_cnt
-    ,y_due_ever_5plus_cnt
-    ,y_due_ever_30plus_cnt
-    ,y_fpd3_obs_cnt
-    ,y_fpd3_ovd_cnt
     ,y_fpd7_obs_cnt
     ,y_fpd7_ovd_cnt
-    ,y_fpd14_obs_cnt
-    ,y_fpd14_ovd_cnt
     ,y_fpd15_obs_cnt
     ,y_fpd15_ovd_cnt
-    ,y_fpd30_obs_cnt
-    ,y_fpd30_ovd_cnt
-    ,y_obs_ovd_cnt
-    ,y_obs_ever_ovd_cnt
     ,y_mob1_obs_cnt
-    ,y_mob1_5plus_cnt
     ,y_mob1_ever_5plus_cnt
-    ,y_mob1_30plus_cnt
     ,y_mob1_ever_30plus_cnt
     ,y_mob2_obs_cnt
-    ,y_mob2_5plus_cnt
     ,y_mob2_ever_5plus_cnt
-    ,y_mob2_30plus_cnt
     ,y_mob2_ever_30plus_cnt
     ,y_mob3_obs_cnt
-    ,y_mob3_5plus_cnt
     ,y_mob3_ever_5plus_cnt
-    ,y_mob3_30plus_cnt
     ,y_mob3_ever_30plus_cnt
 FROM model.tmp_eliam_wagego_dwd_loan_apply_label
 WHERE user_type = 'Old'
