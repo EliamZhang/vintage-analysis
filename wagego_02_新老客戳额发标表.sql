@@ -22,6 +22,7 @@ SELECT
     ,last_limit_flow_id                                   AS flow_id
     ,disburse_month AS sample_month
     ,disburse_quarter AS sample_quarter
+    ,disburse_week AS sample_week
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
@@ -64,6 +65,7 @@ SELECT
     ,DATEDIFF(TO_DATE(disburse_time), TO_DATE(last_limit_time)) AS days_credit_to_disburse
     ,disburse_month AS sample_month
     ,disburse_quarter AS sample_quarter
+    ,disburse_week AS sample_week
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
@@ -120,6 +122,7 @@ SELECT
     ,list_due_date
     ,disburse_month AS sample_month
     ,disburse_quarter AS sample_quarter
+    ,disburse_week AS sample_week
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
@@ -176,6 +179,7 @@ SELECT
     ,list_due_date
     ,disburse_month AS sample_month
     ,disburse_quarter AS sample_quarter
+    ,disburse_week AS sample_week
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
@@ -233,6 +237,7 @@ SELECT
     ,list_due_date
     ,disburse_month AS sample_month
     ,disburse_quarter AS sample_quarter
+    ,disburse_week AS sample_week
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs
@@ -289,6 +294,7 @@ SELECT
     ,list_due_date
     ,disburse_month AS sample_month
     ,disburse_quarter AS sample_quarter
+    ,disburse_week AS sample_week
     ,user_type
     ,first_disburse_time
     ,y_fpd7_obs

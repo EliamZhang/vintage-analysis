@@ -1,5 +1,5 @@
 -- ============================================================================
--- 输出：model.tmp_eliam_wagego_dwd_loan_apply_label（一行一条借款申请，共 94 列）
+-- 输出：model.tmp_eliam_wagego_dwd_loan_apply_label（一行一条借款申请，共 95 列）
 -- 观察日：obs_dt = 债务快照表最新日期
 -- 代码顺序：obs_dt → 借据日快照 → 申请/放款 → 成熟门控 → MOB 快照 → 标签/金额 → 输出
 --
@@ -418,6 +418,7 @@ labeled AS (
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN CASE WHEN TO_DATE(b.user_actual_repay_time) < b.init_due_date THEN 1 ELSE 0 END END AS is_early_settlement
         ,DATE_FORMAT(b.disburse_time, 'yyyy-MM')                 AS disburse_month
         ,CONCAT(CAST(YEAR(b.disburse_time) AS STRING), '-Q', CAST(QUARTER(b.disburse_time) AS STRING)) AS disburse_quarter
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(b.disburse_time)), 'yyyy-MM-dd') AS disburse_week
         ,DATEDIFF(b.obs_dt, TO_DATE(b.disburse_time))            AS days_on_book
         ,CASE WHEN b.first_disburse_time IS NULL THEN 'New'
               WHEN COALESCE(b.disburse_time, b.apply_time) <= b.first_disburse_time THEN 'New'
@@ -460,7 +461,7 @@ SELECT
     ,y_fpd30_obs, y_fpd30_ovd
     -- 时间 / 新老客
     ,loan_term_contract_days, loan_term_actual_days, is_early_settlement
-    ,disburse_month, disburse_quarter, days_on_book, user_type
+    ,disburse_month, disburse_quarter, disburse_week, days_on_book, user_type
     ,first_disburse_time
     -- MOB 标签
     ,y_mob1_obs, y_mob1_5plus, y_mob1_30plus, y_mob1_ever_5plus, y_mob1_ever_30plus
