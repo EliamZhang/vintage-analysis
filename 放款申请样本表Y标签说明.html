@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Y 标签说明：tmp_eliam_wagego_dwd_loan_apply_label</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --ring: rgba(11,11,11,0.10);
+    --fam-due: #2a78d6;
+    --fam-fpd: #eb6834;
+    --fam-obs: #1f8a70;
+    --fam-mob: #8b5cf6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --ring: rgba(255,255,255,0.10);
+      --fam-due: #3987e5;
+      --fam-fpd: #d95926;
+      --fam-obs: #2fa88a;
+      --fam-mob: #a78bfa;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px 48px;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 26px; line-height: 1.3; margin: 0 0 6px; }
+  h2 { font-size: 17px; margin: 30px 0 10px; }
+  .sub { color: var(--ink-2); margin: 0 0 8px; }
+  .n { color: var(--muted); font-size: 12.5px; margin: 0 0 24px; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    font-size: 0.9em;
+    color: var(--ink-2);
+    background: var(--page);
+    border: 1px solid var(--ring);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--ring);
+    border-radius: 12px;
+    padding: 14px 16px 10px;
+  }
+  .card.due { --fc: var(--fam-due); }
+  .card.fpd { --fc: var(--fam-fpd); }
+  .card.obs { --fc: var(--fam-obs); }
+  .card.mob { --fc: var(--fam-mob); }
+  .fam-h { display: flex; align-items: center; gap: 9px; margin: 30px 0 10px; }
+  .fam-h h2 { margin: 0; }
+  .fam-lede { color: var(--ink-2); font-size: 13.5px; margin: 0 0 10px; }
+  .fam-lede b { color: var(--ink); }
+  .badge {
+    display: inline-block;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.5;
+    border-radius: 999px;
+    padding: 1px 8px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .badge.due { color: var(--fam-due); }
+  .badge.fpd { color: var(--fam-fpd); }
+  .badge.obs { color: var(--fam-obs); }
+  .badge.mob { color: var(--fam-mob); }
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; white-space: nowrap; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  td code { white-space: normal; overflow-wrap: anywhere; }
+  .mini th, .mini td { padding: 6px 8px; font-size: 12.5px; }
+  tr.grp td {
+    background: var(--page);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 9px;
+  }
+  .key { color: var(--fc, var(--ink)); font-weight: 600; }
+  .null { color: var(--muted); font-style: italic; }
+  .note { color: var(--muted); font-size: 12.5px; margin: 9px 2px 4px; }
+  ul.notes { margin: 6px 0 0; padding-left: 20px; color: var(--ink-2); font-size: 13px; }
+  ul.notes li { margin: 5px 0; }
+  ul.notes b { color: var(--ink); }
+  @media (max-width: 640px) {
+    body { padding: 28px 14px 40px; }
+    h1 { font-size: 22px; }
+    th, td { padding: 6px 7px; }
+    .fam-h { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Y 标签说明：54 个核心列 + mob 两个新口径</h1>
+  <p class="sub">目标表 <code>model.tmp_eliam_wagego_dwd_loan_apply_label</code>，一行一条借款申请。下面用真实借据 <code>LN00000033</code>，把核心 54 个 <code>y_*</code> 一列一列讲；mob 新增的两个口径共 60 列，在最后汇总。</p>
+  <p class="n">核心 54 列 = due 10 + fpd 10 + obs 4 + mob 30 ｜ 新增 mob 60 列 = 到期日 30 + 固定天数 30 ｜ 合计 114 个 <code>y_*</code> ｜ 观察日 obs_dt = 2026-10-22</p>
+
+  <h2>先看这条样本借据</h2>
+  <div class="card">
+    <p><code>LN00000033</code> · 2026-07-28 放款 <b>50 元</b> · 2026-08-02 到期 · 2026-08-09 首期实还，晚 7 天，随后结清。</p>
+    <div class="table-wrap">
+    <table class="mini">
+      <thead><tr><th>快照日</th><th>用来算</th><th class="num">current</th><th class="num">hist</th></tr></thead>
+      <tbody>
+        <tr><td>2026-08-31</td><td>MOB1 月末</td><td class="num">0</td><td class="num">7</td></tr>
+        <tr><td>2026-09-02</td><td>due + 31（到期 08-02 加 31 天）</td><td class="num">0</td><td class="num">7</td></tr>
+        <tr><td>2026-09-30</td><td>MOB2 月末</td><td class="num">0</td><td class="num">7</td></tr>
+        <tr><td>2026-10-22</td><td>obs_dt 全局观察日</td><td class="num">0</td><td class="num">7</td></tr>
+        <tr><td>2026-10-31</td><td>MOB3 月末（还没到）</td><td class="num null">—</td><td class="num null">—</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note"><code>current</code> = 当天还欠几天；<code>hist</code> = 历史上最深欠几天。本例每次看都是 current 0、hist 7：早就结清了，但曾经晚还 7 天。下面所有标签都从这两个数来。</p>
+  </div>
+
+  <div class="fam-h"><span class="badge due">due</span><h2>到期后第 31 天：当天 vs 曾经</h2></div>
+  <div class="card due">
+    <p class="fam-lede">① 算日子：<b>due + 31 = 2026-09-02</b>。② 取这一天的快照：current = 0、hist = 7，记作 <code>label_dpd = 0</code>、<code>label_hist_dpd = 7</code>。③ 10 列都从这两个数来。</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>标签</th><th>含义</th><th>怎么算</th><th class="num">本例</th></tr></thead>
+      <tbody>
+        <tr><td><code>y_due_dpd</code></td><td>第 31 天当天还欠几天</td><td><code>label_dpd</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_due_ever_dpd</code></td><td>历史上最深欠几天</td><td><code>label_hist_dpd</code></td><td class="num key">7</td></tr>
+        <tr><td><code>y_due_ovd_cnt</code></td><td>当天是否逾期</td><td><code>label_dpd &gt; 0</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_due_ovd_amt</code></td><td>当天逾期金额</td><td><code>label_dpd &gt; 0</code> → <code>real_amount</code>，否则 0</td><td class="num">0</td></tr>
+        <tr><td><code>y_due_5plus_cnt</code></td><td>当天是否逾期 ≥ 5 天</td><td><code>label_dpd &gt;= 5</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_due_30plus_cnt</code></td><td>当天是否逾期 &gt; 30 天</td><td><code>label_dpd &gt; 30</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_due_ever_ovd_cnt</code></td><td>是否曾经逾期</td><td><code>label_hist_dpd &gt; 0</code></td><td class="num key">1</td></tr>
+        <tr><td><code>y_due_ever_ovd_amt</code></td><td>曾经逾期的金额</td><td><code>label_hist_dpd &gt; 0</code> → <code>real_amount</code>，否则 0</td><td class="num key">50</td></tr>
+        <tr><td><code>y_due_ever_5plus_cnt</code></td><td>是否曾经逾期 ≥ 5 天</td><td><code>label_hist_dpd &gt;= 5</code></td><td class="num key">1</td></tr>
+        <tr><td><code>y_due_ever_30plus_cnt</code></td><td>是否曾经逾期 &gt; 30 天</td><td><code>label_hist_dpd &gt; 30</code></td><td class="num">0</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">整族前提 <code>is_due_matured = 1</code>：due + 31 落在放款日和 obs_dt 之间。不满足时 10 列全是 NULL，不能当好人。注意 <b>5plus 是 ≥ 5，30plus 是 &gt; 30</b>。</p>
+  </div>
+
+  <div class="fam-h"><span class="badge fpd">fpd</span><h2>首期在到期后 X 天内还没还？</h2></div>
+  <div class="card fpd">
+    <p class="fam-lede">只看首期（<code>period_no = 1</code>）。<code>label_obs_day</code> 先取 due+31 快照的首还日；没有就取 obs 快照首还日（需 ≤ due+31）；再没有就截在 due+31。本例 = <b>2026-08-09</b>。五个窗口：due+3 = 08-05、due+7 = 08-09、due+14 = 08-16、due+15 = 08-17、due+30 = 09-01。</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>标签</th><th>含义</th><th>怎么算</th><th class="num">本例</th></tr></thead>
+      <tbody>
+        <tr><td><code>y_fpd3_obs_cnt</code></td><td>due+3 窗口能否判定（成熟标志）</td><td><code>LEAST(obs 快照首还日或 obs_dt, 08-05) &lt; 10-22</code></td><td class="num">1</td></tr>
+        <tr><td><code>y_fpd3_ovd_cnt</code></td><td>首期是否晚于 due+3</td><td><code>label_obs_day &gt; 08-05</code></td><td class="num key">1</td></tr>
+        <tr><td><code>y_fpd7_obs_cnt</code></td><td>due+7 窗口能否判定</td><td><code>LEAST(obs 快照首还日或 obs_dt, 08-09) &lt; 10-22</code></td><td class="num">1</td></tr>
+        <tr><td><code>y_fpd7_ovd_cnt</code></td><td>首期是否晚于 due+7</td><td><code>label_obs_day &gt; 08-09</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_fpd14_obs_cnt</code></td><td>due+14 窗口能否判定</td><td><code>LEAST(obs 快照首还日或 obs_dt, 08-16) &lt; 10-22</code></td><td class="num">1</td></tr>
+        <tr><td><code>y_fpd14_ovd_cnt</code></td><td>首期是否晚于 due+14</td><td><code>label_obs_day &gt; 08-16</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_fpd15_obs_cnt</code></td><td>due+15 窗口能否判定</td><td><code>LEAST(obs 快照首还日或 obs_dt, 08-17) &lt; 10-22</code></td><td class="num">1</td></tr>
+        <tr><td><code>y_fpd15_ovd_cnt</code></td><td>首期是否晚于 due+15</td><td><code>label_obs_day &gt; 08-17</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_fpd30_obs_cnt</code></td><td>due+30 窗口能否判定</td><td><code>LEAST(obs 快照首还日或 obs_dt, 09-01) &lt; 10-22</code></td><td class="num">1</td></tr>
+        <tr><td><code>y_fpd30_ovd_cnt</code></td><td>首期是否晚于 due+30</td><td><code>label_obs_day &gt; 09-01</code></td><td class="num">0</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">obs_cnt 里的“首还日”取自 obs 快照；本例 obs 快照与 due+31 快照的首还日都是 08-09，结果一样。窗口未到：obs_cnt = 0、ovd_cnt = NULL。FPD 没有金额列。窗口是嵌套的：FPD7 坏一定 FPD3 坏，窗口越长坏样本只会越少。当前选型的主标签是 <b>FPD15</b>。</p>
+  </div>
+
+  <div class="fam-h"><span class="badge obs">obs</span><h2>全局观察日：今天还欠不欠</h2></div>
+  <div class="card obs">
+    <p class="fam-lede">取 <code>obs_dt = 2026-10-22</code> 当天的快照，不加窗口。本例 current = 0、hist = 7。</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>标签</th><th>含义</th><th>怎么算</th><th class="num">本例</th></tr></thead>
+      <tbody>
+        <tr><td><code>y_obs_ovd_cnt</code></td><td>10-22 当天是否逾期</td><td><code>current &gt; 0</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_obs_ovd_amt</code></td><td>当天逾期金额</td><td><code>current &gt; 0</code> → <code>real_amount</code>，否则 0</td><td class="num">0</td></tr>
+        <tr><td><code>y_obs_ever_ovd_cnt</code></td><td>10-22 时点是否曾经逾期</td><td><code>hist &gt; 0</code></td><td class="num key">1</td></tr>
+        <tr><td><code>y_obs_ever_ovd_amt</code></td><td>曾经逾期的金额</td><td><code>hist &gt; 0</code> → <code>real_amount</code>，否则 0</td><td class="num key">50</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">只有放款成功且有 obs 快照才有值，否则 NULL。刷新 obs_dt 后这 4 列会变；due 和 fpd 成熟后不再变。</p>
+  </div>
+
+  <div class="fam-h"><span class="badge mob">mob</span><h2>放款后第 N 个自然月末</h2></div>
+  <div class="card mob">
+    <p class="fam-lede">放款日 07-28 → <b>MOB1 = 08-31、MOB2 = 09-30、MOB3 = 10-31</b>。取各月末当天的快照：N = 1、2 有快照，current 0 / hist 7；N = 3 还没到 obs_dt。每个 N 有 10 列。</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>标签</th><th>含义</th><th>怎么算</th><th class="num">本例</th></tr></thead>
+      <tbody>
+        <tr class="grp"><td colspan="4">N = 1 · 2026-08-31 · 快照 current = 0 / hist = 7 · 已成熟</td></tr>
+        <tr><td><code>y_mob1_obs_cnt</code></td><td>这个月末是否已过（成熟标志）</td><td><code>08-31 &lt;= 10-22</code></td><td class="num">1</td></tr>
+        <tr><td><code>y_mob1_obs_amt</code></td><td>成熟样本金额（分母，不是坏账）</td><td>成熟 → <code>real_amount</code>，否则 0</td><td class="num">50</td></tr>
+        <tr><td><code>y_mob1_5plus_cnt</code></td><td>月末当天是否逾期 ≥ 5 天</td><td><code>current &gt;= 5</code>（current = 0）</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob1_5plus_amt</code></td><td>5plus 的坏账金额</td><td>5plus = 1 → <code>real_amount</code>，否则 0</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob1_ever_5plus_cnt</code></td><td>到月末是否曾逾期 ≥ 5 天</td><td><code>hist &gt;= 5</code>（hist = 7）</td><td class="num key">1</td></tr>
+        <tr><td><code>y_mob1_ever_5plus_amt</code></td><td>ever_5plus 的坏账金额</td><td>ever_5plus = 1 → <code>real_amount</code>，否则 0</td><td class="num key">50</td></tr>
+        <tr><td><code>y_mob1_30plus_cnt</code></td><td>月末当天是否逾期 &gt; 30 天</td><td><code>current &gt; 30</code>（current = 0）</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob1_30plus_amt</code></td><td>30plus 的坏账金额</td><td>30plus = 1 → <code>real_amount</code>，否则 0</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob1_ever_30plus_cnt</code></td><td>到月末是否曾逾期 &gt; 30 天</td><td><code>hist &gt; 30</code>（hist = 7）</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob1_ever_30plus_amt</code></td><td>ever_30plus 的坏账金额</td><td>ever_30plus = 1 → <code>real_amount</code>，否则 0</td><td class="num">0</td></tr>
+
+        <tr class="grp"><td colspan="4">N = 2 · 2026-09-30 · 快照 current = 0 / hist = 7 · 已成熟</td></tr>
+        <tr><td><code>y_mob2_obs_cnt</code></td><td>这个月末是否已过（成熟标志）</td><td><code>09-30 &lt;= 10-22</code></td><td class="num">1</td></tr>
+        <tr><td><code>y_mob2_obs_amt</code></td><td>成熟样本金额（分母，不是坏账）</td><td>成熟 → <code>real_amount</code>，否则 0</td><td class="num">50</td></tr>
+        <tr><td><code>y_mob2_5plus_cnt</code></td><td>月末当天是否逾期 ≥ 5 天</td><td><code>current &gt;= 5</code>（current = 0）</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob2_5plus_amt</code></td><td>5plus 的坏账金额</td><td>5plus = 1 → <code>real_amount</code>，否则 0</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob2_ever_5plus_cnt</code></td><td>到月末是否曾逾期 ≥ 5 天</td><td><code>hist &gt;= 5</code>（hist = 7）</td><td class="num key">1</td></tr>
+        <tr><td><code>y_mob2_ever_5plus_amt</code></td><td>ever_5plus 的坏账金额</td><td>ever_5plus = 1 → <code>real_amount</code>，否则 0</td><td class="num key">50</td></tr>
+        <tr><td><code>y_mob2_30plus_cnt</code></td><td>月末当天是否逾期 &gt; 30 天</td><td><code>current &gt; 30</code>（current = 0）</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob2_30plus_amt</code></td><td>30plus 的坏账金额</td><td>30plus = 1 → <code>real_amount</code>，否则 0</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob2_ever_30plus_cnt</code></td><td>到月末是否曾逾期 &gt; 30 天</td><td><code>hist &gt; 30</code>（hist = 7）</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob2_ever_30plus_amt</code></td><td>ever_30plus 的坏账金额</td><td>ever_30plus = 1 → <code>real_amount</code>，否则 0</td><td class="num">0</td></tr>
+
+        <tr class="grp"><td colspan="4">N = 3 · 2026-10-31 · 还没到 obs_dt（10-22）</td></tr>
+        <tr><td><code>y_mob3_obs_cnt</code></td><td>这个月末是否已过（成熟标志）</td><td><code>10-31 &gt; 10-22</code></td><td class="num">0</td></tr>
+        <tr><td><code>y_mob3_obs_amt</code></td><td>成熟样本金额（分母，不是坏账）</td><td>未成熟 → 0</td><td class="num">0</td></tr>
+        <tr><td><code>y_mob3_5plus_cnt</code></td><td>月末当天是否逾期 ≥ 5 天</td><td rowspan="8">月末未到，不给结论</td><td class="num null">NULL</td></tr>
+        <tr><td><code>y_mob3_5plus_amt</code></td><td>5plus 的坏账金额</td><td class="num null">NULL</td></tr>
+        <tr><td><code>y_mob3_ever_5plus_cnt</code></td><td>到月末是否曾逾期 ≥ 5 天</td><td class="num null">NULL</td></tr>
+        <tr><td><code>y_mob3_ever_5plus_amt</code></td><td>ever_5plus 的坏账金额</td><td class="num null">NULL</td></tr>
+        <tr><td><code>y_mob3_30plus_cnt</code></td><td>月末当天是否逾期 &gt; 30 天</td><td class="num null">NULL</td></tr>
+        <tr><td><code>y_mob3_30plus_amt</code></td><td>30plus 的坏账金额</td><td class="num null">NULL</td></tr>
+        <tr><td><code>y_mob3_ever_30plus_cnt</code></td><td>到月末是否曾逾期 &gt; 30 天</td><td class="num null">NULL</td></tr>
+        <tr><td><code>y_mob3_ever_30plus_amt</code></td><td>ever_30plus 的坏账金额</td><td class="num null">NULL</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note"><code>y_mobN_obs_cnt</code> 是成熟标志，不是坏标志；<code>y_mobN_obs_amt</code> 是分母金额，不是坏金额。月末已过但当天没有快照时，obs_cnt 仍是 1，坏标签为 NULL；未放款时整族 NULL。</p>
+  </div>
+
+  <div class="fam-h"><span class="badge mob">mob+</span><h2>mob 的两个新口径</h2></div>
+  <div class="card mob">
+    <p class="fam-lede">10 个指标与上面的 mob1/2/3 完全一样，只换观察日：<code>obs_cnt</code>、<code>obs_amt</code>、<code>5plus</code>、<code>ever_5plus</code>、<code>30plus</code>、<code>ever_30plus</code>，每种都有 cnt / amt。</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>口径</th><th>观察日公式</th><th>列名前缀</th><th>本例观察日</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>到期日自然月末</td>
+          <td><code>LAST_DAY(ADD_MONTHS(init_due_date, N))</code><br>N = 1 / 2 / 3</td>
+          <td><code>y_mob_due1_*</code><br><code>y_mob_due2_*</code><br><code>y_mob_due3_*</code></td>
+          <td>09-30 / 10-31 / 11-30<br>只有 due1 已成熟</td>
+        </tr>
+        <tr>
+          <td>放款日固定天数</td>
+          <td><code>disburse_date + N * 30</code><br>N = 1 / 2 / 3</td>
+          <td><code>y_mob_day30_*</code><br><code>y_mob_day60_*</code><br><code>y_mob_day90_*</code></td>
+          <td>08-27 / 09-26 / 10-26<br>day30 / day60 已成熟</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">每个口径 30 列 = 3 个 N × 10 个指标，列名后缀与原来完全一致。本例 due1、day30、day60 的快照都是 current 0 / hist 7 → <code>5plus_cnt = 0</code>、<code>ever_5plus_cnt = 1</code>；due2 / due3 / day90 未成熟，坏标签为 NULL。due1 = 09-30 与原来的 mob2 同一天，是日期巧合，不是同一口径。</p>
+  </div>
+
+  <h2>用之前记住 4 件事</h2>
+  <div class="card">
+    <ul class="notes">
+      <li><b>算坏率先分分子分母。</b>FPD / MOB（含新增的 due / day 口径）用 <code>obs_cnt</code> 作分母、坏标签作分子；due 族先筛 <code>is_due_matured = 1</code>。不要把 NULL 当 0。</li>
+      <li><b>due 和 obs 都分“当天”和“曾经”。</b>current 看当天，hist 看历史最深；本例就是当天 0、曾经 1。</li>
+      <li><b>阈值边界：5plus 是 ≥ 5，30plus 是 &gt; 30。</b>刚好 30 天不算 30+。</li>
+      <li><b>金额标签：坏样本记 <code>real_amount</code>，好样本记 0。</b>唯一例外是所有 mob 的 <code>obs_amt</code>（<code>y_mobN</code> / <code>y_mob_dueN</code> / <code>y_mob_dayXN</code>），它是分母金额。</li>
+    </ul>
+    <p class="note">被拒、未放款、没有借据的申请也会保留一行，但 Y 列是 NULL 或 0：due / obs / mob 整族 NULL，fpd 的 obs_cnt = 0、ovd_cnt = NULL。</p>
+  </div>
+
+  <p class="note" style="margin-top:22px">示例为本地 ODS 导出中的真实借据 LN00000033，所有数值均按现行 SQL 复算。</p>
+</main>
+</body>
+</html>
