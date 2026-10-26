@@ -355,14 +355,15 @@ CASE WHEN apply_status = 'DISBURSE_SUCCESS' THEN 1 ELSE 0 END
     <li class="b-step">
       <div class="b-dot">7</div>
       <div class="b-body">
-        <div class="b-head"><h3>首笔放款 + 关联发标与观察日快照</h3><span class="b-tag">first_disburse / latest</span></div>
-        <p class="purpose"><b>目的：</b>补金额、期次、到期日；确定标签观察日 due+31；同时算出每个用户的第一笔放款时间。</p>
+        <div class="b-head"><h3>补齐借据信息，算出首笔放款日和 due+31</h3><span class="b-tag">first_disburse / latest</span></div>
+        <p class="purpose"><b>目的：</b>第 6 步拿到的还只是“谁申请了、结果如何”；这一步把它补成一条完整借据——借了多少、什么时候到期、到拉数日还了多少，并算出后面反复要用的两个日期。</p>
         <div class="io"><span>输入</span><code>loan_apply</code> <code>dwb_asset_cmn_listing</code> <code>stg_debt_snp</code><span class="arrow">→</span><span>输出</span><code>first_disburse</code> <code>latest</code></div>
         <ul>
-          <li><code>first_disburse</code>：按用户取 <code>MIN(disburse_time)</code>，只算放款成功的申请。</li>
-          <li><code>latest</code>：按 listing_id 关联发标信息，按 <code>stat_date = obs_dt</code> 关联当天借据快照。</li>
-          <li>本金直接取 <code>real_amount</code>，只有放款成功的申请才记录。</li>
-          <li><code>due_label_obs_dt = init_due_date + 31</code>；满足“成功 + is_deal=1 + 有快照 + due+31 在放款日和 obs_dt 之间”才记 <code>is_due_matured = 1</code>。</li>
+          <li><b>先算首笔放款日。</b><code>first_disburse</code> 把每个用户放款成功的申请按时间排一遍，只留最早那笔的 <code>disburse_time</code>。后面判断新老客就看它：这次放款（没放款就看申请时间）不晚于第一笔成功放款 → New，晚于 → Old；从没成功放款过 → New。</li>
+          <li><b>再把借据信息补进来。</b><code>latest</code> 以申请为主表，左关联两张表：发标表补金额、期数、到期日、是否成交；<code>stg_debt_snp</code> 取 <code>stat_date = obs_dt</code> 的那一行，补截至拉数日的还款状态、首还时间、逾期天数、已还和剩余金额。关联不上的申请也保留，字段留空。</li>
+          <li><b>算 due+31。</b>每笔借据用自己的 <code>init_due_date + 31</code>，表示“到期后第 31 天”。第 8 步会拿这一天再去 <code>stg_debt_snp</code> 取一次快照，生成 <code>label_*</code> 和 <code>y_due_*</code>；到期一直没还的借据，也用这一天作为观察截止日。</li>
+          <li><b>判断 due 标签能不能用。</b>只有“放款成功 + is_deal=1 + obs_dt 当天有借据快照 + due+31 落在放款日和 obs_dt 之间”才记 <code>is_due_matured = 1</code>。为 0 的借据没有完整的 due+31 观察，<code>y_due_*</code> 留 NULL，不能当好人。</li>
+          <li><b>记本金。</b>只有放款成功的申请才写 <code>real_amount</code>，其他留空。</li>
         </ul>
         <pre><code>DATE_ADD(s.init_due_date, 31) AS due_label_obs_dt
 
@@ -383,18 +384,37 @@ CASE WHEN a.is_disburse_success = 1
           </tbody>
         </table>
         </div>
+        <p class="note">这一步产出的字段，后面分别这样用：</p>
+        <div class="table-wrap">
+        <table class="mini">
+          <thead><tr><th>字段</th><th>后面用来做什么</th></tr></thead>
+          <tbody>
+            <tr><td>first_disburse_time</td><td>判断 <code>user_type</code>：不晚于第一笔成功放款 → New，晚于 → Old。</td></tr>
+            <tr><td>real_amount</td><td>生成本金 <code>principal</code>；金额类标签（<code>y_due_*_amt</code>、<code>y_obs_*_amt</code>、<code>y_mob*_amt</code>）都用它。</td></tr>
+            <tr><td>init_due_date</td><td>所有 FPD 窗口的起算点（due+3/7/14/15/30）；也用来算 <code>due_label_obs_dt</code> 和合同期限。</td></tr>
+            <tr><td>due_label_obs_dt</td><td>第 8 步用它取 due+31 快照，生成 <code>label_*</code> 和 <code>y_due_*</code>；<code>label_obs_day</code> 也用它兜底。</td></tr>
+            <tr><td>is_due_matured</td><td>决定 <code>y_due_*</code> 是出 0/1 还是留 NULL；没满 31 天不判好坏。</td></tr>
+            <tr><td>obs_dt 当天快照<br>（首还时间、还款状态、当前/历史逾期、已还、剩余）</td><td>算 FPD 成熟和首还日；<code>y_obs_*</code> 时点标签直接用它；也作为输出字段。</td></tr>
+            <tr><td>disburse_time</td><td>新老客判断、MOB1~4 的月末观察日、<code>days_on_book</code>、实际期限。</td></tr>
+            <tr><td>is_deal / debt_listing_id</td><td>判断借据是否真的成立；FPD 要求 <code>is_deal = 1</code> 且有借据快照，MOB 要求放款成功。</td></tr>
+            <tr><td>principal</td><td>只作输出字段，方便核对；金额标签不直接用它。</td></tr>
+            <tr><td>其余申请 / 发标字段</td><td>作为输出维度，方便分群和排查，不参与标签计算。</td></tr>
+          </tbody>
+        </table>
+        </div>
       </div>
     </li>
 
     <li class="b-step">
       <div class="b-dot">8</div>
       <div class="b-body">
-        <div class="b-head"><h3>取 due+31 标签快照，判断 FPD 是否成熟</h3><span class="b-tag">base</span></div>
-        <p class="purpose"><b>目的：</b>在 due+31 再取一次借据，得到最终标签日；同时判断 FPD3/7/14/15/30 每一档是否已经可以下结论。</p>
+        <div class="b-head"><h3>取 due+31 快照，逐档判断 FPD 成熟</h3><span class="b-tag">base</span></div>
+        <p class="purpose"><b>目的：</b>在 due+31 再取一次借据，得到 due 标签要用的状态；同时按每一档自己的窗口，判断 FPD3/7/14/15/30 是否已经可以下结论。</p>
         <div class="io"><span>输入</span><code>latest</code> <code>stg_debt_snp</code><span class="arrow">→</span><span>输出</span><code>base</code></div>
         <ul>
           <li>按 <code>stat_date = due_label_obs_dt</code> 关联借据快照，得到 label_* 字段。</li>
           <li><code>label_obs_day</code>：优先取 due+31 快照里的首还日；缺失则取 obs_dt 前已记录的首还日；再缺取 due+31。</li>
+          <li><b>两套观察期不要混。</b>due+31 只用于生成 <code>label_*</code>、<code>y_due_*</code> 和 <code>label_obs_day</code> 的兜底；FPD 的成熟和好坏看各自的 <code>due+X</code>，与 due+31 无关。</li>
           <li>FPD-X 成熟：<code>LEAST(首还日, due+X) &lt; obs_dt</code>，成熟记 obs_cnt = 1；未成熟 obs_cnt = 0，坏标签为 NULL。</li>
         </ul>
         <pre><code>CASE WHEN is_deal = 1 AND debt_listing_id IS NOT NULL
