@@ -66,6 +66,11 @@ def sup(text, marker):
     return f"{text}<sup>{marker}</sup>"
 
 
+TAG_COUNT = (
+    '<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span>'
+)
+
+
 def read_csvs(input_path: Path):
     if input_path.is_dir():
         files = {p.name: p.read_bytes() for p in input_path.glob("vintage_*.csv")}
@@ -394,6 +399,7 @@ def header_html(data):
     last = data["latestWeek"]["week"]
     latest = data["latest"]
     chips = [
+        "坏率口径 · 笔数",
         f"放款周 {first} ~ {last}",
         f"FPD15 最新可用周 {latest['week']}（{fmt_pct0(latest['fpd15Maturity'])} 成熟）",
         f"分数覆盖 {data['coverage']['pct']:.2f}%",
@@ -404,7 +410,7 @@ def header_html(data):
   <div class="hero-copy">
     <p class="eyebrow">WAGEGO · RISK MONITORING</p>
     <h1>Vintage 监控看板</h1>
-    <p class="sub">按放款周看首期逾期率（FPD），并用模型分五分位和复借期数拆分。</p>
+    <p class="sub">按放款周看首期逾期率（FPD），并用模型分五分位和复借期数拆分；除标注“金额”外，坏率均为笔数口径。</p>
   </div>
   <div class="chips">{chip_html}</div>
 </header>
@@ -424,22 +430,22 @@ def kpi_html(data):
     return f"""
 <section class="kpis">
   <div class="kpi">
-    <span class="label">整体 FPD15</span>
+    <span class="label">整体 FPD15 · 坏率（笔数）</span>
     <b>{fmt_rate(fpd15['rate'])}</b>
-    <span class="sub">n={fmt_int(fpd15['obs'])} · 金额 {fmt_rate(fpd15['amtRate'])}</span>
+    <span class="sub">n={fmt_int(fpd15['obs'])} · 坏率（金额）{fmt_rate(fpd15['amtRate'])}</span>
   </div>
   <div class="kpi">
-    <span class="label">最新可用周</span>
+    <span class="label">最新可用周 · 坏率（笔数）</span>
     <b>{fmt_rate(latest_rate)}</b>
     <span class="sub">{latest['week']} · {fmt_pct0(latest['fpd15Maturity'])} 成熟 · 较前周 {fmt_delta(data['latestDelta'])}</span>
   </div>
   <div class="kpi">
-    <span class="label">新客 / 老客 FPD15</span>
+    <span class="label">新客 / 老客 FPD15 · 坏率（笔数）</span>
     <b class="split">{fmt_rate(new15['rate'])} / {fmt_rate(old15['rate'])}</b>
-    <span class="sub">gap {fmt_delta(gap)} · n={fmt_int(new15['obs'])} / {fmt_int(old15['obs'])}</span>
+    <span class="sub">gap {fmt_delta(gap)} · n={fmt_int(new15['obs'])} / {fmt_int(old15['obs'])} · 金额 {fmt_rate(new15['amtRate'])} / {fmt_rate(old15['amtRate'])}</span>
   </div>
   <div class="kpi">
-    <span class="label">模型 Q5 / Q1</span>
+    <span class="label">模型 Q5 / Q1 · 坏率（笔数）</span>
     <b>{lift:.2f}x</b>
     <span class="sub">Q5 {fmt_rate(q5['rate'])} · Q1 {fmt_rate(q1['rate'])} · 覆盖 {data['coverage']['pct']:.2f}%</span>
   </div>
@@ -461,7 +467,7 @@ def overall_table(overall):
     return f"""
 <div class="table-wrap">
 <table>
-  <thead><tr><th>观察窗口</th><th>成熟样本</th><th>坏样本</th><th>坏率（笔数）</th><th>坏率（金额）</th><th>较上一窗口</th></tr></thead>
+  <thead><tr><th>观察窗口</th><th>成熟样本（笔）</th><th>坏样本（笔）</th><th>坏率（笔数·y_fpdN_ovd）</th><th>坏率（金额·未还本金）</th><th>较上一窗口（笔数）</th></tr></thead>
   <tbody>{''.join(rows)}</tbody>
 </table>
 </div>
@@ -474,17 +480,17 @@ def fpd_card_html(data):
     maturity = data["fpd30Maturity"]
     common = data["common"]
     note = (
-        f"FPD15 整体 {fmt_rate(fpd15['rate'])}，新客 {fmt_rate(data['new15']['rate'])} / 老客 {fmt_rate(data['old15']['rate'])}。"
+        f"笔数口径：FPD15 整体 {fmt_rate(fpd15['rate'])}，新客 {fmt_rate(data['new15']['rate'])} / 老客 {fmt_rate(data['old15']['rate'])}。"
         f"FPD30 为空心点：整体成熟样本仅为 FPD15 的 {fmt_pct0(maturity['ALL'])}"
         f"（新 {fmt_pct0(maturity['New'])} / 老 {fmt_pct0(maturity['Old'])}），只作参考；"
-        f"共同 cohort 上 FPD15 {fmt_rate(common['rate15'])} → FPD30 {fmt_rate(common['rate30'])}。"
+        f"共同 cohort 上 FPD15 笔数坏率 {fmt_rate(common['rate15'])} → FPD30 {fmt_rate(common['rate30'])}。"
     )
     return f"""
 <section class="card">
-  <h2>整体与分客群：FPD 曲线</h2>
-  <p class="desc">横轴为观察窗口，纵轴为笔数坏率；FPD30 为空心点。</p>
+  <h2>整体与分客群：FPD 曲线{TAG_COUNT}</h2>
+  <p class="desc">横轴为观察窗口，纵轴为笔数坏率（坏样本笔数 / 成熟样本笔数）；FPD30 为空心点。金额坏率见下方总览表。</p>
   <div class="chart-wrap">
-    <svg id="fpdCurve" viewBox="0 0 1040 300" role="img" aria-label="整体、新客、老客在各 FPD 窗口的坏率"></svg>
+    <svg id="fpdCurve" viewBox="0 0 1040 300" role="img" aria-label="整体、新客、老客在各 FPD 窗口的笔数坏率"></svg>
     <div class="tip" id="fpdTip"></div>
   </div>
   <div class="legend">
@@ -575,7 +581,7 @@ def week_card_html(data):
         f" vs 前周 {fmt_int(previous_week['windows'][3]['obs']) if previous_week else '—'}），仅参考"
     )
     note = (
-        "成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。"
+        "坏率均为笔数口径。成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。"
         "星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示（FPD30 采用 90% 阈值）。"
         f"≥90% 成熟的最后一周：FPD15 {complete['week']}（{fmt_rate(complete['windows'][15]['rate'])}）；"
         f"{latest['week']} 为 {fmt_pct0(latest['fpd15Maturity'])} 成熟（{fmt_rate(latest['windows'][15]['rate'])}*）。"
@@ -583,10 +589,10 @@ def week_card_html(data):
     )
     return f"""
 <section class="card">
-  <h2>按放款周：FPD15 与早期信号</h2>
-  <p class="desc">FPD15 是确认指标，FPD3 是早期信号；空心点表示成熟度不足或周未完整。</p>
+  <h2>按放款周：FPD15 与早期信号{TAG_COUNT}</h2>
+  <p class="desc">纵轴为笔数坏率；FPD15 是确认指标，FPD3 是早期信号；空心点表示成熟度不足或周未完整。</p>
   <div class="chart-wrap">
-    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15 与 FPD3 坏率"></svg>
+    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15 与 FPD3 笔数坏率"></svg>
     <div class="tip" id="weekTip"></div>
   </div>
   <div class="legend">
@@ -624,7 +630,7 @@ def score_table(score):
 <div class="table-wrap">
 <div class="subhead">分档汇总</div>
 <table class="compact">
-  <thead><tr><th>分档</th><th>分数区间</th><th>整体</th><th>新客</th><th>老客</th></tr></thead>
+  <thead><tr><th>分档</th><th>分数区间</th><th>整体（笔数）</th><th>新客（笔数）</th><th>老客（笔数）</th></tr></thead>
   <tbody>{''.join(rows)}</tbody>
 </table>
 </div>
@@ -658,7 +664,7 @@ def score_week_table(data):
         rows.append(f"<tr><td>Q{q}</td>{''.join(cells)}</tr>")
     return f"""
 <div class="table-wrap">
-<div class="subhead">分档 × 放款周（FPD15 坏率）</div>
+<div class="subhead">分档 × 放款周（FPD15 笔数坏率）</div>
 <table class="compact">
   <thead><tr><th>分档</th>{header}</tr></thead>
   <tbody>{''.join(rows)}</tbody>
@@ -705,17 +711,17 @@ def score_card_html(data):
         heat_bits.append(f"{low_text} 灰显，仅参考")
     heat_note = "；".join(heat_bits) + "。" if heat_bits else ""
     note = (
-        f"Q1 最低分，Q5 最高分。整体 Q5/Q1 = {lift['ALL']:.2f}x，"
+        f"坏率均为 FPD15 笔数口径。Q1 最低分，Q5 最高分。整体 Q5/Q1 = {lift['ALL']:.2f}x，"
         f"新客 {lift['New']:.2f}x，老客 {lift['Old']:.2f}x。{shape}"
         f"覆盖 {data['coverage']['pct']:.2f}%（{fmt_int(data['coverage']['scored'])}/{fmt_int(data['coverage']['obs'])}），"
         f"缺分 {fmt_int(data['coverage']['missing'])}。{heat_note}{sentinel}"
     )
     return f"""
 <section class="card">
-  <h2>模型分五分位</h2>
-  <p class="desc">Q1 最低分 → Q5 最高分；整体、新客、老客的 FPD15 坏率。</p>
+  <h2>模型分五分位{TAG_COUNT}</h2>
+  <p class="desc">Q1 最低分 → Q5 最高分；整体、新客、老客的 FPD15 笔数坏率（y_fpd15_ovd / y_fpd15_obs）。</p>
   <div class="chart-wrap">
-    <svg id="scoreChart" viewBox="0 0 1040 300" role="img" aria-label="模型分五分位的整体、新客、老客 FPD15 坏率"></svg>
+    <svg id="scoreChart" viewBox="0 0 1040 300" role="img" aria-label="模型分五分位的整体、新客、老客 FPD15 笔数坏率"></svg>
     <div class="tip" id="scoreTip"></div>
   </div>
   <div class="legend">
@@ -744,7 +750,7 @@ def rank_table(rank):
     return f"""
 <div class="table-wrap">
 <table class="compact">
-  <thead><tr><th>复借期数</th><th>客群</th><th>样本</th><th>坏样本</th><th>FPD15 坏率</th></tr></thead>
+  <thead><tr><th>复借期数</th><th>客群</th><th>样本（笔）</th><th>坏样本（笔）</th><th>FPD15 坏率（笔数）</th></tr></thead>
   <tbody>{''.join(rows)}</tbody>
 </table>
 </div>
@@ -756,7 +762,7 @@ def rank_card_html(data):
     second = rank.get("2nd")
     fourth = rank.get("4th+")
     note = (
-        "首借 = New；2nd 起为 Old；4th+ 含 4 次及以上。"
+        "坏率为 FPD15 笔数口径。首借 = New；2nd 起为 Old；4th+ 含 4 次及以上。"
         + (
             f"老客中 2nd 最高（{fmt_rate(second['rate'])}），"
             f"4th+ 最低（{fmt_rate(fourth['rate'])}）；复借越多坏率越低。"
@@ -766,11 +772,11 @@ def rank_card_html(data):
     )
     return f"""
 <section class="card">
-  <h2>复借期数</h2>
-  <p class="desc">首借风险最高，复借 4 次以上最低。</p>
+  <h2>复借期数{TAG_COUNT}</h2>
+  <p class="desc">纵轴为 FPD15 笔数坏率；首借风险最高，复借 4 次以上最低。</p>
   <div class="split rank-split">
     <div class="chart-wrap">
-      <svg id="rankChart" viewBox="0 0 520 300" role="img" aria-label="首借与复借期数的 FPD15 坏率"></svg>
+      <svg id="rankChart" viewBox="0 0 520 300" role="img" aria-label="首借与复借期数的 FPD15 笔数坏率"></svg>
       <div class="tip" id="rankTip"></div>
     </div>
     <div>{rank_table(data['rank'])}</div>
@@ -804,9 +810,9 @@ def quality_card_html(data):
   <h2>数据质量与口径</h2>
   <div class="quality">
     <div>
-      <span class="q-label">FPD15 → FPD30（共同 cohort）</span>
+      <span class="q-label">FPD15 → FPD30（共同 cohort · 笔数）</span>
       <b>{fmt_rate(common['retention'])}</b>
-      <span>{fmt_int(common['obs'])} 笔；FPD15 {fmt_rate(common['rate15'])} → FPD30 {fmt_rate(common['rate30'])}，
+      <span>{fmt_int(common['obs'])} 笔；笔数坏率 FPD15 {fmt_rate(common['rate15'])} → FPD30 {fmt_rate(common['rate30'])}，
       {fmt_rate(100 - common['retention'])} 在 due+30 前还清。</span>
     </div>
     <div>
@@ -829,8 +835,8 @@ def footer_html(data, generated_at, input_name):
     return f"""
 <footer class="foot">
   <ul class="notes">
-    <li>FPD-X：首期应还日 due + X 天前未还清首期；成熟样本为 y_fpdN_obs = 1（is_deal = 1、观察日有借据快照且 due + X &lt; obs_dt），未成熟不判坏（即使已结清）。FPD14 由 stg_debt_snp 首期实还日补算，成熟条件同口径。</li>
-    <li>金额坏率：坏样本 due+X 时点未还本金 / 全部成熟样本放款本金；余额取 due+X 当天借据快照（FPD14 同机制），当天无快照的不计入分子。</li>
+    <li>笔数坏率（看板默认口径）：y_fpdN_ovd 之和 / y_fpdN_obs 之和。FPD-X：首期应还日 due + X 天前未还清首期；成熟样本为 y_fpdN_obs = 1（is_deal = 1、观察日有借据快照且 due + X &lt; obs_dt），未成熟不判坏（即使已结清）。FPD14 由 stg_debt_snp 首期实还日补算，成熟条件同口径。</li>
+    <li>金额坏率（仅总览表与 KPI 子行）：estimate_principal_remaining_fpdN 之和 / 全部成熟样本放款本金；余额取 due+X 当天借据快照（FPD14 同机制），当天无快照的不计入分子。</li>
     <li>成熟度：该窗口成熟样本 / 当周 FPD3 样本；星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示；FPD30 采用 90% 阈值。</li>
     <li>新老客：user_type 按首笔放款；复借期数 application_rank，1st = 首借，2nd 起为 Old，4th+ 含 4 次及以上。</li>
     <li>模型分：FPD15 成熟样本内 pooled 五分位，Q1 最低分、Q5 最高分；分数越高越坏。</li>
@@ -920,6 +926,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     border-radius: 12px; padding: 16px 18px 11px; margin: 13px 0;
   }
   .card h2 { font-size: 17px; margin: 0 0 1px; }
+  .card h2 .tag {
+    display: inline-block; margin-left: 7px; padding: 1px 7px;
+    border: 1px solid var(--ring); border-radius: 999px;
+    background: var(--page); color: var(--ink-2);
+    font-size: 10.5px; font-weight: 500; vertical-align: 2px;
+    cursor: help;
+  }
   .desc { color: var(--ink-2); font-size: 12.5px; margin: 0 0 6px; }
   .chart-wrap { position: relative; margin: 3px 0 2px; }
   .chart-wrap svg { display: block; width: 100%; height: auto; }
@@ -1042,7 +1055,7 @@ function clearSvg(svg) {
 function makeLineChart(svgId, tipId, cfg) {
   const svg = document.getElementById(svgId);
   const tip = document.getElementById(tipId);
-  const { width, height, margin, labels, series, yMax, yTicks, xLabel } = cfg;
+  const { width, height, margin, labels, series, yMax, yTicks, xLabel, yLabel } = cfg;
   const innerW = width - margin.l - margin.r;
   const innerH = height - margin.t - margin.b;
   const n = labels.length;
@@ -1060,6 +1073,15 @@ function makeLineChart(svgId, tipId, cfg) {
       fill: 'var(--muted)', 'font-size': 11.5
     }, v + '%');
   });
+
+  if (yLabel) {
+    const cy = margin.t + innerH / 2;
+    svgEl(svg, 'text', {
+      x: 13, y: cy, 'text-anchor': 'middle',
+      transform: `rotate(-90 13 ${cy})`,
+      fill: 'var(--muted)', 'font-size': 11.5
+    }, yLabel);
+  }
 
   labels.forEach((label, i) => {
     svgEl(svg, 'text', {
@@ -1161,7 +1183,7 @@ function makeLineChart(svgId, tipId, cfg) {
 function makeBarChart(svgId, tipId, cfg) {
   const svg = document.getElementById(svgId);
   const tip = document.getElementById(tipId);
-  const { width, height, margin, data, yMax, yTicks, color, xLabel } = cfg;
+  const { width, height, margin, data, yMax, yTicks, color, xLabel, yLabel } = cfg;
   const innerW = width - margin.l - margin.r;
   const innerH = height - margin.t - margin.b;
   const y = v => margin.t + (1 - v / yMax) * innerH;
@@ -1179,6 +1201,15 @@ function makeBarChart(svgId, tipId, cfg) {
       fill: 'var(--muted)', 'font-size': 11.5
     }, v + '%');
   });
+
+  if (yLabel) {
+    const cy = margin.t + innerH / 2;
+    svgEl(svg, 'text', {
+      x: 13, y: cy, 'text-anchor': 'middle',
+      transform: `rotate(-90 13 ${cy})`,
+      fill: 'var(--muted)', 'font-size': 11.5
+    }, yLabel);
+  }
 
   data.forEach((item, index) => {
     const cx = margin.l + band * (index + 0.5);
@@ -1212,7 +1243,7 @@ function makeBarChart(svgId, tipId, cfg) {
     hit.addEventListener('mousemove', event => {
       const box = svg.getBoundingClientRect();
       bar.setAttribute('opacity', 0.82);
-      tip.innerHTML = `<b>${item.label} · ${item.sub}</b><br><span>FPD15 <b>${fmtRate(item.rate)}</b> · n=${fmtInt(item.obs)} · 坏 ${fmtInt(item.bad)}</span>`;
+      tip.innerHTML = `<b>${item.label} · ${item.sub}</b><br><span>FPD15 笔数坏率 <b>${fmtRate(item.rate)}</b> · n=${fmtInt(item.obs)} · 坏 ${fmtInt(item.bad)}</span>`;
       tip.classList.toggle('down', yTop * (box.height / height) < 90);
       tip.style.left = Math.max(100, Math.min(box.width - 100, cx * (box.width / width))) + 'px';
       tip.style.top = yTop * (box.height / height) + 'px';
@@ -1232,10 +1263,10 @@ function makeBarChart(svgId, tipId, cfg) {
 
 const fpdSeries = DATA.fpdCurve.series;
 makeLineChart('fpdCurve', 'fpdTip', {
-  width: 1040, height: 300, margin: { t: 30, r: 130, b: 46, l: 48 },
+  width: 1040, height: 300, margin: { t: 30, r: 130, b: 46, l: 56 },
   labels: DATA.fpdCurve.labels,
   series: fpdSeries,
-  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '观察窗口',
+  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '观察窗口', yLabel: '笔数坏率',
   directLabels: fpdSeries.map((series, index) => ({
     series: index, index: 3,
     text: `${series.name} ${fmtRate(series.points[3].rate)}`,
@@ -1249,7 +1280,7 @@ makeLineChart('fpdCurve', 'fpdTip', {
     const age = index === 4
       ? `<br><span>30 天成熟：整体 ${Math.round(fpdSeries[0].points[4].maturity * 100)}% · 新 ${Math.round(fpdSeries[1].points[4].maturity * 100)}% · 老 ${Math.round(fpdSeries[2].points[4].maturity * 100)}%</span>`
       : '';
-    return `<b>${DATA.fpdCurve.labels[index]}</b><br>${rows}${age}`;
+    return `<b>${DATA.fpdCurve.labels[index]} · 笔数坏率</b><br>${rows}${age}`;
   }
 });
 
@@ -1264,10 +1295,10 @@ const lastPointIndex = points => {
 const last15 = lastPointIndex(DATA.weekChart.fpd15);
 const last3 = lastPointIndex(DATA.weekChart.fpd3);
 makeLineChart('weekChart', 'weekTip', {
-  width: 1040, height: 300, margin: { t: 30, r: 100, b: 46, l: 48 },
+  width: 1040, height: 300, margin: { t: 30, r: 100, b: 46, l: 56 },
   labels: DATA.weekChart.labels,
   series: weekSeries,
-  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）',
+  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）', yLabel: '笔数坏率',
   directLabels: [
     {
       series: 1, index: last15,
@@ -1281,7 +1312,7 @@ makeLineChart('weekChart', 'weekTip', {
     }
   ],
   tooltip: index => {
-    const parts = [`<b>${DATA.weekChart.weeks[index]}</b>`];
+    const parts = [`<b>${DATA.weekChart.weeks[index]} · 笔数坏率</b>`];
     const fpd3 = DATA.weekChart.fpd3[index];
     const fpd15 = DATA.weekChart.fpd15[index];
     if (fpd3) parts.push(`<span><i style="background:var(--muted)"></i>FPD3 <b>${fmtRate(fpd3.rate)}</b> · n=${fmtInt(fpd3.obs)}${fpd3.partial ? ' · 周未完整' : ''}</span>`);
@@ -1298,10 +1329,10 @@ makeLineChart('weekChart', 'weekTip', {
 
 const scoreSeries = DATA.scoreChart.series;
 makeLineChart('scoreChart', 'scoreTip', {
-  width: 1040, height: 300, margin: { t: 30, r: 135, b: 46, l: 48 },
+  width: 1040, height: 300, margin: { t: 30, r: 135, b: 46, l: 56 },
   labels: DATA.scoreChart.labels,
   series: scoreSeries,
-  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '模型分五分位（低 → 高）',
+  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '模型分五分位（低 → 高）', yLabel: '笔数坏率',
   directLabels: scoreSeries.map((series, index) => ({
     series: index, index: 4,
     text: `${series.name} ${fmtRate(series.points[4].rate)}`,
@@ -1313,15 +1344,15 @@ makeLineChart('scoreChart', 'scoreTip', {
       const point = series.points[index];
       return `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b> · n=${fmtInt(point.obs)}</span>`;
     }).join('<br>');
-    return `<b>${DATA.scoreChart.labels[index]} · ${base.min.toFixed(4)} ~ ${base.max.toFixed(4)}</b><br>${rows}`;
+    return `<b>${DATA.scoreChart.labels[index]} · ${base.min.toFixed(4)} ~ ${base.max.toFixed(4)} · 笔数坏率</b><br>${rows}`;
   }
 });
 
 makeBarChart('rankChart', 'rankTip', {
-  width: 520, height: 300, margin: { t: 30, r: 24, b: 64, l: 42 },
+  width: 520, height: 300, margin: { t: 30, r: 24, b: 64, l: 52 },
   data: DATA.rankChart,
   yMax: 12, yTicks: [0, 3, 6, 9, 12],
-  color: 'var(--c1)', xLabel: '复借期数'
+  color: 'var(--c1)', xLabel: '复借期数', yLabel: '笔数坏率'
 });
 </script>
 </body>
