@@ -4,7 +4,7 @@
 -- 代码顺序：obs_dt → 借据日快照 → 申请/放款 → 成熟门控 → MOB 快照 → 标签/金额 → 输出
 --
 -- Y 标签 25 个（全部 0/1 标记，SUM 即笔数）
---   FPD 10：y_fpd{1,3,7,15,30}_obs   窗口成熟，可判定
+--   FPD 10：y_fpd{1,3,7,15,30}_obs   窗口成熟（due+N < obs_dt），可判定
 --           y_fpd{1,3,7,15,30}_ovd   首期实还日 > due+N
 --   MOB 15：y_mob{1,2,3}_obs              月末已到
 --           y_mob{1,2,3}_5plus             月末 current DPD >= 5
@@ -13,6 +13,7 @@
 --           y_mob{1,2,3}_ever_30plus       截至月末 hist DPD > 30
 --
 -- 关键口径：
+--   FPD 按日历窗口成熟：due+N < obs_dt 才 obs=1；未成熟即使已结清，ovd 仍为 NULL
 --   FPD 是单时点事件，没有 ever；label_obs_day = COALESCE(首还日, obs_dt)，obs=1 才判 ovd
 --   MOB1-3 的标签与金额指标共用月末当天快照；缺快照 -> NULL
 --   MOB0/4 只有金额指标；MOB0 允许月末后 7 天内的快照
@@ -270,19 +271,19 @@ obs_labels AS (
     SELECT
          l.*
         ,CASE WHEN l.is_fpd_eligible = 1
-               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 1)) < l.obs_dt
+               AND DATE_ADD(l.init_due_date, 1) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd1_obs
         ,CASE WHEN l.is_fpd_eligible = 1
-               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 3)) < l.obs_dt
+               AND DATE_ADD(l.init_due_date, 3) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd3_obs
         ,CASE WHEN l.is_fpd_eligible = 1
-               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 7)) < l.obs_dt
+               AND DATE_ADD(l.init_due_date, 7) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd7_obs
         ,CASE WHEN l.is_fpd_eligible = 1
-               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 15)) < l.obs_dt
+               AND DATE_ADD(l.init_due_date, 15) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd15_obs
         ,CASE WHEN l.is_fpd_eligible = 1
-               AND LEAST(l.label_obs_day, DATE_ADD(l.init_due_date, 30)) < l.obs_dt
+               AND DATE_ADD(l.init_due_date, 30) < l.obs_dt
               THEN 1 ELSE 0 END                               AS y_fpd30_obs
         ,CASE WHEN l.is_disburse_success = 1
               THEN CASE WHEN LAST_DAY(ADD_MONTHS(TO_DATE(l.disburse_time), 1)) <= l.obs_dt THEN 1 ELSE 0 END

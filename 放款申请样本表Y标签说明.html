@@ -592,7 +592,7 @@
         </div>
         <p class="mt-note">按事件顺序排列，不按比例；颜色与桌面时间轴一致。</p>
       </div>
-      <p class="note"><b>FPD</b>：<code>y_fpdN_obs</code> = 窗口到了，能判断；<code>y_fpdN_ovd</code> = 首还日或 <code>obs_dt</code> 晚于 due+N。<b>MOB</b>：<code>y_mobN_obs</code> = 月末到了；<code>y_mobN_5plus / 30plus</code> 看当天仍逾期 ≥ 5 / &gt; 30 天；<code>y_mobN_ever_5plus / ever_30plus</code> 看截至当天曾逾期 ≥ 5 / &gt; 30 天。</p>
+      <p class="note"><b>FPD</b>：<code>y_fpdN_obs</code> = 窗口到了（<code>due+N &lt; obs_dt</code>），能判断；未成熟时 <code>ovd</code> 一律为 NULL，即使已结清。<code>y_fpdN_ovd</code> = 首还日或 <code>obs_dt</code> 晚于 due+N。<b>MOB</b>：<code>y_mobN_obs</code> = 月末到了；<code>y_mobN_5plus / 30plus</code> 看当天仍逾期 ≥ 5 / &gt; 30 天；<code>y_mobN_ever_5plus / ever_30plus</code> 看截至当天曾逾期 ≥ 5 / &gt; 30 天。</p>
     </div>
   </section>
 
@@ -717,7 +717,7 @@
           <thead><tr><th>字段</th><th>含义</th><th>怎么算</th></tr></thead>
           <tbody>
             <tr class="grp"><td colspan="3">FPD · 首期 · due+1 / +3 / +7 / +15 / +30（N = 1 / 3 / 7 / 15 / 30）</td></tr>
-            <tr><td><code>y_fpdN_obs</code></td><td>首期窗口已过，能判断有没有逾期</td><td><code>LEAST(首还日或 obs_dt, due+N) &lt; obs_dt</code>，且 <code>is_deal = 1</code>、有借据</td></tr>
+            <tr><td><code>y_fpdN_obs</code></td><td>首期窗口已过，能判断有没有逾期</td><td><code>due+N &lt; obs_dt</code>，且 <code>is_deal = 1</code>、有借据</td></tr>
             <tr><td><code>y_fpdN_ovd</code></td><td>首期还款晚于到期后 N 天</td><td><code>obs = 1</code> 时，<code>label_obs_day &gt; due+N</code></td></tr>
 
             <tr class="grp"><td colspan="3">MOB1 / MOB2 / MOB3 · 放款后第 1 / 2 / 3 个自然月末（N = 1 / 2 / 3）</td></tr>
@@ -728,7 +728,7 @@
         </table>
       </div>
       <p class="scroll-hint">左右滑动查看完整表格 →</p>
-      <p class="note">MOB 取自然月末，不是放款后 30 天。<code>obs</code> 是成熟标志兼笔数率分母；窗口未到时坏标签为 NULL，不要当 0。阈值边界：<b>5plus 是 ≥ 5，30plus 是 &gt; 30</b>。</p>
+      <p class="note">MOB 取自然月末，不是放款后 30 天。<code>obs</code> 是成熟标志兼笔数率分母；窗口未到时坏标签为 NULL（即使已结清），不要当 0。阈值边界：<b>5plus 是 ≥ 5，30plus 是 &gt; 30</b>。</p>
     </div>
   </section>
 

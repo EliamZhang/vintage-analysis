@@ -829,7 +829,7 @@ def footer_html(data, generated_at, input_name):
     return f"""
 <footer class="foot">
   <ul class="notes">
-    <li>FPD-X：首期应还日 due + X 天前未还清首期；成熟样本为 is_deal = 1 且 due + X &lt; obs_dt。FPD14 由 stg_debt_snp 首期实还日补算。</li>
+    <li>FPD-X：首期应还日 due + X 天前未还清首期；成熟样本为 y_fpdN_obs = 1（is_deal = 1、观察日有借据快照且 due + X &lt; obs_dt），未成熟不判坏（即使已结清）。FPD14 由 stg_debt_snp 首期实还日补算，成熟条件同口径。</li>
     <li>成熟度：该窗口成熟样本 / 当周 FPD3 样本；星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示；FPD30 采用 90% 阈值。</li>
     <li>新老客：user_type 按首笔放款；复借期数 application_rank，1st = 首借，2nd 起为 Old，4th+ 含 4 次及以上。</li>
     <li>模型分：FPD15 成熟样本内 pooled 五分位，Q1 最低分、Q5 最高分；分数越高越坏。</li>
