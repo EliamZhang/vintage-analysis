@@ -451,10 +451,10 @@
   <header class="hero">
     <p class="eyebrow">WageGo Vintage · 标签口径</p>
     <h1>Y 标签与金额逾期率指标说明</h1>
-    <p class="sub">目标表 <code>model.tmp_eliam_wagego_dwd_loan_apply_label</code>，一行一条借款申请。Y 标签共 <b>25 个</b>，全部是 0/1 笔数标记；金额逾期率另用 1 个放款金额列和 15 个 MOB 中间指标列。先看时间轴，再看字段清单。</p>
+    <p class="sub">目标表 <code>model.tmp_eliam_wagego_dwd_loan_apply_label</code>，一行一条借款申请。Y 标签共 <b>25 个</b>，全部是 0/1 笔数标记；金额逾期率另用 1 个放款金额列、5 个 FPD 时点余额列和 15 个 MOB 中间指标列。先看时间轴，再看字段清单。</p>
     <div class="meta">
       <span><b>obs_dt</b> 债务快照最新日期</span>
-      <span><b>主表</b> 94 列</span>
+      <span><b>主表</b> 100 列</span>
     </div>
     <nav class="toc" aria-label="页面目录">
       <a href="#timeline">观察时间轴</a>
@@ -737,7 +737,7 @@
       <div class="section-no">03</div>
       <div>
         <h2>金额逾期率</h2>
-        <p class="section-desc">FPD 用放款本金，MOB 用时点剩余本金；Y 标签走笔数口径，金额率用对应的中间列。</p>
+        <p class="section-desc">FPD 有放款本金、时点余额两种口径，MOB 用时点剩余本金；Y 标签走笔数口径，金额率用对应的中间列。</p>
       </div>
     </div>
     <div class="metric-grid">
@@ -745,10 +745,12 @@
         <div class="metric-top">
           <span class="dot fpd" aria-hidden="true"></span>
           <h3>FPD 金额率</h3>
-          <span class="metric-tag">principal</span>
+          <span class="metric-tag">放款本金 / 时点余额</span>
         </div>
         <div class="formula">SUM(CASE WHEN y_fpdN_ovd = 1 THEN principal ELSE 0 END) / SUM(CASE WHEN y_fpdN_obs = 1 THEN principal ELSE 0 END)</div>
-        <p class="metric-example">分母是窗口成熟（<code>obs = 1</code>）的放款本金，分子是其中首还晚于 <code>due+N</code> 的本金。</p>
+        <p class="metric-example"><b>放款本金口径</b>：分母是窗口成熟（<code>obs = 1</code>）的放款本金，分子是其中首还晚于 <code>due+N</code> 的本金。</p>
+        <div class="formula">SUM(CASE WHEN y_fpdN_ovd = 1 THEN estimate_principal_remaining_fpdN ELSE 0 END) / SUM(CASE WHEN y_fpdN_obs = 1 THEN principal ELSE 0 END)</div>
+        <p class="metric-example"><b>时点余额口径</b>：分子改用 <code>due+N</code> 当天的整笔未还本金，属近似口径；当天无快照为 NULL。</p>
       </div>
       <div class="metric-card mob">
         <div class="metric-top">
@@ -760,7 +762,7 @@
         <p class="metric-example">快照：MOB1–4 取月末当天，MOB0 允许月末后 7 天。ever 把 <code>dpd_days_mobN</code> 换成 <code>dpd_days_ever_mobN</code>。</p>
       </div>
     </div>
-    <p class="note"><code>principal</code> 在放款成功时等于 <code>real_amount</code>；MOB 的 <code>dpd_days_*</code> 是快照原始 DPD，NULL 记 0，没有快照时整组 NULL。<b>MOB1–3 与 Y 标签同快照，可直接对比笔数率与金额率。</b>MOB0 和 MOB4 只有金额指标，没有 Y 标。</p>
+    <p class="note"><code>principal</code> 在放款成功时等于 <code>real_amount</code>；<code>estimate_principal_remaining_fpdN</code> 取 <code>due+N</code> 当天快照的整笔未还本金，成熟条件与 <code>y_fpdN_obs</code> 一致，缺快照为 NULL；MOB 的 <code>dpd_days_*</code> 是快照原始 DPD，NULL 记 0，没有快照时整组 NULL。<b>MOB1–3 与 Y 标签同快照，可直接对比笔数率与金额率。</b>MOB0 和 MOB4 只有金额指标，没有 Y 标。</p>
   </section>
 
   <p class="footer">字段口径以 <code>wagego_01_放款申请样本表及Y标签.sql</code> 为准。</p>

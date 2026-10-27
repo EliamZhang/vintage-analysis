@@ -185,7 +185,7 @@
   <div class="kpi">
     <span class="label">整体 FPD15</span>
     <b>8.32%</b>
-    <span class="sub">n=11,849 · 金额 7.40%</span>
+    <span class="sub">n=11,849 · 金额 7.39%</span>
   </div>
   <div class="kpi">
     <span class="label">最新可用周</span>
@@ -221,7 +221,7 @@
 <div class="table-wrap">
 <table>
   <thead><tr><th>观察窗口</th><th>成熟样本</th><th>坏样本</th><th>坏率（笔数）</th><th>坏率（金额）</th><th>较上一窗口</th></tr></thead>
-  <tbody><tr><td>FPD3</td><td class='num'>23,615</td><td class='num'>3,250</td><td class='num'>13.76%</td><td class='num'>12.27%</td><td class='num'>—</td></tr><tr><td>FPD7</td><td class='num'>17,798</td><td class='num'>1,989</td><td class='num'>11.18%</td><td class='num'>9.88%</td><td class='num'>−2.59pp</td></tr><tr><td>FPD14</td><td class='num'>12,112</td><td class='num'>1,075</td><td class='num'>8.88%</td><td class='num'>7.92%</td><td class='num'>−2.30pp</td></tr><tr><td>FPD15</td><td class='num'>11,849</td><td class='num'>986</td><td class='num'>8.32%</td><td class='num'>7.40%</td><td class='num'>−0.55pp</td></tr><tr><td>FPD30</td><td class='num'>4,347</td><td class='num'>300</td><td class='num'>6.90%</td><td class='num'>6.16%</td><td class='num'>−1.42pp</td></tr></tbody>
+  <tbody><tr><td>FPD3</td><td class='num'>23,615</td><td class='num'>3,250</td><td class='num'>13.76%</td><td class='num'>12.26%</td><td class='num'>—</td></tr><tr><td>FPD7</td><td class='num'>17,798</td><td class='num'>1,989</td><td class='num'>11.18%</td><td class='num'>9.87%</td><td class='num'>−2.59pp</td></tr><tr><td>FPD14</td><td class='num'>12,112</td><td class='num'>1,075</td><td class='num'>8.88%</td><td class='num'>7.91%</td><td class='num'>−2.30pp</td></tr><tr><td>FPD15</td><td class='num'>11,849</td><td class='num'>986</td><td class='num'>8.32%</td><td class='num'>7.39%</td><td class='num'>−0.55pp</td></tr><tr><td>FPD30</td><td class='num'>4,347</td><td class='num'>300</td><td class='num'>6.90%</td><td class='num'>6.16%</td><td class='num'>−1.42pp</td></tr></tbody>
 </table>
 </div>
 
@@ -336,10 +336,11 @@
 <footer class="foot">
   <ul class="notes">
     <li>FPD-X：首期应还日 due + X 天前未还清首期；成熟样本为 y_fpdN_obs = 1（is_deal = 1、观察日有借据快照且 due + X &lt; obs_dt），未成熟不判坏（即使已结清）。FPD14 由 stg_debt_snp 首期实还日补算，成熟条件同口径。</li>
+    <li>金额坏率：坏样本 due+X 时点未还本金 / 全部成熟样本放款本金；余额取 due+X 当天借据快照（FPD14 同机制），当天无快照的不计入分子。</li>
     <li>成熟度：该窗口成熟样本 / 当周 FPD3 样本；星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示；FPD30 采用 90% 阈值。</li>
     <li>新老客：user_type 按首笔放款；复借期数 application_rank，1st = 首借，2nd 起为 Old，4th+ 含 4 次及以上。</li>
     <li>模型分：FPD15 成熟样本内 pooled 五分位，Q1 最低分、Q5 最高分；分数越高越坏。</li>
-    <li>数据源：vintage_data.zip（8 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：2026-10-27 12:58 China Standard Time。</li>
+    <li>数据源：vintage_data.zip（8 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：2026-10-27 14:55 China Standard Time。</li>
   </ul>
 </footer>
 

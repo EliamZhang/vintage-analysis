@@ -6,7 +6,8 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 --   1) 每个窗口用各自成熟 cohort：y_fpdN_obs = 1（is_deal = 1、观察日有借据快照、due+N < obs_dt）
 --   2) 坏 = 首期实还日（未还则取 obs_dt）晚于 due + X
 --   3) FPD14 主表没有独立字段，用 model.tmp_eliam_wagego_stg_debt_snp 的首期实还日补算，成熟条件同口径
---   4) 金额坏率 = 坏样本 real_amount / 全部 real_amount
+--   4) 金额坏率 = 坏样本 due+N 时点未还本金 / 全部成熟放款本金（real_amount）
+--      FPD14 的余额取 due+14 当天借据快照（与主表 FPD 金额字段同机制）
 --   5) 块 3 按 user_type 拆分；块 4 按放款周（周一开始）拆 vintage 路径
 --   6) 块 5-6 模型分五分位：FPD15 成熟样本内统一切分，切点固定后套到新老客和放款周
 --   7) 块 7 按 application_rank 拆复借期数：1st / 2nd / 3rd / 4th+
@@ -21,7 +22,7 @@ WITH win AS (
         ,COUNT(*)                                                       AS obs_cnt
         ,SUM(t.y_fpd3_ovd)                                              AS bad_cnt
         ,SUM(t.real_amount)                                             AS total_amt
-        ,SUM(CASE WHEN t.y_fpd3_ovd = 1 THEN t.real_amount ELSE 0 END)  AS bad_amt
+        ,SUM(CASE WHEN t.y_fpd3_ovd = 1 THEN t.estimate_principal_remaining_fpd3 ELSE 0 END) AS bad_amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.y_fpd3_obs = 1
     UNION ALL
@@ -30,7 +31,7 @@ WITH win AS (
         ,COUNT(*)
         ,SUM(t.y_fpd7_ovd)
         ,SUM(t.real_amount)
-        ,SUM(CASE WHEN t.y_fpd7_ovd = 1 THEN t.real_amount ELSE 0 END)
+        ,SUM(CASE WHEN t.y_fpd7_ovd = 1 THEN t.estimate_principal_remaining_fpd7 ELSE 0 END)
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.y_fpd7_obs = 1
     UNION ALL
@@ -41,11 +42,16 @@ WITH win AS (
                   THEN 1 ELSE 0 END)                                    AS bad_cnt
         ,SUM(t.real_amount)
         ,SUM(CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
-                  THEN t.real_amount ELSE 0 END)                        AS bad_amt
+                  THEN CASE WHEN d14.listing_id IS NOT NULL
+                            THEN GREATEST(COALESCE(d14.owing_principal, 0), 0) END
+                  ELSE 0 END)                                           AS bad_amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp s
       ON t.listing_id = s.listing_id
      AND s.stat_date = t.obs_dt
+    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d14
+      ON t.listing_id = d14.listing_id
+     AND d14.stat_date = DATE_ADD(t.init_due_date, 14)
     WHERE t.is_deal = 1
       AND s.listing_id IS NOT NULL
       AND DATE_ADD(t.init_due_date, 14) < t.obs_dt
@@ -55,7 +61,7 @@ WITH win AS (
         ,COUNT(*)
         ,SUM(t.y_fpd15_ovd)
         ,SUM(t.real_amount)
-        ,SUM(CASE WHEN t.y_fpd15_ovd = 1 THEN t.real_amount ELSE 0 END)
+        ,SUM(CASE WHEN t.y_fpd15_ovd = 1 THEN t.estimate_principal_remaining_fpd15 ELSE 0 END)
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.y_fpd15_obs = 1
     UNION ALL
@@ -64,7 +70,7 @@ WITH win AS (
         ,COUNT(*)
         ,SUM(t.y_fpd30_ovd)
         ,SUM(t.real_amount)
-        ,SUM(CASE WHEN t.y_fpd30_ovd = 1 THEN t.real_amount ELSE 0 END)
+        ,SUM(CASE WHEN t.y_fpd30_ovd = 1 THEN t.estimate_principal_remaining_fpd30 ELSE 0 END)
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.y_fpd30_obs = 1
 ),
@@ -133,6 +139,7 @@ WITH base AS (
         ,t.user_type
         ,t.y_fpd3_ovd                                                    AS label
         ,t.real_amount
+        ,t.estimate_principal_remaining_fpd3                             AS amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.y_fpd3_obs = 1
     UNION ALL
@@ -141,6 +148,7 @@ WITH base AS (
         ,t.user_type
         ,t.y_fpd7_ovd
         ,t.real_amount
+        ,t.estimate_principal_remaining_fpd7                             AS amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.y_fpd7_obs = 1
     UNION ALL
@@ -150,10 +158,15 @@ WITH base AS (
         ,CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
               THEN 1 ELSE 0 END                                         AS label
         ,t.real_amount
+        ,CASE WHEN d14.listing_id IS NOT NULL
+              THEN GREATEST(COALESCE(d14.owing_principal, 0), 0) END     AS amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp s
       ON t.listing_id = s.listing_id
      AND s.stat_date = t.obs_dt
+    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d14
+      ON t.listing_id = d14.listing_id
+     AND d14.stat_date = DATE_ADD(t.init_due_date, 14)
     WHERE t.is_deal = 1
       AND s.listing_id IS NOT NULL
       AND DATE_ADD(t.init_due_date, 14) < t.obs_dt
@@ -163,6 +176,7 @@ WITH base AS (
         ,t.user_type
         ,t.y_fpd15_ovd
         ,t.real_amount
+        ,t.estimate_principal_remaining_fpd15                            AS amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.y_fpd15_obs = 1
     UNION ALL
@@ -171,6 +185,7 @@ WITH base AS (
         ,t.user_type
         ,t.y_fpd30_ovd
         ,t.real_amount
+        ,t.estimate_principal_remaining_fpd30                            AS amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.y_fpd30_obs = 1
 )
@@ -180,7 +195,7 @@ SELECT
     ,COUNT(*)                                                        AS obs_cnt
     ,SUM(label)                                                      AS bad_cnt
     ,ROUND(CAST(SUM(label) AS DOUBLE) / COUNT(*) * 100, 2)           AS bad_rate_pct
-    ,ROUND(SUM(CASE WHEN label = 1 THEN real_amount ELSE 0 END)
+    ,ROUND(SUM(CASE WHEN label = 1 THEN amt ELSE 0 END)
            / NULLIF(SUM(real_amount), 0) * 100, 2)                   AS bad_rate_amt_pct
 FROM base
 GROUP BY window_days, user_type
@@ -197,6 +212,7 @@ WITH base AS (
         ,3 AS window_days
         ,t.y_fpd3_ovd                                                    AS label
         ,t.real_amount
+        ,t.estimate_principal_remaining_fpd3                             AS amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.disburse_time IS NOT NULL
       AND t.y_fpd3_obs = 1
@@ -206,6 +222,7 @@ WITH base AS (
         ,7
         ,t.y_fpd7_ovd
         ,t.real_amount
+        ,t.estimate_principal_remaining_fpd7                             AS amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.disburse_time IS NOT NULL
       AND t.y_fpd7_obs = 1
@@ -216,10 +233,15 @@ WITH base AS (
         ,CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
               THEN 1 ELSE 0 END                                         AS label
         ,t.real_amount
+        ,CASE WHEN d14.listing_id IS NOT NULL
+              THEN GREATEST(COALESCE(d14.owing_principal, 0), 0) END     AS amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp s
       ON t.listing_id = s.listing_id
      AND s.stat_date = t.obs_dt
+    LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp d14
+      ON t.listing_id = d14.listing_id
+     AND d14.stat_date = DATE_ADD(t.init_due_date, 14)
     WHERE t.disburse_time IS NOT NULL
       AND t.is_deal = 1
       AND s.listing_id IS NOT NULL
@@ -230,6 +252,7 @@ WITH base AS (
         ,15
         ,t.y_fpd15_ovd
         ,t.real_amount
+        ,t.estimate_principal_remaining_fpd15                            AS amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.disburse_time IS NOT NULL
       AND t.y_fpd15_obs = 1
@@ -239,6 +262,7 @@ WITH base AS (
         ,30
         ,t.y_fpd30_ovd
         ,t.real_amount
+        ,t.estimate_principal_remaining_fpd30                            AS amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.disburse_time IS NOT NULL
       AND t.y_fpd30_obs = 1
@@ -249,7 +273,7 @@ SELECT
     ,COUNT(*)                                                        AS obs_cnt
     ,SUM(label)                                                      AS bad_cnt
     ,ROUND(CAST(SUM(label) AS DOUBLE) / COUNT(*) * 100, 2)           AS bad_rate_pct
-    ,ROUND(SUM(CASE WHEN label = 1 THEN real_amount ELSE 0 END)
+    ,ROUND(SUM(CASE WHEN label = 1 THEN amt ELSE 0 END)
            / NULLIF(SUM(real_amount), 0) * 100, 2)                   AS bad_rate_amt_pct
 FROM base
 GROUP BY week_start, window_days
