@@ -3,9 +3,9 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 -- WageGo Vintage 分析：各 FPD 观察窗口的坏率与 cohort 路径
 -- 数据源：model.tmp_eliam_wagego_dwd_loan_apply_label
 -- 口径：
---   1) 每个窗口用各自日历 cohort：is_deal = 1 且 init_due_date + X < obs_dt
+--   1) 每个窗口用各自成熟 cohort：y_fpdN_obs = 1（is_deal = 1、观察日有借据快照、due+N < obs_dt）
 --   2) 坏 = 首期实还日（未还则取 obs_dt）晚于 due + X
---   3) FPD14 主表没有独立字段，用 model.tmp_eliam_wagego_stg_debt_snp 的首期实还日补算
+--   3) FPD14 主表没有独立字段，用 model.tmp_eliam_wagego_stg_debt_snp 的首期实还日补算，成熟条件同口径
 --   4) 金额坏率 = 坏样本 real_amount / 全部 real_amount
 --   5) 块 3 按 user_type 拆分；块 4 按放款周（周一开始）拆 vintage 路径
 --   6) 块 5-6 模型分五分位：FPD15 成熟样本内统一切分，切点固定后套到新老客和放款周
@@ -23,9 +23,7 @@ WITH win AS (
         ,SUM(t.real_amount)                                             AS total_amt
         ,SUM(CASE WHEN t.y_fpd3_ovd = 1 THEN t.real_amount ELSE 0 END)  AS bad_amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 3) < t.obs_dt
+    WHERE t.y_fpd3_obs = 1
     UNION ALL
     SELECT
          7
@@ -34,28 +32,22 @@ WITH win AS (
         ,SUM(t.real_amount)
         ,SUM(CASE WHEN t.y_fpd7_ovd = 1 THEN t.real_amount ELSE 0 END)
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 7) < t.obs_dt
+    WHERE t.y_fpd7_obs = 1
     UNION ALL
     SELECT
          14
         ,COUNT(*)
-        ,SUM(CASE WHEN s.listing_id IS NOT NULL
-                  THEN CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
-                            THEN 1 ELSE 0 END
-             END)                                                       AS bad_cnt
+        ,SUM(CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
+                  THEN 1 ELSE 0 END)                                    AS bad_cnt
         ,SUM(t.real_amount)
-        ,SUM(CASE WHEN s.listing_id IS NOT NULL
-                  THEN CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
-                            THEN t.real_amount ELSE 0 END
-             END)                                                       AS bad_amt
+        ,SUM(CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
+                  THEN t.real_amount ELSE 0 END)                        AS bad_amt
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp s
       ON t.listing_id = s.listing_id
      AND s.stat_date = t.obs_dt
     WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
+      AND s.listing_id IS NOT NULL
       AND DATE_ADD(t.init_due_date, 14) < t.obs_dt
     UNION ALL
     SELECT
@@ -65,9 +57,7 @@ WITH win AS (
         ,SUM(t.real_amount)
         ,SUM(CASE WHEN t.y_fpd15_ovd = 1 THEN t.real_amount ELSE 0 END)
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 15) < t.obs_dt
+    WHERE t.y_fpd15_obs = 1
     UNION ALL
     SELECT
          30
@@ -76,9 +66,7 @@ WITH win AS (
         ,SUM(t.real_amount)
         ,SUM(CASE WHEN t.y_fpd30_ovd = 1 THEN t.real_amount ELSE 0 END)
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 30) < t.obs_dt
+    WHERE t.y_fpd30_obs = 1
 ),
 stat AS (
     SELECT
@@ -114,11 +102,8 @@ WITH base AS (
          t.y_fpd15_ovd                                                 AS fpd15
         ,t.y_fpd30_ovd                                                 AS fpd30
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 30) < t.obs_dt
-      AND t.y_fpd15_ovd IS NOT NULL
-      AND t.y_fpd30_ovd IS NOT NULL
+    WHERE t.y_fpd15_obs = 1
+      AND t.y_fpd30_obs = 1
 ),
 cohort AS (
     SELECT
@@ -149,9 +134,7 @@ WITH base AS (
         ,t.y_fpd3_ovd                                                    AS label
         ,t.real_amount
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 3) < t.obs_dt
+    WHERE t.y_fpd3_obs = 1
     UNION ALL
     SELECT
          7
@@ -159,24 +142,20 @@ WITH base AS (
         ,t.y_fpd7_ovd
         ,t.real_amount
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 7) < t.obs_dt
+    WHERE t.y_fpd7_obs = 1
     UNION ALL
     SELECT
          14
         ,t.user_type
-        ,CASE WHEN s.listing_id IS NOT NULL
-              THEN CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
-                        THEN 1 ELSE 0 END
-         END                                                             AS label
+        ,CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
+              THEN 1 ELSE 0 END                                         AS label
         ,t.real_amount
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp s
       ON t.listing_id = s.listing_id
      AND s.stat_date = t.obs_dt
     WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
+      AND s.listing_id IS NOT NULL
       AND DATE_ADD(t.init_due_date, 14) < t.obs_dt
     UNION ALL
     SELECT
@@ -185,9 +164,7 @@ WITH base AS (
         ,t.y_fpd15_ovd
         ,t.real_amount
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 15) < t.obs_dt
+    WHERE t.y_fpd15_obs = 1
     UNION ALL
     SELECT
          30
@@ -195,9 +172,7 @@ WITH base AS (
         ,t.y_fpd30_ovd
         ,t.real_amount
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 30) < t.obs_dt
+    WHERE t.y_fpd30_obs = 1
 )
 SELECT
      window_days
@@ -223,10 +198,8 @@ WITH base AS (
         ,t.y_fpd3_ovd                                                    AS label
         ,t.real_amount
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.disburse_time IS NOT NULL
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 3) < t.obs_dt
+    WHERE t.disburse_time IS NOT NULL
+      AND t.y_fpd3_obs = 1
     UNION ALL
     SELECT
          DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd')
@@ -234,26 +207,22 @@ WITH base AS (
         ,t.y_fpd7_ovd
         ,t.real_amount
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.disburse_time IS NOT NULL
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 7) < t.obs_dt
+    WHERE t.disburse_time IS NOT NULL
+      AND t.y_fpd7_obs = 1
     UNION ALL
     SELECT
          DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd')
         ,14
-        ,CASE WHEN s.listing_id IS NOT NULL
-              THEN CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
-                        THEN 1 ELSE 0 END
-         END                                                             AS label
+        ,CASE WHEN COALESCE(TO_DATE(s.first_repay_time), t.obs_dt) > DATE_ADD(t.init_due_date, 14)
+              THEN 1 ELSE 0 END                                         AS label
         ,t.real_amount
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     LEFT JOIN model.tmp_eliam_wagego_stg_debt_snp s
       ON t.listing_id = s.listing_id
      AND s.stat_date = t.obs_dt
-    WHERE t.is_deal = 1
-      AND t.disburse_time IS NOT NULL
-      AND t.init_due_date IS NOT NULL
+    WHERE t.disburse_time IS NOT NULL
+      AND t.is_deal = 1
+      AND s.listing_id IS NOT NULL
       AND DATE_ADD(t.init_due_date, 14) < t.obs_dt
     UNION ALL
     SELECT
@@ -262,10 +231,8 @@ WITH base AS (
         ,t.y_fpd15_ovd
         ,t.real_amount
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.disburse_time IS NOT NULL
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 15) < t.obs_dt
+    WHERE t.disburse_time IS NOT NULL
+      AND t.y_fpd15_obs = 1
     UNION ALL
     SELECT
          DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd')
@@ -273,10 +240,8 @@ WITH base AS (
         ,t.y_fpd30_ovd
         ,t.real_amount
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.disburse_time IS NOT NULL
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 30) < t.obs_dt
+    WHERE t.disburse_time IS NOT NULL
+      AND t.y_fpd30_obs = 1
 )
 SELECT
      week_start
@@ -304,10 +269,7 @@ WITH base AS (
         ,t.y_fpd15_ovd                                               AS label
         ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 15) < t.obs_dt
-      AND t.y_fpd15_ovd IS NOT NULL
+    WHERE t.y_fpd15_obs = 1
 )
 SELECT
      COUNT(*)                                                        AS obs_cnt
@@ -324,10 +286,7 @@ WITH base AS (
         ,t.y_fpd15_ovd                                               AS label
         ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 15) < t.obs_dt
-      AND t.y_fpd15_ovd IS NOT NULL
+    WHERE t.y_fpd15_obs = 1
 ),
 scored AS (
     SELECT
@@ -376,10 +335,7 @@ WITH base AS (
         ,t.y_fpd15_ovd                                               AS label
         ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 15) < t.obs_dt
-      AND t.y_fpd15_ovd IS NOT NULL
+    WHERE t.y_fpd15_obs = 1
 ),
 scored AS (
     SELECT
@@ -425,10 +381,7 @@ WITH base AS (
         ,t.user_type
         ,t.y_fpd15_ovd                                               AS label
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
-    WHERE t.is_deal = 1
-      AND t.init_due_date IS NOT NULL
-      AND DATE_ADD(t.init_due_date, 15) < t.obs_dt
-      AND t.y_fpd15_ovd IS NOT NULL
+    WHERE t.y_fpd15_obs = 1
       AND t.application_rank IS NOT NULL
 )
 SELECT
