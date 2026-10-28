@@ -1,6 +1,6 @@
 SET spark.sql.session.timeZone = Australia/Sydney;
 
--- 样本：model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples
+-- 样本：model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples（每个用户第一次戳额申请）
 -- 数据源：ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log.model_input
 -- 关联键：样本 flow_id = 日志 scene_id
 -- 模型：model_code = aus_wagego_new_risk_3rd_v1_0（其 model_input 带银行流水明细）
@@ -10,15 +10,14 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 
 
 -- 银行流水明细：一行一笔交易，拼上对应银行卡的信息，金额保留原始正负号
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_variable_illion_transaction_middle;
-CREATE TABLE model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_variable_illion_transaction_middle AS
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_20260801_20261023_variable_illion_transaction_middle;
+CREATE TABLE model.tmp_eliam_wagego_new_user_credit_20260801_20261023_variable_illion_transaction_middle AS
 WITH sample AS (
     SELECT
          flow_id
         ,user_id
-        ,deal_loan_no
         ,sample_datetime
-    FROM model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples
+    FROM model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples
 ),
 latest_log AS (
     SELECT
@@ -84,7 +83,6 @@ account AS (
 SELECT
      s.flow_id
     ,s.user_id
-    ,s.deal_loan_no
     ,s.sample_datetime
     ,txn.log_time
     ,TO_DATE(txn.transaction_date)                        AS transaction_date
@@ -114,15 +112,14 @@ LEFT JOIN account acc
 
 
 -- 银行卡余额：一行一张卡一天的日终余额
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_balance_time_series_middle;
-CREATE TABLE model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_balance_time_series_middle AS
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_20260801_20261023_balance_time_series_middle;
+CREATE TABLE model.tmp_eliam_wagego_new_user_credit_20260801_20261023_balance_time_series_middle AS
 WITH sample AS (
     SELECT
          flow_id
         ,user_id
-        ,deal_loan_no
         ,sample_datetime
-    FROM model.tmp_eliam_wagego_new_user_credit_deal_20260801_20261023_samples
+    FROM model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples
 ),
 latest_log AS (
     SELECT
@@ -147,7 +144,6 @@ latest_log AS (
 SELECT
      s.flow_id
     ,s.user_id
-    ,s.deal_loan_no
     ,s.sample_datetime
     ,l.log_time
     ,TO_DATE(bal.balance_date)                            AS balance_date

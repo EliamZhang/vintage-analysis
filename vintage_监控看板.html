@@ -78,6 +78,13 @@
     border-radius: 12px; padding: 16px 18px 11px; margin: 13px 0;
   }
   .card h2 { font-size: 17px; margin: 0 0 1px; }
+  .card h2 .tag {
+    display: inline-block; margin-left: 7px; padding: 1px 7px;
+    border: 1px solid var(--ring); border-radius: 999px;
+    background: var(--page); color: var(--ink-2);
+    font-size: 10.5px; font-weight: 500; vertical-align: 2px;
+    cursor: help;
+  }
   .desc { color: var(--ink-2); font-size: 12.5px; margin: 0 0 6px; }
   .chart-wrap { position: relative; margin: 3px 0 2px; }
   .chart-wrap svg { display: block; width: 100%; height: auto; }
@@ -175,30 +182,30 @@
   <div class="hero-copy">
     <p class="eyebrow">WAGEGO · RISK MONITORING</p>
     <h1>Vintage 监控看板</h1>
-    <p class="sub">按放款周看首期逾期率（FPD），并用模型分五分位和复借期数拆分。</p>
+    <p class="sub">按放款周看首期逾期率（FPD），并用模型分五分位和复借期数拆分；除标注“金额”外，坏率均为笔数口径。</p>
   </div>
-  <div class="chips"><span class="chip">放款周 2026-08-24 ~ 2026-10-19</span><span class="chip">FPD15 最新可用周 2026-09-28（74% 成熟）</span><span class="chip">分数覆盖 99.99%</span></div>
+  <div class="chips"><span class="chip">坏率口径 · 笔数</span><span class="chip">放款周 2026-08-24 ~ 2026-10-19</span><span class="chip">FPD15 最新可用周 2026-09-28（74% 成熟）</span><span class="chip">分数覆盖 99.99%</span></div>
 </header>
 
 
 <section class="kpis">
   <div class="kpi">
-    <span class="label">整体 FPD15</span>
+    <span class="label">整体 FPD15 · 坏率（笔数）</span>
     <b>8.32%</b>
-    <span class="sub">n=11,849 · 金额 7.40%</span>
+    <span class="sub">n=11,849 · 坏率（金额）7.39%</span>
   </div>
   <div class="kpi">
-    <span class="label">最新可用周</span>
+    <span class="label">最新可用周 · 坏率（笔数）</span>
     <b>7.07%</b>
     <span class="sub">2026-09-28 · 74% 成熟 · 较前周 −1.21pp</span>
   </div>
   <div class="kpi">
-    <span class="label">新客 / 老客 FPD15</span>
+    <span class="label">新客 / 老客 FPD15 · 坏率（笔数）</span>
     <b class="split">10.38% / 5.38%</b>
-    <span class="sub">gap +5.00pp · n=6,964 / 4,885</span>
+    <span class="sub">gap +5.00pp · n=6,964 / 4,885 · 金额 9.30% / 4.89%</span>
   </div>
   <div class="kpi">
-    <span class="label">模型 Q5 / Q1</span>
+    <span class="label">模型 Q5 / Q1 · 坏率（笔数）</span>
     <b>3.04x</b>
     <span class="sub">Q5 13.72% · Q1 4.51% · 覆盖 99.99%</span>
   </div>
@@ -206,10 +213,10 @@
 
 
 <section class="card">
-  <h2>整体与分客群：FPD 曲线</h2>
-  <p class="desc">横轴为观察窗口，纵轴为笔数坏率；FPD30 为空心点。</p>
+  <h2>整体与分客群：FPD 曲线<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span></h2>
+  <p class="desc">横轴为观察窗口，纵轴为笔数坏率（坏样本笔数 / 成熟样本笔数）；FPD30 为空心点。金额坏率见下方总览表。</p>
   <div class="chart-wrap">
-    <svg id="fpdCurve" viewBox="0 0 1040 300" role="img" aria-label="整体、新客、老客在各 FPD 窗口的坏率"></svg>
+    <svg id="fpdCurve" viewBox="0 0 1040 300" role="img" aria-label="整体、新客、老客在各 FPD 窗口的笔数坏率"></svg>
     <div class="tip" id="fpdTip"></div>
   </div>
   <div class="legend">
@@ -220,20 +227,20 @@
   
 <div class="table-wrap">
 <table>
-  <thead><tr><th>观察窗口</th><th>成熟样本</th><th>坏样本</th><th>坏率（笔数）</th><th>坏率（金额）</th><th>较上一窗口</th></tr></thead>
-  <tbody><tr><td>FPD3</td><td class='num'>23,615</td><td class='num'>3,250</td><td class='num'>13.76%</td><td class='num'>12.27%</td><td class='num'>—</td></tr><tr><td>FPD7</td><td class='num'>17,798</td><td class='num'>1,989</td><td class='num'>11.18%</td><td class='num'>9.88%</td><td class='num'>−2.59pp</td></tr><tr><td>FPD14</td><td class='num'>12,112</td><td class='num'>1,075</td><td class='num'>8.88%</td><td class='num'>7.92%</td><td class='num'>−2.30pp</td></tr><tr><td>FPD15</td><td class='num'>11,849</td><td class='num'>986</td><td class='num'>8.32%</td><td class='num'>7.40%</td><td class='num'>−0.55pp</td></tr><tr><td>FPD30</td><td class='num'>4,347</td><td class='num'>300</td><td class='num'>6.90%</td><td class='num'>6.16%</td><td class='num'>−1.42pp</td></tr></tbody>
+  <thead><tr><th>观察窗口</th><th>成熟样本（笔）</th><th>坏样本（笔）</th><th>坏率（笔数·y_fpdN_ovd）</th><th>坏率（金额·未还本金）</th><th>较上一窗口（笔数）</th></tr></thead>
+  <tbody><tr><td>FPD3</td><td class='num'>23,615</td><td class='num'>3,250</td><td class='num'>13.76%</td><td class='num'>12.26%</td><td class='num'>—</td></tr><tr><td>FPD7</td><td class='num'>17,798</td><td class='num'>1,989</td><td class='num'>11.18%</td><td class='num'>9.87%</td><td class='num'>−2.59pp</td></tr><tr><td>FPD14</td><td class='num'>12,112</td><td class='num'>1,075</td><td class='num'>8.88%</td><td class='num'>7.91%</td><td class='num'>−2.30pp</td></tr><tr><td>FPD15</td><td class='num'>11,849</td><td class='num'>986</td><td class='num'>8.32%</td><td class='num'>7.39%</td><td class='num'>−0.55pp</td></tr><tr><td>FPD30</td><td class='num'>4,347</td><td class='num'>300</td><td class='num'>6.90%</td><td class='num'>6.16%</td><td class='num'>−1.42pp</td></tr></tbody>
 </table>
 </div>
 
-  <p class="note">FPD15 整体 8.32%，新客 10.38% / 老客 5.38%。FPD30 为空心点：整体成熟样本仅为 FPD15 的 37%（新 42% / 老 29%），只作参考；共同 cohort 上 FPD15 9.32% → FPD30 6.90%。</p>
+  <p class="note">笔数口径：FPD15 整体 8.32%，新客 10.38% / 老客 5.38%。FPD30 为空心点：整体成熟样本仅为 FPD15 的 37%（新 42% / 老 29%），只作参考；共同 cohort 上 FPD15 笔数坏率 9.32% → FPD30 6.90%。</p>
 </section>
 
 
 <section class="card">
-  <h2>按放款周：FPD15 与早期信号</h2>
-  <p class="desc">FPD15 是确认指标，FPD3 是早期信号；空心点表示成熟度不足或周未完整。</p>
+  <h2>按放款周：FPD15 与早期信号<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span></h2>
+  <p class="desc">纵轴为笔数坏率；FPD15 是确认指标，FPD3 是早期信号；空心点表示成熟度不足或周未完整。</p>
   <div class="chart-wrap">
-    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15 与 FPD3 坏率"></svg>
+    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15 与 FPD3 笔数坏率"></svg>
     <div class="tip" id="weekTip"></div>
   </div>
   <div class="legend">
@@ -248,15 +255,15 @@
 </table>
 </div>
 
-  <p class="note">成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示（FPD30 采用 90% 阈值）。≥90% 成熟的最后一周：FPD15 2026-09-21（8.28%）；2026-09-28 为 74% 成熟（7.07%*）。2026-10-05 的 FPD15 10.52%（12% 成熟）未纳入；2026-10-19 周 FPD3 16.54%†（FPD3 样本 665 vs 前周 4,705），仅参考。2026-07-20~2026-08-17 的 4 周样本仅 6–12 笔，已排除。</p>
+  <p class="note">坏率均为笔数口径。成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示（FPD30 采用 90% 阈值）。≥90% 成熟的最后一周：FPD15 2026-09-21（8.28%）；2026-09-28 为 74% 成熟（7.07%*）。2026-10-05 的 FPD15 10.52%（12% 成熟）未纳入；2026-10-19 周 FPD3 16.54%†（FPD3 样本 665 vs 前周 4,705），仅参考。2026-07-20~2026-08-17 的 4 周样本仅 6–12 笔，已排除。</p>
 </section>
 
 
 <section class="card">
-  <h2>模型分五分位</h2>
-  <p class="desc">Q1 最低分 → Q5 最高分；整体、新客、老客的 FPD15 坏率。</p>
+  <h2>模型分五分位<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span></h2>
+  <p class="desc">Q1 最低分 → Q5 最高分；整体、新客、老客的 FPD15 笔数坏率（y_fpd15_ovd / y_fpd15_obs）。</p>
   <div class="chart-wrap">
-    <svg id="scoreChart" viewBox="0 0 1040 300" role="img" aria-label="模型分五分位的整体、新客、老客 FPD15 坏率"></svg>
+    <svg id="scoreChart" viewBox="0 0 1040 300" role="img" aria-label="模型分五分位的整体、新客、老客 FPD15 笔数坏率"></svg>
     <div class="tip" id="scoreTip"></div>
   </div>
   <div class="legend">
@@ -269,14 +276,14 @@
 <div class="table-wrap">
 <div class="subhead">分档汇总</div>
 <table class="compact">
-  <thead><tr><th>分档</th><th>分数区间</th><th>整体</th><th>新客</th><th>老客</th></tr></thead>
+  <thead><tr><th>分档</th><th>分数区间</th><th>整体（笔数）</th><th>新客（笔数）</th><th>老客（笔数）</th></tr></thead>
   <tbody><tr><td>Q1</td><td class='range'>≤ 0.05856</td><td class='num'><b>4.51%</b><span class='n'>n=2,370</span></td><td class='num'><b>5.09%</b><span class='n'>n=1,395</span></td><td class='num'><b>3.69%</b><span class='n'>n=975</span></td></tr><tr><td>Q2</td><td class='range'>0.05856–0.07774</td><td class='num'><b>5.57%</b><span class='n'>n=2,370</span></td><td class='num'><b>7.67%</b><span class='n'>n=1,408</span></td><td class='num'><b>2.49%</b><span class='n'>n=962</span></td></tr><tr><td>Q3</td><td class='range'>0.07775–0.09825</td><td class='num'><b>8.78%</b><span class='n'>n=2,370</span></td><td class='num'><b>10.51%</b><span class='n'>n=1,399</span></td><td class='num'><b>6.28%</b><span class='n'>n=971</span></td></tr><tr><td>Q4</td><td class='range'>0.09825–0.12330</td><td class='num'><b>9.03%</b><span class='n'>n=2,369</span></td><td class='num'><b>11.79%</b><span class='n'>n=1,408</span></td><td class='num'><b>4.99%</b><span class='n'>n=961</span></td></tr><tr><td>Q5</td><td class='range'>> 0.12331</td><td class='num'><b>13.72%</b><span class='n'>n=2,369</span></td><td class='num'><b>17.07%</b><span class='n'>n=1,353</span></td><td class='num'><b>9.25%</b><span class='n'>n=1,016</span></td></tr></tbody>
 </table>
 </div>
 
     
 <div class="table-wrap">
-<div class="subhead">分档 × 放款周（FPD15 坏率）</div>
+<div class="subhead">分档 × 放款周（FPD15 笔数坏率）</div>
 <table class="compact">
   <thead><tr><th>分档</th><th>09-07</th><th>09-14</th><th>09-21</th><th>09-28</th><th>10-05</th></tr></thead>
   <tbody><tr><td>Q1</td><td class="num">4.62%</td><td class="num">3.77%</td><td class="num">4.51%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">3.65%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 12%，仅参考">5.88%</td></tr><tr><td>Q2</td><td class="num">5.67%</td><td class="num">6.16%</td><td class="num">5.25%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">5.24%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 12%，仅参考">7.14%</td></tr><tr><td>Q3</td><td class="num">8.52%</td><td class="num">8.57%</td><td class="num">9.10%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">7.12%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 12%，仅参考">10.66%</td></tr><tr><td>Q4</td><td class="num">9.60%</td><td class="num">9.38%</td><td class="num">8.57%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">7.79%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 12%，仅参考">13.64%</td></tr><tr><td>Q5</td><td class="num">14.24%</td><td class="num">13.52%</td><td class="num">14.06%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">11.80%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 12%，仅参考">15.17%</td></tr></tbody>
@@ -284,28 +291,28 @@
 </div>
 
   </div>
-  <p class="note">Q1 最低分，Q5 最高分。整体 Q5/Q1 = 3.04x，新客 3.35x，老客 2.51x。整体与新客基本单调；老客 Q2/Q4 低于前一档，排序弱于新客。覆盖 99.99%（11,848/11,849），缺分 1。分档×周表从 09-07 起，更早周每档样本不足，未纳入；09-28 标 *（70–90% 成熟）；10-05（12% 成熟） 灰显，仅参考。Q1 分数下限 -1.0，疑似缺分哨兵；分档按原查询结果展示，未单独剔除。</p>
+  <p class="note">坏率均为 FPD15 笔数口径。Q1 最低分，Q5 最高分。整体 Q5/Q1 = 3.04x，新客 3.35x，老客 2.51x。整体与新客基本单调；老客 Q2/Q4 低于前一档，排序弱于新客。覆盖 99.99%（11,848/11,849），缺分 1。分档×周表从 09-07 起，更早周每档样本不足，未纳入；09-28 标 *（70–90% 成熟）；10-05（12% 成熟） 灰显，仅参考。Q1 分数下限 -1.0，疑似缺分哨兵；分档按原查询结果展示，未单独剔除。</p>
 </section>
 
 
 <section class="card">
-  <h2>复借期数</h2>
-  <p class="desc">首借风险最高，复借 4 次以上最低。</p>
+  <h2>复借期数<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span></h2>
+  <p class="desc">纵轴为 FPD15 笔数坏率；首借风险最高，复借 4 次以上最低。</p>
   <div class="split rank-split">
     <div class="chart-wrap">
-      <svg id="rankChart" viewBox="0 0 520 300" role="img" aria-label="首借与复借期数的 FPD15 坏率"></svg>
+      <svg id="rankChart" viewBox="0 0 520 300" role="img" aria-label="首借与复借期数的 FPD15 笔数坏率"></svg>
       <div class="tip" id="rankTip"></div>
     </div>
     <div>
 <div class="table-wrap">
 <table class="compact">
-  <thead><tr><th>复借期数</th><th>客群</th><th>样本</th><th>坏样本</th><th>FPD15 坏率</th></tr></thead>
+  <thead><tr><th>复借期数</th><th>客群</th><th>样本（笔）</th><th>坏样本（笔）</th><th>FPD15 坏率（笔数）</th></tr></thead>
   <tbody><tr><td>1st</td><td>New</td><td class='num'>6,964</td><td class='num'>723</td><td class='num'>10.38%</td></tr><tr><td>2nd</td><td>Old</td><td class='num'>2,743</td><td class='num'>166</td><td class='num'>6.05%</td></tr><tr><td>3rd</td><td>Old</td><td class='num'>1,164</td><td class='num'>66</td><td class='num'>5.67%</td></tr><tr><td>4th+</td><td>Old</td><td class='num'>978</td><td class='num'>31</td><td class='num'>3.17%</td></tr></tbody>
 </table>
 </div>
 </div>
   </div>
-  <p class="note">首借 = New；2nd 起为 Old；4th+ 含 4 次及以上。老客中 2nd 最高（6.05%），4th+ 最低（3.17%）；复借越多坏率越低。</p>
+  <p class="note">坏率为 FPD15 笔数口径。首借 = New；2nd 起为 Old；4th+ 含 4 次及以上。老客中 2nd 最高（6.05%），4th+ 最低（3.17%）；复借越多坏率越低。</p>
 </section>
 
 
@@ -313,9 +320,9 @@
   <h2>数据质量与口径</h2>
   <div class="quality">
     <div>
-      <span class="q-label">FPD15 → FPD30（共同 cohort）</span>
+      <span class="q-label">FPD15 → FPD30（共同 cohort · 笔数）</span>
       <b>74.07%</b>
-      <span>4,347 笔；FPD15 9.32% → FPD30 6.90%，
+      <span>4,347 笔；笔数坏率 FPD15 9.32% → FPD30 6.90%，
       25.93% 在 due+30 前还清。</span>
     </div>
     <div>
@@ -335,11 +342,12 @@
 
 <footer class="foot">
   <ul class="notes">
-    <li>FPD-X：首期应还日 due + X 天前未还清首期；成熟样本为 y_fpdN_obs = 1（is_deal = 1、观察日有借据快照且 due + X &lt; obs_dt），未成熟不判坏（即使已结清）。FPD14 由 stg_debt_snp 首期实还日补算，成熟条件同口径。</li>
+    <li>笔数坏率（看板默认口径）：y_fpdN_ovd 之和 / y_fpdN_obs 之和。FPD-X：首期应还日 due + X 天前未还清首期；成熟样本为 y_fpdN_obs = 1（is_deal = 1、观察日有借据快照且 due + X &lt; obs_dt），未成熟不判坏（即使已结清）。FPD14 由 stg_debt_snp 首期实还日补算，成熟条件同口径。</li>
+    <li>金额坏率（仅总览表与 KPI 子行）：estimate_principal_remaining_fpdN 之和 / 全部成熟样本放款本金；余额取 due+X 当天借据快照（FPD14 同机制），当天无快照的不计入分子。</li>
     <li>成熟度：该窗口成熟样本 / 当周 FPD3 样本；星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示；FPD30 采用 90% 阈值。</li>
     <li>新老客：user_type 按首笔放款；复借期数 application_rank，1st = 首借，2nd 起为 Old，4th+ 含 4 次及以上。</li>
     <li>模型分：FPD15 成熟样本内 pooled 五分位，Q1 最低分、Q5 最高分；分数越高越坏。</li>
-    <li>数据源：vintage_data.zip（8 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：2026-10-27 12:58 China Standard Time。</li>
+    <li>数据源：vintage_data.zip（8 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：2026-10-27 15:29 China Standard Time。</li>
   </ul>
 </footer>
 
@@ -365,7 +373,7 @@ function clearSvg(svg) {
 function makeLineChart(svgId, tipId, cfg) {
   const svg = document.getElementById(svgId);
   const tip = document.getElementById(tipId);
-  const { width, height, margin, labels, series, yMax, yTicks, xLabel } = cfg;
+  const { width, height, margin, labels, series, yMax, yTicks, xLabel, yLabel } = cfg;
   const innerW = width - margin.l - margin.r;
   const innerH = height - margin.t - margin.b;
   const n = labels.length;
@@ -383,6 +391,15 @@ function makeLineChart(svgId, tipId, cfg) {
       fill: 'var(--muted)', 'font-size': 11.5
     }, v + '%');
   });
+
+  if (yLabel) {
+    const cy = margin.t + innerH / 2;
+    svgEl(svg, 'text', {
+      x: 13, y: cy, 'text-anchor': 'middle',
+      transform: `rotate(-90 13 ${cy})`,
+      fill: 'var(--muted)', 'font-size': 11.5
+    }, yLabel);
+  }
 
   labels.forEach((label, i) => {
     svgEl(svg, 'text', {
@@ -484,7 +501,7 @@ function makeLineChart(svgId, tipId, cfg) {
 function makeBarChart(svgId, tipId, cfg) {
   const svg = document.getElementById(svgId);
   const tip = document.getElementById(tipId);
-  const { width, height, margin, data, yMax, yTicks, color, xLabel } = cfg;
+  const { width, height, margin, data, yMax, yTicks, color, xLabel, yLabel } = cfg;
   const innerW = width - margin.l - margin.r;
   const innerH = height - margin.t - margin.b;
   const y = v => margin.t + (1 - v / yMax) * innerH;
@@ -502,6 +519,15 @@ function makeBarChart(svgId, tipId, cfg) {
       fill: 'var(--muted)', 'font-size': 11.5
     }, v + '%');
   });
+
+  if (yLabel) {
+    const cy = margin.t + innerH / 2;
+    svgEl(svg, 'text', {
+      x: 13, y: cy, 'text-anchor': 'middle',
+      transform: `rotate(-90 13 ${cy})`,
+      fill: 'var(--muted)', 'font-size': 11.5
+    }, yLabel);
+  }
 
   data.forEach((item, index) => {
     const cx = margin.l + band * (index + 0.5);
@@ -535,7 +561,7 @@ function makeBarChart(svgId, tipId, cfg) {
     hit.addEventListener('mousemove', event => {
       const box = svg.getBoundingClientRect();
       bar.setAttribute('opacity', 0.82);
-      tip.innerHTML = `<b>${item.label} · ${item.sub}</b><br><span>FPD15 <b>${fmtRate(item.rate)}</b> · n=${fmtInt(item.obs)} · 坏 ${fmtInt(item.bad)}</span>`;
+      tip.innerHTML = `<b>${item.label} · ${item.sub}</b><br><span>FPD15 笔数坏率 <b>${fmtRate(item.rate)}</b> · n=${fmtInt(item.obs)} · 坏 ${fmtInt(item.bad)}</span>`;
       tip.classList.toggle('down', yTop * (box.height / height) < 90);
       tip.style.left = Math.max(100, Math.min(box.width - 100, cx * (box.width / width))) + 'px';
       tip.style.top = yTop * (box.height / height) + 'px';
@@ -555,10 +581,10 @@ function makeBarChart(svgId, tipId, cfg) {
 
 const fpdSeries = DATA.fpdCurve.series;
 makeLineChart('fpdCurve', 'fpdTip', {
-  width: 1040, height: 300, margin: { t: 30, r: 130, b: 46, l: 48 },
+  width: 1040, height: 300, margin: { t: 30, r: 130, b: 46, l: 56 },
   labels: DATA.fpdCurve.labels,
   series: fpdSeries,
-  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '观察窗口',
+  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '观察窗口', yLabel: '笔数坏率',
   directLabels: fpdSeries.map((series, index) => ({
     series: index, index: 3,
     text: `${series.name} ${fmtRate(series.points[3].rate)}`,
@@ -572,7 +598,7 @@ makeLineChart('fpdCurve', 'fpdTip', {
     const age = index === 4
       ? `<br><span>30 天成熟：整体 ${Math.round(fpdSeries[0].points[4].maturity * 100)}% · 新 ${Math.round(fpdSeries[1].points[4].maturity * 100)}% · 老 ${Math.round(fpdSeries[2].points[4].maturity * 100)}%</span>`
       : '';
-    return `<b>${DATA.fpdCurve.labels[index]}</b><br>${rows}${age}`;
+    return `<b>${DATA.fpdCurve.labels[index]} · 笔数坏率</b><br>${rows}${age}`;
   }
 });
 
@@ -587,10 +613,10 @@ const lastPointIndex = points => {
 const last15 = lastPointIndex(DATA.weekChart.fpd15);
 const last3 = lastPointIndex(DATA.weekChart.fpd3);
 makeLineChart('weekChart', 'weekTip', {
-  width: 1040, height: 300, margin: { t: 30, r: 100, b: 46, l: 48 },
+  width: 1040, height: 300, margin: { t: 30, r: 100, b: 46, l: 56 },
   labels: DATA.weekChart.labels,
   series: weekSeries,
-  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）',
+  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）', yLabel: '笔数坏率',
   directLabels: [
     {
       series: 1, index: last15,
@@ -604,7 +630,7 @@ makeLineChart('weekChart', 'weekTip', {
     }
   ],
   tooltip: index => {
-    const parts = [`<b>${DATA.weekChart.weeks[index]}</b>`];
+    const parts = [`<b>${DATA.weekChart.weeks[index]} · 笔数坏率</b>`];
     const fpd3 = DATA.weekChart.fpd3[index];
     const fpd15 = DATA.weekChart.fpd15[index];
     if (fpd3) parts.push(`<span><i style="background:var(--muted)"></i>FPD3 <b>${fmtRate(fpd3.rate)}</b> · n=${fmtInt(fpd3.obs)}${fpd3.partial ? ' · 周未完整' : ''}</span>`);
@@ -621,10 +647,10 @@ makeLineChart('weekChart', 'weekTip', {
 
 const scoreSeries = DATA.scoreChart.series;
 makeLineChart('scoreChart', 'scoreTip', {
-  width: 1040, height: 300, margin: { t: 30, r: 135, b: 46, l: 48 },
+  width: 1040, height: 300, margin: { t: 30, r: 135, b: 46, l: 56 },
   labels: DATA.scoreChart.labels,
   series: scoreSeries,
-  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '模型分五分位（低 → 高）',
+  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '模型分五分位（低 → 高）', yLabel: '笔数坏率',
   directLabels: scoreSeries.map((series, index) => ({
     series: index, index: 4,
     text: `${series.name} ${fmtRate(series.points[4].rate)}`,
@@ -636,15 +662,15 @@ makeLineChart('scoreChart', 'scoreTip', {
       const point = series.points[index];
       return `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b> · n=${fmtInt(point.obs)}</span>`;
     }).join('<br>');
-    return `<b>${DATA.scoreChart.labels[index]} · ${base.min.toFixed(4)} ~ ${base.max.toFixed(4)}</b><br>${rows}`;
+    return `<b>${DATA.scoreChart.labels[index]} · ${base.min.toFixed(4)} ~ ${base.max.toFixed(4)} · 笔数坏率</b><br>${rows}`;
   }
 });
 
 makeBarChart('rankChart', 'rankTip', {
-  width: 520, height: 300, margin: { t: 30, r: 24, b: 64, l: 42 },
+  width: 520, height: 300, margin: { t: 30, r: 24, b: 64, l: 52 },
   data: DATA.rankChart,
   yMax: 12, yTicks: [0, 3, 6, 9, 12],
-  color: 'var(--c1)', xLabel: '复借期数'
+  color: 'var(--c1)', xLabel: '复借期数', yLabel: '笔数坏率'
 });
 </script>
 </body>

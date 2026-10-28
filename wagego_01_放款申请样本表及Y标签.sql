@@ -1,11 +1,13 @@
 -- ============================================================================
--- 输出：model.tmp_eliam_wagego_dwd_loan_apply_label（一行一条借款申请，共 95 列）
+-- 输出：model.tmp_eliam_wagego_dwd_loan_apply_label（一行一条借款申请，共 100 列）
 -- 观察日：obs_dt = 债务快照表最新日期
 -- 代码顺序：obs_dt → 借据日快照 → 申请/放款 → 成熟门控 → MOB 快照 → 标签/金额 → 输出
 --
 -- Y 标签 25 个（全部 0/1 标记，SUM 即笔数）
 --   FPD 10：y_fpd{1,3,7,15,30}_obs   窗口成熟（due+N < obs_dt），可判定
 --           y_fpd{1,3,7,15,30}_ovd   首期实还日 > due+N
+--   FPD 金额 5：estimate_principal_remaining_fpd{1,3,7,15,30}
+--             due+N 当天快照的整笔未还本金，成熟条件同 y_fpdN_obs，缺快照 -> NULL
 --   MOB 15：y_mob{1,2,3}_obs              月末已到
 --           y_mob{1,2,3}_5plus             月末 current DPD >= 5
 --           y_mob{1,2,3}_30plus            月末 current DPD > 30
@@ -15,6 +17,7 @@
 -- 关键口径：
 --   FPD 按日历窗口成熟：due+N < obs_dt 才 obs=1；未成熟即使已结清，ovd 仍为 NULL
 --   FPD 是单时点事件，没有 ever；label_obs_day = COALESCE(首还日, obs_dt)，obs=1 才判 ovd
+--   FPD 金额率近似口径 = 逾期借据 due+N 时点未还本金 / 成熟借据放款本金
 --   MOB1-3 的标签与金额指标共用月末当天快照；缺快照 -> NULL
 --   MOB0/4 只有金额指标；MOB0 允许月末后 7 天内的快照
 --   金额率分母 estimate_principal_remaining_mobN；current/ever 分子分别用
@@ -390,6 +393,31 @@ mob_amount_wide AS (
     FROM mob_snapshot_detail
     GROUP BY loan_no
 ),
+-- FPD 金额指标：due+N 当天快照的整笔未还本金
+fpd_amount_detail AS (
+    SELECT
+         b.loan_no
+        ,f.fpd_n
+        ,GREATEST(COALESCE(d.owing_principal, 0), 0) AS owing_principal_at_window
+    FROM obs_labels b
+    CROSS JOIN (SELECT EXPLODE(ARRAY(1, 3, 7, 15, 30)) AS fpd_n) f
+    JOIN model.tmp_eliam_wagego_stg_debt_snp d
+      ON b.listing_id = d.listing_id
+     AND d.stat_date = DATE_ADD(b.init_due_date, f.fpd_n)
+    WHERE b.is_fpd_eligible = 1
+      AND DATE_ADD(b.init_due_date, f.fpd_n) < b.obs_dt
+),
+fpd_amount_wide AS (
+    SELECT
+         loan_no
+        ,MAX(CASE WHEN fpd_n = 1  THEN owing_principal_at_window END) AS estimate_principal_remaining_fpd1
+        ,MAX(CASE WHEN fpd_n = 3  THEN owing_principal_at_window END) AS estimate_principal_remaining_fpd3
+        ,MAX(CASE WHEN fpd_n = 7  THEN owing_principal_at_window END) AS estimate_principal_remaining_fpd7
+        ,MAX(CASE WHEN fpd_n = 15 THEN owing_principal_at_window END) AS estimate_principal_remaining_fpd15
+        ,MAX(CASE WHEN fpd_n = 30 THEN owing_principal_at_window END) AS estimate_principal_remaining_fpd30
+    FROM fpd_amount_detail
+    GROUP BY loan_no
+),
 model_log AS (
     SELECT
          t.scene_id                                                                                   AS loan_no
@@ -413,6 +441,10 @@ labeled AS (
         ,CASE WHEN b.y_fpd7_obs = 1  THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 7)  THEN 1 ELSE 0 END END AS y_fpd7_ovd
         ,CASE WHEN b.y_fpd15_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 15) THEN 1 ELSE 0 END END AS y_fpd15_ovd
         ,CASE WHEN b.y_fpd30_obs = 1 THEN CASE WHEN b.label_obs_day > DATE_ADD(b.init_due_date, 30) THEN 1 ELSE 0 END END AS y_fpd30_ovd
+        -- FPD 金额指标
+        ,fa.estimate_principal_remaining_fpd1, fa.estimate_principal_remaining_fpd3
+        ,fa.estimate_principal_remaining_fpd7, fa.estimate_principal_remaining_fpd15
+        ,fa.estimate_principal_remaining_fpd30
         -- 时间 / 新老客
         ,CASE WHEN b.debt_listing_id IS NOT NULL THEN DATEDIFF(b.init_due_date, TO_DATE(b.disburse_time)) END AS loan_term_contract_days
         ,CASE WHEN b.user_actual_repay_time IS NOT NULL THEN DATEDIFF(TO_DATE(b.user_actual_repay_time), TO_DATE(b.disburse_time)) END AS loan_term_actual_days
@@ -437,6 +469,8 @@ labeled AS (
         ,t.estimate_principal_remaining_mob4, t.dpd_days_mob4, t.dpd_days_ever_mob4
         ,ml.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
     FROM obs_labels b
+    LEFT JOIN fpd_amount_wide fa
+      ON b.loan_no = fa.loan_no
     LEFT JOIN mob_label_wide m
       ON b.loan_no = m.loan_no
     LEFT JOIN mob_amount_wide t
@@ -460,6 +494,10 @@ SELECT
     ,y_fpd1_obs, y_fpd1_ovd, y_fpd3_obs, y_fpd3_ovd
     ,y_fpd7_obs, y_fpd7_ovd, y_fpd15_obs, y_fpd15_ovd
     ,y_fpd30_obs, y_fpd30_ovd
+    -- FPD 金额指标
+    ,estimate_principal_remaining_fpd1, estimate_principal_remaining_fpd3
+    ,estimate_principal_remaining_fpd7, estimate_principal_remaining_fpd15
+    ,estimate_principal_remaining_fpd30
     -- 时间 / 新老客
     ,loan_term_contract_days, loan_term_actual_days, is_early_settlement
     ,disburse_month, disburse_quarter, disburse_week, days_on_book, user_type

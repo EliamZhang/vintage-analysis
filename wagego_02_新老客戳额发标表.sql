@@ -3,51 +3,54 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 -- 样本时间窗：2026-08-01 至 2026-10-23（今天），表名中的 _20260801_20261023 对应此窗口
 -- 新客戳额样本按戳额时间筛选，发标及发标成交样本按申请时间筛选
 -- 事件时间列统一命名为 sample_datetime
--- 每个样本表末尾附带 19 个核心 y 标签，直接取自主表同名字段
+-- 戳额样本只保留 用户 / 戳额时间 / 戳额流水 三列，不挂 y 标签
+-- 发标及发标成交样本末尾附带 19 个核心 y 标签，直接取自主表同名字段
 -- 新老客标签 user_type 也直接取自主表
 
--- 新客戳额首笔申请样本：每个用户的第一条借款申请（无论成败）及其申请前最近一次戳额
+-- 新客戳额样本：每个用户全历史第一次戳额申请的记录（额度申请表优先取，风控事件兜底）
+-- 先在用户全历史内取第一条，再筛戳额时间窗，避免把老客窗口内的再次戳额当成新客
 DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples;
 CREATE TABLE model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples AS
+WITH credit AS (
+    -- 额度申请表：戳额申请主来源（biz_type = 400）
+    SELECT
+         a.borrower_id                                        AS user_id
+        ,CAST(a.inserttime AS TIMESTAMP)                      AS credit_time
+        ,a.flow_no                                            AS flow_id
+        ,1                                                    AS source_priority
+    FROM ods_ewa.aus_listing_tb_loan_limit_apply a
+    WHERE CAST(a.isactive AS INT) = 1
+      AND CAST(a.biz_type AS INT) = 400
+    UNION ALL
+    -- 风控事件表：无额度申请记录的用户兜底（biz_id = 10000）
+    SELECT
+         e.user_id
+        ,CAST(e.inserttime AS TIMESTAMP)
+        ,e.flow_id
+        ,2
+    FROM ods_ewa.aus_ewa_risk_risk_event_task e
+    WHERE CAST(e.is_active AS INT) = 1
+      AND CAST(e.biz_id AS STRING) = '10000'
+),
+ranked AS (
+    SELECT
+         user_id
+        ,credit_time
+        ,flow_id
+        ,ROW_NUMBER() OVER (
+             PARTITION BY user_id
+             ORDER BY credit_time ASC NULLS LAST, source_priority, flow_id
+         )                                                    AS rn
+    FROM credit
+)
 SELECT
-     loan_no
-    ,user_id
-    ,listing_id
-    ,apply_status
-    ,apply_status_desc
-    ,is_disburse_success
-    ,apply_time
-    ,disburse_time
-    ,last_limit_time                                      AS sample_datetime
-    ,last_limit_flow_id                                   AS flow_id
-    ,disburse_month AS sample_month
-    ,disburse_quarter AS sample_quarter
-    ,disburse_week AS sample_week
-    ,user_type
-    ,first_disburse_time
-    ,y_fpd7_obs
-    ,y_fpd7_ovd
-    ,y_fpd15_obs
-    ,y_fpd15_ovd
-    ,y_mob1_obs
-    ,y_mob1_5plus
-    ,y_mob1_30plus
-    ,y_mob1_ever_5plus
-    ,y_mob1_ever_30plus
-    ,y_mob2_obs
-    ,y_mob2_5plus
-    ,y_mob2_30plus
-    ,y_mob2_ever_5plus
-    ,y_mob2_ever_30plus
-    ,y_mob3_obs
-    ,y_mob3_5plus
-    ,y_mob3_30plus
-    ,y_mob3_ever_5plus
-    ,y_mob3_ever_30plus
-FROM model.tmp_eliam_wagego_dwd_loan_apply_label
-WHERE apply_seq = 1
-  AND last_limit_time >= TO_DATE('2026-08-01')
-  AND last_limit_time <  TO_DATE('2026-10-24')
+     user_id
+    ,credit_time                                          AS sample_datetime
+    ,flow_id
+FROM ranked
+WHERE rn = 1
+  AND credit_time >= TO_DATE('2026-08-01')
+  AND credit_time <  TO_DATE('2026-10-24')
 ;
 
 
