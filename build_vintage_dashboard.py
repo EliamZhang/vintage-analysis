@@ -254,9 +254,18 @@ def build_data(raw):
         ],
     }
 
-    week_chart = {"labels": [], "weeks": [], "fpd3": [], "fpd15": [], "fpd15Low": []}
+    week_chart = {
+        "labels": [],
+        "weeks": [],
+        "fpd3": [],
+        "fpd7": [],
+        "fpd7Low": [],
+        "fpd15": [],
+        "fpd15Low": [],
+    }
     for item in chart_weeks:
         fpd3_row = item["windows"].get(3)
+        fpd7_row = item["windows"].get(7)
         fpd15_row = item["windows"].get(15)
         week_chart["labels"].append(item["week"][5:])
         week_chart["weeks"].append(item["week"])
@@ -269,6 +278,27 @@ def build_data(raw):
             if fpd3_row
             else None
         )
+        if fpd7_row and fpd7_row["maturity"] >= 0.7:
+            week_chart["fpd7"].append(
+                {
+                    "rate": fpd7_row["rate"],
+                    "obs": fpd7_row["obs"],
+                    "maturity": fpd7_row["maturity"],
+                    "partial": fpd7_row["maturity"] < 0.9 or item["incomplete"],
+                }
+            )
+            week_chart["fpd7Low"].append(None)
+        else:
+            week_chart["fpd7"].append(None)
+            week_chart["fpd7Low"].append(
+                {
+                    "rate": fpd7_row["rate"],
+                    "obs": fpd7_row["obs"],
+                    "maturity": fpd7_row["maturity"],
+                }
+                if fpd7_row and fpd7_row["maturity"] > 0
+                else None
+            )
         if fpd15_row and fpd15_row["maturity"] >= 0.7:
             week_chart["fpd15"].append(
                 {
@@ -591,13 +621,14 @@ def week_card_html(data):
     return f"""
 <section class="card">
   <h2>按放款周：FPD15 与早期信号{TAG_COUNT}</h2>
-  <p class="desc">纵轴为笔数坏率；FPD15 是确认指标，FPD3 是早期信号；空心点表示成熟度不足或周未完整。</p>
+  <p class="desc">纵轴为笔数坏率；FPD15 是确认指标，FPD7 / FPD3 是早期信号；空心点表示成熟度不足或周未完整。</p>
   <div class="chart-wrap">
-    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15 与 FPD3 笔数坏率"></svg>
+    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15、FPD7 与 FPD3 笔数坏率"></svg>
     <div class="tip" id="weekTip"></div>
   </div>
   <div class="legend">
     <span><i style="background:var(--c1)"></i>FPD15</span>
+    <span><i class="dash" style="border-top-color:var(--c3)"></i>FPD7 早期信号</span>
     <span><i class="dash"></i>FPD3 早期信号</span>
   </div>
   {week_table(data)}
@@ -865,6 +896,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     --axis: #c3c2b7;
     --c1: #2a78d6;
     --c2: #eb6834;
+    --c3: #008300;
     --ring: rgba(11,11,11,0.10);
   }
   @media (prefers-color-scheme: dark) {
@@ -879,6 +911,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --axis: #383835;
       --c1: #3987e5;
       --c2: #d95926;
+      --c3: #008300;
       --ring: rgba(255,255,255,0.10);
     }
   }
@@ -1287,6 +1320,7 @@ makeLineChart('fpdCurve', 'fpdTip', {
 
 const weekSeries = [
   { name: 'FPD3', key: 'fpd3', color: 'var(--muted)', points: DATA.weekChart.fpd3, dash: '5 4', width: 1.8 },
+  { name: 'FPD7', key: 'fpd7', color: 'var(--c3)', points: DATA.weekChart.fpd7, dash: '5 4', width: 1.8 },
   { name: 'FPD15', key: 'fpd15', color: 'var(--c1)', points: DATA.weekChart.fpd15, width: 2 }
 ];
 const lastPointIndex = points => {
@@ -1294,6 +1328,7 @@ const lastPointIndex = points => {
   return -1;
 };
 const last15 = lastPointIndex(DATA.weekChart.fpd15);
+const last7 = lastPointIndex(DATA.weekChart.fpd7);
 const last3 = lastPointIndex(DATA.weekChart.fpd3);
 makeLineChart('weekChart', 'weekTip', {
   width: 1040, height: 300, margin: { t: 30, r: 100, b: 46, l: 56 },
@@ -1302,8 +1337,13 @@ makeLineChart('weekChart', 'weekTip', {
   yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）', yLabel: '笔数坏率',
   directLabels: [
     {
-      series: 1, index: last15,
+      series: 2, index: last15,
       text: `FPD15 ${fmtRate(DATA.weekChart.fpd15[last15].rate)}${DATA.weekChart.fpd15[last15].partial ? '*' : ''}`,
+      dx: 8, dy: -10, anchor: 'start'
+    },
+    {
+      series: 1, index: last7,
+      text: `FPD7 ${fmtRate(DATA.weekChart.fpd7[last7].rate)}${DATA.weekChart.fpd7[last7].partial ? '*' : ''}`,
       dx: 8, dy: -10, anchor: 'start'
     },
     {
@@ -1315,8 +1355,16 @@ makeLineChart('weekChart', 'weekTip', {
   tooltip: index => {
     const parts = [`<b>${DATA.weekChart.weeks[index]} · 笔数坏率</b>`];
     const fpd3 = DATA.weekChart.fpd3[index];
+    const fpd7 = DATA.weekChart.fpd7[index];
     const fpd15 = DATA.weekChart.fpd15[index];
     if (fpd3) parts.push(`<span><i style="background:var(--muted)"></i>FPD3 <b>${fmtRate(fpd3.rate)}</b> · n=${fmtInt(fpd3.obs)}${fpd3.partial ? ' · 周未完整' : ''}</span>`);
+    if (fpd7) parts.push(`<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(fpd7.rate)}</b> · n=${fmtInt(fpd7.obs)} · ${Math.round(fpd7.maturity * 100)}% 成熟${fpd7.partial ? '*' : ''}</span>`);
+    else {
+      const low7 = DATA.weekChart.fpd7Low[index];
+      parts.push(low7
+        ? `<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(low7.rate)}</b> · n=${fmtInt(low7.obs)} · ${Math.round(low7.maturity * 100)}% 成熟（低于 70%，未入图）</span>`
+        : '<span>FPD7 尚未达到 70% 成熟</span>');
+    }
     if (fpd15) parts.push(`<span><i style="background:var(--c1)"></i>FPD15 <b>${fmtRate(fpd15.rate)}</b> · n=${fmtInt(fpd15.obs)} · ${Math.round(fpd15.maturity * 100)}% 成熟${fpd15.partial ? '*' : ''}</span>`);
     else {
       const low = DATA.weekChart.fpd15Low[index];

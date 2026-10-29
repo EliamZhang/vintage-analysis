@@ -16,6 +16,7 @@
     --axis: #c3c2b7;
     --c1: #2a78d6;
     --c2: #eb6834;
+    --c3: #008300;
     --ring: rgba(11,11,11,0.10);
   }
   @media (prefers-color-scheme: dark) {
@@ -30,6 +31,7 @@
       --axis: #383835;
       --c1: #3987e5;
       --c2: #d95926;
+      --c3: #008300;
       --ring: rgba(255,255,255,0.10);
     }
   }
@@ -238,13 +240,14 @@
 
 <section class="card">
   <h2>按放款周：FPD15 与早期信号<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span></h2>
-  <p class="desc">纵轴为笔数坏率；FPD15 是确认指标，FPD3 是早期信号；空心点表示成熟度不足或周未完整。</p>
+  <p class="desc">纵轴为笔数坏率；FPD15 是确认指标，FPD7 / FPD3 是早期信号；空心点表示成熟度不足或周未完整。</p>
   <div class="chart-wrap">
-    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15 与 FPD3 笔数坏率"></svg>
+    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15、FPD7 与 FPD3 笔数坏率"></svg>
     <div class="tip" id="weekTip"></div>
   </div>
   <div class="legend">
     <span><i style="background:var(--c1)"></i>FPD15</span>
+    <span><i class="dash" style="border-top-color:var(--c3)"></i>FPD7 早期信号</span>
     <span><i class="dash"></i>FPD3 早期信号</span>
   </div>
   
@@ -347,13 +350,13 @@
     <li>成熟度：该窗口成熟样本 / 当周 FPD3 样本；星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示；FPD30 采用 90% 阈值。</li>
     <li>新老客：user_type 按首笔放款；复借期数 application_rank，1st = 首借，2nd 起为 Old，4th+ 含 4 次及以上。</li>
     <li>模型分：FPD15 成熟样本内 pooled 五分位，Q1 最低分、Q5 最高分；分数越高越坏。</li>
-    <li>数据源：vintage_data (1).zip（8 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：2026-10-29 14:00 China Standard Time。</li>
+    <li>数据源：vintage_data.zip（8 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：2026-10-29 14:06 China Standard Time。</li>
   </ul>
 </footer>
 
 </main>
 <script>
-const DATA = {"fpdCurve": {"labels": ["FPD3", "FPD7", "FPD14", "FPD15", "FPD30"], "series": [{"name": "整体", "key": "ALL", "color": "var(--ink-2)", "points": [{"rate": 13.76, "obs": 23635, "bad": 3252, "partial": false, "maturity": null}, {"rate": 11.06, "obs": 21886, "bad": 2420, "partial": false, "maturity": null}, {"rate": 8.37, "obs": 16046, "bad": 1343, "partial": false, "maturity": null}, {"rate": 8.14, "obs": 13352, "bad": 1087, "partial": false, "maturity": null}, {"rate": 6.98, "obs": 4585, "bad": 320, "partial": true, "maturity": 0.34339424805272617}]}, {"name": "新客", "key": "New", "color": "var(--c1)", "points": [{"rate": 16.63, "obs": 12013, "bad": 1998, "partial": false, "maturity": null}, {"rate": 14.03, "obs": 11322, "bad": 1588, "partial": false, "maturity": null}, {"rate": 10.61, "obs": 8980, "bad": 953, "partial": false, "maturity": null}, {"rate": 10.35, "obs": 7611, "bad": 788, "partial": false, "maturity": null}, {"rate": 8.28, "obs": 3042, "bad": 252, "partial": true, "maturity": 0.3996846669294442}]}, {"name": "老客", "key": "Old", "color": "var(--c2)", "points": [{"rate": 10.79, "obs": 11622, "bad": 1254, "partial": false, "maturity": null}, {"rate": 7.88, "obs": 10564, "bad": 832, "partial": false, "maturity": null}, {"rate": 5.52, "obs": 7066, "bad": 390, "partial": false, "maturity": null}, {"rate": 5.21, "obs": 5741, "bad": 299, "partial": false, "maturity": null}, {"rate": 4.41, "obs": 1543, "bad": 68, "partial": true, "maturity": 0.2687685072287058}]}]}, "weekChart": {"labels": ["08-24", "08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12", "10-19"], "weeks": ["2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19"], "fpd3": [{"rate": 13.68, "obs": 95, "partial": false}, {"rate": 16.71, "obs": 694, "partial": false}, {"rate": 14.52, "obs": 1501, "partial": false}, {"rate": 14.52, "obs": 2266, "partial": false}, {"rate": 14.24, "obs": 3363, "partial": false}, {"rate": 13.39, "obs": 4698, "partial": false}, {"rate": 12.33, "obs": 5594, "partial": false}, {"rate": 13.92, "obs": 4711, "partial": false}, {"rate": 16.54, "obs": 677, "partial": true}], "fpd15": [{"rate": 9.47, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 11.1, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 8.66, "obs": 1501, "maturity": 1.0, "partial": false}, {"rate": 8.34, "obs": 2183, "maturity": 0.9633715798764343, "partial": false}, {"rate": 8.28, "obs": 3211, "maturity": 0.9548022598870056, "partial": false}, {"rate": 6.91, "obs": 3777, "maturity": 0.8039591315453385, "partial": true}, null, null, null], "fpd15Low": [null, null, null, null, null, null, {"rate": 8.38, "obs": 1767, "maturity": 0.3158741508759385}, {"rate": 7.95, "obs": 88, "maturity": 0.018679685841647208}, null]}, "scoreChart": {"labels": ["Q1", "Q2", "Q3", "Q4", "Q5"], "series": [{"name": "整体", "key": "ALL", "color": "var(--ink-2)", "points": [{"q": 1, "min": -1.0, "max": 0.058358208265568784, "avg": 0.0407, "obs": 2671, "bad": 113, "rate": 4.23}, {"q": 2, "min": 0.05836036362929259, "max": 0.07755551369781186, "avg": 0.0679, "obs": 2670, "bad": 144, "rate": 5.39}, {"q": 3, "min": 0.07755935262096425, "max": 0.09802073301386452, "avg": 0.0878, "obs": 2670, "bad": 226, "rate": 8.46}, {"q": 4, "min": 0.09802970897418876, "max": 0.12306400282359745, "avg": 0.1102, "obs": 2670, "bad": 241, "rate": 9.03}, {"q": 5, "min": 0.1230744427692629, "max": 0.5372854233620126, "avg": 0.1715, "obs": 2670, "bad": 363, "rate": 13.6}]}, {"name": "新客", "key": "New", "color": "var(--c1)", "points": [{"q": 1, "min": -1.0, "max": 0.058358208265568784, "avg": 0.0416, "obs": 1518, "bad": 75, "rate": 4.94}, {"q": 2, "min": 0.05836036362929259, "max": 0.07755448780110999, "avg": 0.068, "obs": 1530, "bad": 115, "rate": 7.52}, {"q": 3, "min": 0.07755935262096425, "max": 0.09801055817217603, "avg": 0.0878, "obs": 1526, "bad": 156, "rate": 10.22}, {"q": 4, "min": 0.09802970897418876, "max": 0.12305907509783542, "avg": 0.1101, "obs": 1541, "bad": 185, "rate": 12.01}, {"q": 5, "min": 0.12307665582139204, "max": 0.5372854233620126, "avg": 0.1741, "obs": 1495, "bad": 257, "rate": 17.19}]}, {"name": "老客", "key": "Old", "color": "var(--c2)", "points": [{"q": 1, "min": -1.0, "max": 0.058355009756532766, "avg": 0.0393, "obs": 1153, "bad": 38, "rate": 3.3}, {"q": 2, "min": 0.0583790387153694, "max": 0.07755551369781186, "avg": 0.0678, "obs": 1140, "bad": 29, "rate": 2.54}, {"q": 3, "min": 0.07756489695501323, "max": 0.09802073301386452, "avg": 0.0877, "obs": 1144, "bad": 70, "rate": 6.12}, {"q": 4, "min": 0.09803499464816698, "max": 0.12306400282359745, "avg": 0.1103, "obs": 1129, "bad": 56, "rate": 4.96}, {"q": 5, "min": 0.1230744427692629, "max": 0.5372854233620126, "avg": 0.1683, "obs": 1175, "bad": 106, "rate": 9.02}]}]}, "rankChart": [{"label": "1st", "sub": "New", "rate": 10.35, "obs": 7611, "bad": 788}, {"label": "2nd", "sub": "Old", "rate": 5.86, "obs": 3159, "bad": 185}, {"label": "3rd", "sub": "Old", "rate": 5.35, "obs": 1382, "bad": 74}, {"label": "4th+", "sub": "Old", "rate": 3.33, "obs": 1200, "bad": 40}]};
+const DATA = {"fpdCurve": {"labels": ["FPD3", "FPD7", "FPD14", "FPD15", "FPD30"], "series": [{"name": "整体", "key": "ALL", "color": "var(--ink-2)", "points": [{"rate": 13.76, "obs": 23635, "bad": 3252, "partial": false, "maturity": null}, {"rate": 11.06, "obs": 21886, "bad": 2420, "partial": false, "maturity": null}, {"rate": 8.37, "obs": 16046, "bad": 1343, "partial": false, "maturity": null}, {"rate": 8.14, "obs": 13352, "bad": 1087, "partial": false, "maturity": null}, {"rate": 6.98, "obs": 4585, "bad": 320, "partial": true, "maturity": 0.34339424805272617}]}, {"name": "新客", "key": "New", "color": "var(--c1)", "points": [{"rate": 16.63, "obs": 12013, "bad": 1998, "partial": false, "maturity": null}, {"rate": 14.03, "obs": 11322, "bad": 1588, "partial": false, "maturity": null}, {"rate": 10.61, "obs": 8980, "bad": 953, "partial": false, "maturity": null}, {"rate": 10.35, "obs": 7611, "bad": 788, "partial": false, "maturity": null}, {"rate": 8.28, "obs": 3042, "bad": 252, "partial": true, "maturity": 0.3996846669294442}]}, {"name": "老客", "key": "Old", "color": "var(--c2)", "points": [{"rate": 10.79, "obs": 11622, "bad": 1254, "partial": false, "maturity": null}, {"rate": 7.88, "obs": 10564, "bad": 832, "partial": false, "maturity": null}, {"rate": 5.52, "obs": 7066, "bad": 390, "partial": false, "maturity": null}, {"rate": 5.21, "obs": 5741, "bad": 299, "partial": false, "maturity": null}, {"rate": 4.41, "obs": 1543, "bad": 68, "partial": true, "maturity": 0.2687685072287058}]}]}, "weekChart": {"labels": ["08-24", "08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12", "10-19"], "weeks": ["2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19"], "fpd3": [{"rate": 13.68, "obs": 95, "partial": false}, {"rate": 16.71, "obs": 694, "partial": false}, {"rate": 14.52, "obs": 1501, "partial": false}, {"rate": 14.52, "obs": 2266, "partial": false}, {"rate": 14.24, "obs": 3363, "partial": false}, {"rate": 13.39, "obs": 4698, "partial": false}, {"rate": 12.33, "obs": 5594, "partial": false}, {"rate": 13.92, "obs": 4711, "partial": false}, {"rate": 16.54, "obs": 677, "partial": true}], "fpd7": [{"rate": 11.58, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 13.83, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 12.06, "obs": 1501, "maturity": 1.0, "partial": false}, {"rate": 11.87, "obs": 2266, "maturity": 1.0, "partial": false}, {"rate": 11.81, "obs": 3353, "maturity": 0.9970264644662503, "partial": false}, {"rate": 10.35, "obs": 4685, "maturity": 0.997232865048957, "partial": false}, {"rate": 10.22, "obs": 5165, "maturity": 0.9233106900250269, "partial": false}, {"rate": 10.78, "obs": 3729, "maturity": 0.7915516875398004, "partial": true}, null], "fpd7Low": [null, null, null, null, null, null, null, null, {"rate": 12.43, "obs": 362, "maturity": 0.534711964549483}], "fpd15": [{"rate": 9.47, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 11.1, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 8.66, "obs": 1501, "maturity": 1.0, "partial": false}, {"rate": 8.34, "obs": 2183, "maturity": 0.9633715798764343, "partial": false}, {"rate": 8.28, "obs": 3211, "maturity": 0.9548022598870056, "partial": false}, {"rate": 6.91, "obs": 3777, "maturity": 0.8039591315453385, "partial": true}, null, null, null], "fpd15Low": [null, null, null, null, null, null, {"rate": 8.38, "obs": 1767, "maturity": 0.3158741508759385}, {"rate": 7.95, "obs": 88, "maturity": 0.018679685841647208}, null]}, "scoreChart": {"labels": ["Q1", "Q2", "Q3", "Q4", "Q5"], "series": [{"name": "整体", "key": "ALL", "color": "var(--ink-2)", "points": [{"q": 1, "min": -1.0, "max": 0.058358208265568784, "avg": 0.0407, "obs": 2671, "bad": 113, "rate": 4.23}, {"q": 2, "min": 0.05836036362929259, "max": 0.07755551369781186, "avg": 0.0679, "obs": 2670, "bad": 144, "rate": 5.39}, {"q": 3, "min": 0.07755935262096425, "max": 0.09802073301386452, "avg": 0.0878, "obs": 2670, "bad": 226, "rate": 8.46}, {"q": 4, "min": 0.09802970897418876, "max": 0.12306400282359745, "avg": 0.1102, "obs": 2670, "bad": 241, "rate": 9.03}, {"q": 5, "min": 0.1230744427692629, "max": 0.5372854233620126, "avg": 0.1715, "obs": 2670, "bad": 363, "rate": 13.6}]}, {"name": "新客", "key": "New", "color": "var(--c1)", "points": [{"q": 1, "min": -1.0, "max": 0.058358208265568784, "avg": 0.0416, "obs": 1518, "bad": 75, "rate": 4.94}, {"q": 2, "min": 0.05836036362929259, "max": 0.07755448780110999, "avg": 0.068, "obs": 1530, "bad": 115, "rate": 7.52}, {"q": 3, "min": 0.07755935262096425, "max": 0.09801055817217603, "avg": 0.0878, "obs": 1526, "bad": 156, "rate": 10.22}, {"q": 4, "min": 0.09802970897418876, "max": 0.12305907509783542, "avg": 0.1101, "obs": 1541, "bad": 185, "rate": 12.01}, {"q": 5, "min": 0.12307665582139204, "max": 0.5372854233620126, "avg": 0.1741, "obs": 1495, "bad": 257, "rate": 17.19}]}, {"name": "老客", "key": "Old", "color": "var(--c2)", "points": [{"q": 1, "min": -1.0, "max": 0.058355009756532766, "avg": 0.0393, "obs": 1153, "bad": 38, "rate": 3.3}, {"q": 2, "min": 0.0583790387153694, "max": 0.07755551369781186, "avg": 0.0678, "obs": 1140, "bad": 29, "rate": 2.54}, {"q": 3, "min": 0.07756489695501323, "max": 0.09802073301386452, "avg": 0.0877, "obs": 1144, "bad": 70, "rate": 6.12}, {"q": 4, "min": 0.09803499464816698, "max": 0.12306400282359745, "avg": 0.1103, "obs": 1129, "bad": 56, "rate": 4.96}, {"q": 5, "min": 0.1230744427692629, "max": 0.5372854233620126, "avg": 0.1683, "obs": 1175, "bad": 106, "rate": 9.02}]}]}, "rankChart": [{"label": "1st", "sub": "New", "rate": 10.35, "obs": 7611, "bad": 788}, {"label": "2nd", "sub": "Old", "rate": 5.86, "obs": 3159, "bad": 185}, {"label": "3rd", "sub": "Old", "rate": 5.35, "obs": 1382, "bad": 74}, {"label": "4th+", "sub": "Old", "rate": 3.33, "obs": 1200, "bad": 40}]};
 const NS = 'http://www.w3.org/2000/svg';
 const fmtRate = v => (v == null ? '—' : v.toFixed(2) + '%');
 const fmtInt = n => (n == null ? '—' : n.toLocaleString('en-US'));
@@ -604,6 +607,7 @@ makeLineChart('fpdCurve', 'fpdTip', {
 
 const weekSeries = [
   { name: 'FPD3', key: 'fpd3', color: 'var(--muted)', points: DATA.weekChart.fpd3, dash: '5 4', width: 1.8 },
+  { name: 'FPD7', key: 'fpd7', color: 'var(--c3)', points: DATA.weekChart.fpd7, dash: '5 4', width: 1.8 },
   { name: 'FPD15', key: 'fpd15', color: 'var(--c1)', points: DATA.weekChart.fpd15, width: 2 }
 ];
 const lastPointIndex = points => {
@@ -611,6 +615,7 @@ const lastPointIndex = points => {
   return -1;
 };
 const last15 = lastPointIndex(DATA.weekChart.fpd15);
+const last7 = lastPointIndex(DATA.weekChart.fpd7);
 const last3 = lastPointIndex(DATA.weekChart.fpd3);
 makeLineChart('weekChart', 'weekTip', {
   width: 1040, height: 300, margin: { t: 30, r: 100, b: 46, l: 56 },
@@ -619,8 +624,13 @@ makeLineChart('weekChart', 'weekTip', {
   yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）', yLabel: '笔数坏率',
   directLabels: [
     {
-      series: 1, index: last15,
+      series: 2, index: last15,
       text: `FPD15 ${fmtRate(DATA.weekChart.fpd15[last15].rate)}${DATA.weekChart.fpd15[last15].partial ? '*' : ''}`,
+      dx: 8, dy: -10, anchor: 'start'
+    },
+    {
+      series: 1, index: last7,
+      text: `FPD7 ${fmtRate(DATA.weekChart.fpd7[last7].rate)}${DATA.weekChart.fpd7[last7].partial ? '*' : ''}`,
       dx: 8, dy: -10, anchor: 'start'
     },
     {
@@ -632,8 +642,16 @@ makeLineChart('weekChart', 'weekTip', {
   tooltip: index => {
     const parts = [`<b>${DATA.weekChart.weeks[index]} · 笔数坏率</b>`];
     const fpd3 = DATA.weekChart.fpd3[index];
+    const fpd7 = DATA.weekChart.fpd7[index];
     const fpd15 = DATA.weekChart.fpd15[index];
     if (fpd3) parts.push(`<span><i style="background:var(--muted)"></i>FPD3 <b>${fmtRate(fpd3.rate)}</b> · n=${fmtInt(fpd3.obs)}${fpd3.partial ? ' · 周未完整' : ''}</span>`);
+    if (fpd7) parts.push(`<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(fpd7.rate)}</b> · n=${fmtInt(fpd7.obs)} · ${Math.round(fpd7.maturity * 100)}% 成熟${fpd7.partial ? '*' : ''}</span>`);
+    else {
+      const low7 = DATA.weekChart.fpd7Low[index];
+      parts.push(low7
+        ? `<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(low7.rate)}</b> · n=${fmtInt(low7.obs)} · ${Math.round(low7.maturity * 100)}% 成熟（低于 70%，未入图）</span>`
+        : '<span>FPD7 尚未达到 70% 成熟</span>');
+    }
     if (fpd15) parts.push(`<span><i style="background:var(--c1)"></i>FPD15 <b>${fmtRate(fpd15.rate)}</b> · n=${fmtInt(fpd15.obs)} · ${Math.round(fpd15.maturity * 100)}% 成熟${fpd15.partial ? '*' : ''}</span>`);
     else {
       const low = DATA.weekChart.fpd15Low[index];
