@@ -209,6 +209,19 @@ def approval_envelope(score, label):
     return rate_sorted[better], keep_max[better]
 
 
+HEAT_EDGES = (1, 3, 7, 15)  # 坏率分级边界：<1 / 1–3 / 3–7 / 7–15 / ≥15
+
+
+def heat_level(rate):
+    """把坏率映射到 1–5 的热力档。"""
+    if rate is None:
+        return 0
+    for level, edge in enumerate(HEAT_EDGES, start=1):
+        if rate < edge:
+            return level
+    return 5
+
+
 def kept_stats(score, label, amount, kept):
     """通过分数最低的 kept 笔（即放行最安全的部分）后的通过结构。"""
     score = np.asarray(score, dtype=float)
@@ -415,6 +428,53 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
             "n": n_pair,
             "cells": cells,
             "overall_rate": round(float(label_arr.mean() * 100), 2),
+        }
+
+        # 五分位交叉矩阵：行 = 新戳额模型档，列 = 线上模型档
+        pair_all = base.dropna(subset=["old_score", "new_score"])
+        label_all = pair_all[ovd_col].astype(int).to_numpy()
+        n_pair_all = len(pair_all)
+
+        def quintile(values):
+            rank = pd.Series(np.asarray(values, dtype=float)).rank(method="first")
+            return np.ceil(rank * 5 / n_pair_all).astype(int).to_numpy()
+
+        q_new = quintile(pair_all["new_score"].to_numpy(float))
+        q_old = quintile(pair_all["old_score"].to_numpy(float))
+        cross_rows = []
+        for i in range(1, 6):
+            cells = []
+            for j in range(1, 6):
+                mask = (q_new == i) & (q_old == j)
+                cnt = int(mask.sum())
+                bad = int(label_all[mask].sum())
+                cells.append(
+                    {
+                        "n": cnt,
+                        "bad": bad,
+                        "rate": round(bad / cnt * 100, 2) if cnt else None,
+                        "level": heat_level(bad / cnt * 100) if cnt else 0,
+                    }
+                )
+            cross_rows.append({"q": i, "cells": cells})
+
+        rates = [[c["rate"] for c in row["cells"]] for row in cross_rows]
+        row_spreads = [
+            max(v for v in r if v is not None) - min(v for v in r if v is not None)
+            for r in rates
+        ]
+        col_spreads = [
+            max(rates[i][j] for i in range(5)) - min(rates[i][j] for i in range(5))
+            for j in range(5)
+        ]
+        diag = sum(cross_rows[i]["cells"][i]["n"] for i in range(5))
+        entry["cross"] = {
+            "rows": cross_rows,
+            "n": n_pair_all,
+            "min_cell": min(c["n"] for row in cross_rows for c in row["cells"]),
+            "diag_share": round(diag / n_pair_all * 100, 1),
+            "row_spread_max": round(max(row_spreads), 2),
+            "col_spread_min": round(min(col_spreads), 2),
         }
 
         # 通过收益：同一通过坏率预算下，两个模型各自能做到多大通过率
@@ -923,6 +983,60 @@ def decile_card(data) -> str:
     """
 
 
+def cross_table(data, window_key="15") -> str:
+    entry = data["windows"][window_key]
+    cross = entry["cross"]
+    head = "".join(f"<th>{j} 档</th>" for j in range(1, 6))
+    body = []
+    for row in cross["rows"]:
+        cells = []
+        for j, c in enumerate(row["cells"], start=1):
+            tip = (
+                f"新戳额 {row['q']} 档 × 线上 {j} 档："
+                f"{fmt_int(c['n'])} 笔，坏 {fmt_int(c['bad'])} 笔，坏率 {fmt_pct(c['rate'])}"
+            )
+            cells.append(
+                f'<td class="h{c["level"]}" title="{tip}">'
+                f"<b>{fmt_pct(c['rate'])}</b><span>{fmt_int(c['n'])} 笔</span></td>"
+            )
+        body.append(f'<tr><th class="rowhead">{row["q"]} 档</th>{"".join(cells)}</tr>')
+    return f"""
+      <div class="table-wrap">
+        <table class="cross">
+          <thead>
+            <tr><th class="corner"></th><th colspan="5" class="group">线上模型 · 五分位</th></tr>
+            <tr><th class="rowhead">新戳额模型</th>{head}</tr>
+          </thead>
+          <tbody>{''.join(body)}</tbody>
+        </table>
+      </div>
+    """
+
+
+def cross_card(data) -> str:
+    cross = data["windows"]["15"]["cross"]
+    return f"""
+    <section class="card">
+      <h2>五分位交叉矩阵<span class="tag" title="行 = 新戳额模型五分位，列 = 线上模型五分位，每格为该组合的笔数坏率">FPD15</span></h2>
+      <p class="desc">每格是落在该组合的样本的笔数坏率。横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差
+      {cross['row_spread_max']:.1f}pp；纵向看（线上档固定、新戳额模型 1→5 档）至少差 {cross['col_spread_min']:.1f}pp
+      ——风险差异主要由新戳额模型的分档解释，线上模型分档带来的额外区分很小。</p>
+      {cross_table(data, '15')}
+      <div class="heat-legend">
+        <span class="muted">笔数坏率</span>
+        <span><i class="sw h1"></i>&lt;1%</span>
+        <span><i class="sw h2"></i>1–3%</span>
+        <span><i class="sw h3"></i>3–7%</span>
+        <span><i class="sw h4"></i>7–15%</span>
+        <span><i class="sw h5"></i>≥15%</span>
+      </div>
+      <p class="note">行 = 新戳额模型五分位，列 = 线上模型五分位，1 档风险最低。样本为 FPD15 成熟且两个模型都有分的
+      {fmt_int(cross['n'])} 笔，每格最少 {fmt_int(cross['min_cell'])} 笔；两模型落在同一档（对角线）的占
+      {cross['diag_share']}%，其余是重排。悬停方格可看该格坏样本数。</p>
+    </section>
+    """
+
+
 def capture_card(data) -> str:
     entry = data["windows"]["15"]
     reject = data["meta"]["reject_pct"]
@@ -1274,6 +1388,38 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   table.metrics tr.delta td { border-bottom: 1px solid var(--grid); background: var(--page); }
   table.metrics tr.delta td.strong { font-weight: 600; }
   table.decile td.lift { color: var(--ink-2); }
+  table.cross { width: 100%; border-collapse: separate; border-spacing: 3px; }
+  table.cross th {
+    font-weight: 500; color: var(--muted); font-size: 11.5px;
+    text-align: center; padding: 4px 6px; border-bottom: 0;
+  }
+  table.cross th.corner { border: 0; }
+  table.cross th.rowhead { text-align: right; white-space: nowrap; padding-right: 12px; }
+  table.cross td {
+    text-align: center; padding: 11px 6px; border-radius: 6px;
+    border-bottom: 0; color: var(--ink); background: var(--surface);
+  }
+  table.cross td b { display: block; font-size: 15px; font-weight: 600; line-height: 1.3; }
+  table.cross td span { display: block; font-size: 10.5px; opacity: .72; }
+  table.cross td.h1 { background: rgba(192,57,43,0.06); }
+  table.cross td.h2 { background: rgba(192,57,43,0.15); }
+  table.cross td.h3 { background: rgba(192,57,43,0.29); }
+  table.cross td.h4 { background: rgba(192,57,43,0.46); }
+  table.cross td.h5 { background: rgba(192,57,43,0.66); }
+  .heat-legend {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 15px;
+    font-size: 11.5px; color: var(--ink-2); margin: 8px 2px 0;
+  }
+  .heat-legend .sw {
+    display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+    margin-right: 5px; vertical-align: -2px;
+    box-shadow: inset 0 0 0 1px var(--ring);
+  }
+  .heat-legend .sw.h1 { background: rgba(192,57,43,0.06); }
+  .heat-legend .sw.h2 { background: rgba(192,57,43,0.15); }
+  .heat-legend .sw.h3 { background: rgba(192,57,43,0.29); }
+  .heat-legend .sw.h4 { background: rgba(192,57,43,0.46); }
+  .heat-legend .sw.h5 { background: rgba(192,57,43,0.66); }
   .subhead { color: var(--muted); font-size: 11.5px; font-weight: 600; margin: 14px 1px 3px; }
   .note { color: var(--muted); font-size: 12px; line-height: 1.65; margin: 8px 2px 4px; }
   .swap {
@@ -1321,6 +1467,7 @@ __SUMMARY__
 __METRICS_CARD__
 __ROC_CARD__
 __DECILE_CARD__
+__CROSS_CARD__
 __CAPTURE_CARD__
 __THROUGH_CARD__
 __SWAP_CARD__
@@ -1938,6 +2085,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str) -> str
     html = html.replace("__METRICS_CARD__", metrics_card)
     html = html.replace("__ROC_CARD__", roc_card(data))
     html = html.replace("__DECILE_CARD__", decile_card(data))
+    html = html.replace("__CROSS_CARD__", cross_card(data))
     html = html.replace("__CAPTURE_CARD__", capture_card(data))
     html = html.replace("__THROUGH_CARD__", through_card(data))
     html = html.replace("__SWAP_CARD__", swap_card(data))
