@@ -127,8 +127,8 @@ def delong_paired(score_a, score_b, label):
     return out
 
 
-def deciles(score, label):
-    """按分数升序切 10 档（第 1 档最低风险）。"""
+def deciles(score, label, amount=None, loss=None):
+    """按分数升序切 10 档（第 1 档最低风险）；可选带放款规模与坏账损失本金。"""
     score = np.asarray(score, dtype=float)
     label = np.asarray(label, dtype=int)
     n = len(score)
@@ -139,14 +139,19 @@ def deciles(score, label):
     rows = []
     for k in range(1, 11):
         mask = q == k
-        rows.append(
-            {
-                "q": k,
-                "n": int(mask.sum()),
-                "bad": int(label[mask].sum()),
-                "rate": float(label[mask].mean() * 100) if mask.sum() else None,
-            }
-        )
+        item = {
+            "q": k,
+            "n": int(mask.sum()),
+            "bad": int(label[mask].sum()),
+            "rate": float(label[mask].mean() * 100) if mask.sum() else None,
+        }
+        if amount is not None:
+            amt = float(amount[mask].sum())
+            loss_amt = float(loss[mask].sum()) if loss is not None else 0.0
+            item["amt"] = amt
+            item["loss_amt"] = loss_amt
+            item["amt_rate"] = round(loss_amt / amt * 100, 2) if amt else None
+        rows.append(item)
     return rows
 
 
@@ -165,7 +170,7 @@ def capture_curve(score, label, max_reject=60):
     return points
 
 
-def cutoff_stats(score, label, reject_pct):
+def cutoff_stats(score, label, reject_pct, amount=None, loss=None):
     """按分数拒绝最差 reject_pct% 后的通过坏率与坏账捕获率。"""
     score = np.asarray(score, dtype=float)
     label = np.asarray(label, dtype=int)
@@ -177,7 +182,7 @@ def cutoff_stats(score, label, reject_pct):
     kept = ~rejected
     total_bad = int(label.sum())
     kept_bad = int(label[kept].sum())
-    return {
+    stats = {
         "reject_pct": reject_pct,
         "reject_n": k,
         "kept_n": int(kept.sum()),
@@ -186,6 +191,15 @@ def cutoff_stats(score, label, reject_pct):
         "capture": round((total_bad - kept_bad) / total_bad * 100, 2) if total_bad else None,
         "rejected_bad": total_bad - kept_bad,
     }
+    if amount is not None and loss is not None:
+        total_loss = float(loss.sum())
+        kept_loss = float(loss[kept].sum())
+        stats["kept_amt"] = float(amount[kept].sum())
+        stats["kept_loss"] = kept_loss
+        stats["capture_amt"] = (
+            round((total_loss - kept_loss) / total_loss * 100, 2) if total_loss else None
+        )
+    return stats
 
 
 def approval_envelope(score, label):
@@ -343,20 +357,26 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
             "maturity": round(len(base) / len(sample) * 100, 1),
             "models": {},
         }
+        loss_col = f"estimate_principal_remaining_fpd{w}"
         for key, col in (("old", "old_score"), ("new", "new_score")):
             d = base.dropna(subset=[col])
             y = d[ovd_col].astype(int).to_numpy()
             s = d[col].to_numpy(float)
+            amt = pd.to_numeric(d["real_amount"], errors="coerce").fillna(0).to_numpy(float)
+            loss = pd.to_numeric(d[loss_col], errors="coerce").fillna(0).to_numpy(float)
             auc, ks = auc_ks(s, y)
             _, se, _, _ = delong(s, y)
-            dec = deciles(s, y)
+            dec = deciles(s, y, amt, loss)
             overall_rate = float(y.mean() * 100)
-            for d in dec:
-                d["lift"] = round(d["rate"] / overall_rate, 2) if overall_rate else None
+            for item in dec:
+                item["lift"] = round(item["rate"] / overall_rate, 2) if overall_rate else None
             entry["models"][key] = {
                 "n": int(len(d)),
                 "bad": int(y.sum()),
                 "rate": round(overall_rate, 2),
+                "amt": float(amt.sum()),
+                "loss_amt": float(loss.sum()),
+                "amt_rate": round(float(loss.sum() / amt.sum() * 100), 2) if amt.sum() else None,
                 "auc": round(auc, 4),
                 "se": round(se, 4),
                 "auc_lo": round(auc - Z95 * se, 4),
@@ -369,7 +389,7 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
                 "roc": roc_points(s, y),
                 "capture": capture_curve(s, y),
                 "cutoffs": [
-                    cutoff_stats(s, y, r)
+                    cutoff_stats(s, y, r, amt, loss)
                     for r in sorted(set(CUTOFF_REJECTS) | {reject_pct})
                 ],
             }
@@ -575,7 +595,9 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
 
 
 def fmt_int(value):
-    return "—" if value is None else f"{value:,}"
+    if value is None:
+        return "—"
+    return f"{int(round(value)):,}"
 
 
 def fmt_pct(value, digits=2):
@@ -694,6 +716,15 @@ def metrics_table(data) -> str:
 def scenario_table(data, window_key) -> str:
     entry = data["windows"][window_key]
     levels = sorted(c["reject_pct"] for c in entry["models"]["new"]["cutoffs"])
+
+    def sub(c, reject):
+        parts = []
+        if c["capture"] is not None and reject:
+            parts.append(f"lift {c['capture'] / reject:.2f}×")
+        if c.get("capture_amt") is not None:
+            parts.append(f"金额 {fmt_pct(c['capture_amt'], 1)}")
+        return " · ".join(parts)
+
     rows = []
     for reject in levels:
         o, n = cut_for(entry, "old", reject), cut_for(entry, "new", reject)
@@ -704,9 +735,9 @@ def scenario_table(data, window_key) -> str:
               <td class="strong">{100 - reject}%</td>
               <td>{fmt_int(n['kept_n'])}</td>
               <td class="strong">{fmt_pct(n['kept_rate'])}</td>
-              <td class="soft">{fmt_pct(n['capture'], 1)}<span class="n">lift {fmt_num(n['capture'] / reject if n['capture'] is not None else None, 2)}×</span></td>
+              <td class="soft">{fmt_pct(n['capture'], 1)}<span class="n">{sub(n, reject)}</span></td>
               <td>{fmt_pct(o['kept_rate'])}</td>
-              <td class="soft">{fmt_pct(o['capture'], 1)}<span class="n">lift {fmt_num(o['capture'] / reject if o['capture'] is not None else None, 2)}×</span></td>
+              <td class="soft">{fmt_pct(o['capture'], 1)}<span class="n">{sub(o, reject)}</span></td>
               <td>{fmt_signed(diff, 2)}pp</td>
             </tr>"""
         )
@@ -721,8 +752,8 @@ def scenario_table(data, window_key) -> str:
               <th rowspan="2">坏率差</th>
             </tr>
             <tr>
-              <th>通过坏率</th><th>拦截坏账</th>
-              <th>通过坏率</th><th>拦截坏账</th>
+              <th>通过坏率</th><th>拦截坏账（笔数）</th>
+              <th>通过坏率</th><th>拦截坏账（笔数）</th>
             </tr>
           </thead>
           <tbody>{''.join(rows)}</tbody>
@@ -1037,6 +1068,128 @@ def cross_card(data) -> str:
     """
 
 
+def money_overall_table(data) -> str:
+    rows = []
+    for w in WINDOWS:
+        entry = data["windows"][str(w)]
+        for key in ("new", "old"):
+            m = entry["models"][key]
+            name = NEW_NAME if key == "new" else OLD_NAME
+            keep = m["amt"] - m["loss_amt"]
+            rows.append(
+                f"""
+            <tr>
+              <td class="w">{entry['label']}</td>
+              <td class="model"><i class="dot {key}"></i>{name}</td>
+              <td>{fmt_int(m['amt'])}</td>
+              <td class="soft">{fmt_int(m['loss_amt'])}</td>
+              <td class="strong">{fmt_pct(m['amt_rate'])}</td>
+              <td class="soft">{fmt_int(keep)}</td>
+              <td class="soft">{fmt_pct(m['rate'])}</td>
+            </tr>"""
+            )
+    return f"""
+      <div class="table-wrap">
+        <table class="money">
+          <thead>
+            <tr>
+              <th>窗口</th><th>模型</th><th>置入</th><th>置出（坏账损失）</th>
+              <th>置出率</th><th>留存</th><th>笔数坏率（对照）</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(rows)}</tbody>
+        </table>
+      </div>
+    """
+
+
+def money_decile_table(data, window_key="15") -> str:
+    entry = data["windows"][window_key]
+    new_dec = entry["models"]["new"]["deciles"]
+    old_dec = entry["models"]["old"]["deciles"]
+    rows = []
+    for i in range(10):
+        n, o = new_dec[i], old_dec[i]
+        rows.append(
+            f"""
+            <tr>
+              <td>{n['q']}</td>
+              <td>{fmt_int(n['amt'])}</td>
+              <td class="soft">{fmt_int(n['loss_amt'])}</td>
+              <td class="strong">{fmt_pct(n['amt_rate'])}</td>
+              <td>{fmt_int(o['amt'])}</td>
+              <td class="soft">{fmt_int(o['loss_amt'])}</td>
+              <td>{fmt_pct(o['amt_rate'])}</td>
+            </tr>"""
+        )
+    return f"""
+      <div class="table-wrap">
+        <table class="decile">
+          <thead>
+            <tr>
+              <th rowspan="2">档位</th>
+              <th colspan="3" class="group new">新戳额模型</th>
+              <th colspan="3" class="group old">线上模型</th>
+            </tr>
+            <tr>
+              <th>置入</th><th>置出</th><th>置出率</th>
+              <th>置入</th><th>置出</th><th>置出率</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(rows)}</tbody>
+        </table>
+      </div>
+    """
+
+
+def money_card(data) -> str:
+    entry = data["windows"]["15"]
+    m = entry["models"]["new"]
+    old_m = entry["models"]["old"]
+    gap = m["rate"] - m["amt_rate"]
+    if gap >= 0:
+        gap_txt = f"低 {gap:.2f}pp——坏样本的单笔金额小于整体平均"
+    else:
+        gap_txt = f"高 {-gap:.2f}pp——坏样本的单笔金额大于整体平均"
+    top = m["deciles"][-1]
+    top_amt_share = top["amt"] / m["amt"] * 100 if m["amt"] else 0
+    top_loss_share = top["loss_amt"] / m["loss_amt"] * 100 if m["loss_amt"] else 0
+    old_top_loss = old_m["deciles"][-1]["loss_amt"] / old_m["loss_amt"] * 100 if old_m["loss_amt"] else 0
+    panels = ""
+    for key in ("new", "old"):
+        mm = entry["models"][key]
+        name = NEW_NAME if key == "new" else OLD_NAME
+        panels += f"""
+      <div class="panel">
+        <h3>{name}<span class="muted">　置入 {fmt_int(mm['amt'])} · 置出 {fmt_int(mm['loss_amt'])}（{fmt_pct(mm['amt_rate'])}）</span></h3>
+        <div class="chart-wrap">
+          <svg id="money{key}" viewBox="0 0 500 300" role="img" aria-label="各档置入与置出金额"></svg>
+          <div class="tip" id="moneyTip{key}"></div>
+        </div>
+      </div>"""
+    return f"""
+    <section class="card">
+      <h2>置入与置出<span class="tag" title="置入 = 放款本金 real_amount 之和；置出 = due+N 当天借据快照的未还本金之和">放款规模与坏账损失</span></h2>
+      <p class="desc">前面所有坏率都是笔数口径，这里换成钱。FPD15 成熟样本上，新戳额模型口径的置入
+      {fmt_int(m['amt'])}、置出 {fmt_int(m['loss_amt'])}，置出率 {fmt_pct(m['amt_rate'])}，
+      比同口径的笔数坏率 {fmt_pct(m['rate'])} {gap_txt}。最高档只占置入的 {top_amt_share:.1f}%，
+      却贡献 {top_loss_share:.1f}% 的置出（线上模型最高档 {old_top_loss:.1f}%）。</p>
+      <div class="grid2">{panels}</div>
+      <div class="heat-legend">
+        <span class="muted">柱高 = 置入</span>
+        <span><i class="sw loss"></i>置出（坏账损失）</span>
+        <span><i class="sw keep"></i>留存</span>
+      </div>
+      <div class="subhead">整体</div>
+      {money_overall_table(data)}
+      <div class="subhead">分档明细（FPD15）</div>
+      {money_decile_table(data, '15')}
+      <p class="note">置入 = real_amount 之和；置出 = due + N 当天借据快照的未还本金之和，成熟样本内无缺失；
+      置出率 = 置出 / 置入；留存 = 置入 − 置出。金额为放款本金口径，不含利息与费用。</p>
+    </section>
+    """
+
+
 def capture_card(data) -> str:
     entry = data["windows"]["15"]
     reject = data["meta"]["reject_pct"]
@@ -1060,7 +1213,8 @@ def capture_card(data) -> str:
       {scenario_table(data, '15')}
       <div class="subhead">FPD7 · 通过率情景</div>
       {scenario_table(data, '7')}
-      <p class="note">通过坏率 = 未被拒绝样本的笔数坏率；拦截坏账 = 被拒坏样本 / 全部坏样本。
+      <p class="note">通过坏率 = 未被拒绝样本的笔数坏率；拦截坏账（笔数）= 被拒坏样本 / 全部坏样本；
+      拦截坏账下的「金额」= 被拒样本的坏账损失本金 / 全部坏账损失本金，见「金额口径」卡。
       通过笔数按新戳额模型样本计（线上模型缺失 5 笔，各情景差异在 5 笔以内）。
       通过率 {100 - data['meta']['reject_pct']}% 为上方「结论」引用的口径。</p>
     </section>
@@ -1257,6 +1411,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     --axis: #c3c2b7;
     --c1: #2a78d6;
     --c2: #eb6834;
+    --keep: #dcdad2;
+    --loss: #c0392b;
     --ring: rgba(11,11,11,0.10);
   }
   @media (prefers-color-scheme: dark) {
@@ -1271,6 +1427,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --axis: #383835;
       --c1: #3987e5;
       --c2: #d95926;
+      --keep: #4a4a44;
+      --loss: #b34a3f;
       --ring: rgba(255,255,255,0.10);
     }
   }
@@ -1420,6 +1578,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .heat-legend .sw.h3 { background: rgba(192,57,43,0.29); }
   .heat-legend .sw.h4 { background: rgba(192,57,43,0.46); }
   .heat-legend .sw.h5 { background: rgba(192,57,43,0.66); }
+  .heat-legend .sw.keep { background: var(--keep); }
+  .heat-legend .sw.loss { background: var(--loss); }
   .subhead { color: var(--muted); font-size: 11.5px; font-weight: 600; margin: 14px 1px 3px; }
   .note { color: var(--muted); font-size: 12px; line-height: 1.65; margin: 8px 2px 4px; }
   .swap {
@@ -1467,6 +1627,7 @@ __SUMMARY__
 __METRICS_CARD__
 __ROC_CARD__
 __DECILE_CARD__
+__MONEY_CARD__
 __CROSS_CARD__
 __CAPTURE_CARD__
 __THROUGH_CARD__
@@ -2033,6 +2194,95 @@ function drawWeekly(w) {
   hit.addEventListener('blur', () => { tip.hide(); cross.setAttribute('opacity', 0); });
 }
 
+/* ---------- 置入 / 置出 ---------- */
+function drawMoney(key) {
+  const dec = DATA.windows['15'].models[key].deciles;
+  const svg = document.getElementById('money' + key);
+  const tip = tipCtl(svg, document.getElementById('moneyTip' + key));
+  const W = 500, H = 300, m = { l: 56, r: 14, t: 14, b: 44 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const step = 50000;
+  const both = DATA.windows['15'].models.new.deciles.concat(DATA.windows['15'].models.old.deciles);
+  const yMax = Math.ceil(Math.max.apply(null, both.map(d => d.amt)) / step) * step;
+  const groupW = iw / 10;
+  const barW = Math.min(20, groupW * 0.55);
+  const cx = q => m.l + (q - 0.5) * groupW;
+  const y = v => m.t + (1 - v / yMax) * ih;
+  const baseline = H - m.b;
+  clearSvg(svg);
+
+  const ticks = [];
+  for (let v = 0; v <= yMax + 1; v += step) ticks.push(v);
+  axes(svg, {
+    W, H, m, x: v => v, y, xTicks: [], yTicks: ticks, tickSize: 11,
+    xFmt: t => '', yFmt: v => (v === 0 ? '0' : (v / 1000) + 'K'),
+    xLabel: '分档（1 = 分数最低）', yLabel: '金额'
+  });
+
+  const band = svgEl(svg, 'rect', {
+    x: m.l, y: m.t, width: 0, height: ih,
+    fill: 'var(--grid)', opacity: 0, 'pointer-events': 'none'
+  });
+
+  dec.forEach((d, i) => {
+    const xb = cx(i + 1) - barW / 2;
+    const yTop = y(d.amt);
+    const yLoss = y(d.loss_amt);
+    const keepBottom = Math.min(yLoss - 2, baseline);
+    if (keepBottom > yTop) {
+      const r = Math.min(4, keepBottom - yTop, barW / 2);
+      svgEl(svg, 'path', {
+        d: 'M' + xb + ',' + keepBottom +
+           ' L' + xb + ',' + (yTop + r) +
+           ' Q' + xb + ',' + yTop + ' ' + (xb + r) + ',' + yTop +
+           ' L' + (xb + barW - r) + ',' + yTop +
+           ' Q' + (xb + barW) + ',' + yTop + ' ' + (xb + barW) + ',' + (yTop + r) +
+           ' L' + (xb + barW) + ',' + keepBottom + ' Z',
+        fill: 'var(--keep)'
+      });
+    }
+    if (yLoss < baseline) {
+      svgEl(svg, 'rect', {
+        x: xb, y: yLoss, width: barW, height: baseline - yLoss, fill: 'var(--loss)'
+      });
+    }
+  });
+
+  const hit = svgEl(svg, 'rect', {
+    x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent', tabindex: 0
+  });
+  let active = 10;
+  function show(q) {
+    active = q;
+    const d = dec[q - 1];
+    band.setAttribute('x', m.l + (q - 1) * groupW);
+    band.setAttribute('width', groupW);
+    band.setAttribute('opacity', 0.55);
+    tip.show({
+      title: '第 ' + q + ' 档',
+      rows: [
+        { value: fmtInt(d.amt), name: '置入', color: 'var(--keep)' },
+        { value: fmtInt(d.loss_amt), name: '置出', color: 'var(--loss)' },
+        { value: fmtPct(d.amt_rate), name: '置出率', color: null }
+      ]
+    }, cx(q), y(d.amt) - 6);
+  }
+  function clear() {
+    tip.hide();
+    band.setAttribute('width', 0);
+    band.setAttribute('opacity', 0);
+  }
+  function groupAt(clientX) {
+    const box = svg.getBoundingClientRect();
+    const ux = (clientX - box.left) / box.width * W;
+    return Math.min(10, Math.max(1, Math.floor((ux - m.l) / groupW) + 1));
+  }
+  hit.addEventListener('pointermove', e => show(groupAt(e.clientX)));
+  hit.addEventListener('pointerleave', clear);
+  hit.addEventListener('focus', () => show(active));
+  hit.addEventListener('blur', clear);
+}
+
 drawRoc('15');
 drawRoc('7');
 drawDeciles();
@@ -2040,6 +2290,8 @@ drawCapture();
 drawApproval();
 drawWeekly('15');
 drawWeekly('7');
+drawMoney('new');
+drawMoney('old');
 </script>
 </body>
 </html>
@@ -2085,6 +2337,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str) -> str
     html = html.replace("__METRICS_CARD__", metrics_card)
     html = html.replace("__ROC_CARD__", roc_card(data))
     html = html.replace("__DECILE_CARD__", decile_card(data))
+    html = html.replace("__MONEY_CARD__", money_card(data))
     html = html.replace("__CROSS_CARD__", cross_card(data))
     html = html.replace("__CAPTURE_CARD__", capture_card(data))
     html = html.replace("__THROUGH_CARD__", through_card(data))
