@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""新客样本上的新旧模型效果对比，输出自包含 HTML。
+"""新客样本上的新戳额模型与线上模型效果对比，输出自包含 HTML。
 
 样本：wagego_02 中的新客首笔成交样本（application_rank = 1，戳额时间落在窗口内）。
-新模型分数按 last_limit_flow_id = 打分文件的 flow_id 关联；旧模型分数取自主表。
+新戳额模型分数按 last_limit_flow_id = 打分文件的 flow_id 关联；线上模型分数取自主表。
 
 用法：
     python build_model_compare.py
@@ -35,8 +35,8 @@ DEFAULT_OUTPUT = PROJECT_DIR / "模型效果对比.html"
 OLD_SCORE = "aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626"
 NEW_SCORE = "aus_new_wagego_credit_20261028_v1_0_txn_lgb_score"
 
-OLD_NAME = "旧模型"
-NEW_NAME = "新模型"
+OLD_NAME = "线上模型"
+NEW_NAME = "新戳额模型"
 OLD_DESC = "发标 3rd 模型"
 NEW_DESC = "交易流水 LGB 模型"
 
@@ -277,7 +277,7 @@ def load_sample(label_csv: Path, score_csv: Path, start: str, end: str) -> pd.Da
     )
     merged = merged.rename(columns={NEW_SCORE: "new_score"})
     merged["old_score"] = pd.to_numeric(merged[OLD_SCORE], errors="coerce")
-    # 旧模型的 -1 是"未打分"哨兵值，按缺失处理，不参与排序
+    # 线上模型的 -1 是"未打分"哨兵值，按缺失处理，不参与排序
     merged.loc[merged["old_score"] < 0, "old_score"] = np.nan
     merged["new_score"] = pd.to_numeric(merged["new_score"], errors="coerce")
 
@@ -337,10 +337,13 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
             auc, ks = auc_ks(s, y)
             _, se, _, _ = delong(s, y)
             dec = deciles(s, y)
+            overall_rate = float(y.mean() * 100)
+            for d in dec:
+                d["lift"] = round(d["rate"] / overall_rate, 2) if overall_rate else None
             entry["models"][key] = {
                 "n": int(len(d)),
                 "bad": int(y.sum()),
-                "rate": round(float(y.mean() * 100), 2),
+                "rate": round(overall_rate, 2),
                 "auc": round(auc, 4),
                 "se": round(se, 4),
                 "auc_lo": round(auc - Z95 * se, 4),
@@ -348,7 +351,7 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
                 "gini": round(2 * auc - 1, 4),
                 "ks": round(ks, 4),
                 "top_rate": dec[-1]["rate"],
-                "top_lift": round(float(dec[-1]["rate"] / (y.mean() * 100)), 2),
+                "top_lift": dec[-1]["lift"],
                 "deciles": dec,
                 "roc": roc_points(s, y),
                 "capture": capture_curve(s, y),
@@ -618,15 +621,14 @@ def metrics_table(data) -> str:
             <tr>
               <th>窗口</th><th>模型</th><th>成熟样本</th><th>坏样本</th><th>笔数坏率</th>
               <th>AUC</th><th>AUC 95% CI</th><th>Gini</th><th>KS</th>
-              <th>最高档坏率</th><th>档位 lift</th>
+              <th>最高档坏率</th><th>最高档 lift</th>
             </tr>
           </thead>
           <tbody>{''.join(rows)}</tbody>
         </table>
       </div>
       <p class="note">坏样本 = y_fpdN_ovd 之和；成熟样本 = y_fpdN_obs = 1（due + N &lt; 观察日）。
-      最高档 = 十分位第 10 档（分数最高）；lift = 该档坏率 / 全体坏率。ΔAUC 用 DeLong 配对检验，仅取两模型都有分的样本。</p>
-    """
+      最高档 = 十分位第 10 档（分数最高）；lift = 该档坏率 / 全体坏率。ΔAUC 用 DeLong 配对检验，仅取两模型都有分的样本。</p>    """
 
 
 def scenario_table(data, window_key) -> str:
@@ -642,9 +644,9 @@ def scenario_table(data, window_key) -> str:
               <td class="strong">{100 - reject}%</td>
               <td>{fmt_int(n['kept_n'])}</td>
               <td class="strong">{fmt_pct(n['kept_rate'])}</td>
-              <td class="soft">{fmt_pct(n['capture'], 1)}</td>
+              <td class="soft">{fmt_pct(n['capture'], 1)}<span class="n">lift {fmt_num(n['capture'] / reject if n['capture'] is not None else None, 2)}×</span></td>
               <td>{fmt_pct(o['kept_rate'])}</td>
-              <td class="soft">{fmt_pct(o['capture'], 1)}</td>
+              <td class="soft">{fmt_pct(o['capture'], 1)}<span class="n">lift {fmt_num(o['capture'] / reject if o['capture'] is not None else None, 2)}×</span></td>
               <td>{fmt_signed(diff, 2)}pp</td>
             </tr>"""
         )
@@ -654,8 +656,8 @@ def scenario_table(data, window_key) -> str:
           <thead>
             <tr>
               <th rowspan="2">通过率</th><th rowspan="2">通过笔数</th>
-              <th colspan="2" class="group new">新模型</th>
-              <th colspan="2" class="group old">旧模型</th>
+              <th colspan="2" class="group new">新戳额模型</th>
+              <th colspan="2" class="group old">线上模型</th>
               <th rowspan="2">坏率差</th>
             </tr>
             <tr>
@@ -682,9 +684,11 @@ def decile_table(data, window_key) -> str:
               <td>{n['q']}</td>
               <td>{fmt_int(n['n'])}</td>
               <td class="strong">{fmt_pct(n['rate'])}</td>
+              <td class="lift">{fmt_num(n['lift'], 2)}×</td>
               <td class="soft">{fmt_int(n['bad'])}</td>
               <td>{fmt_int(o['n'])}</td>
               <td>{fmt_pct(o['rate'])}</td>
+              <td class="lift">{fmt_num(o['lift'], 2)}×</td>
               <td class="soft">{fmt_int(o['bad'])}</td>
             </tr>"""
         )
@@ -694,12 +698,12 @@ def decile_table(data, window_key) -> str:
           <thead>
             <tr>
               <th rowspan="2">档位</th>
-              <th colspan="3" class="group new">新模型</th>
-              <th colspan="3" class="group old">旧模型</th>
+              <th colspan="4" class="group new">新戳额模型</th>
+              <th colspan="4" class="group old">线上模型</th>
             </tr>
             <tr>
-              <th>样本</th><th>笔数坏率</th><th>坏样本</th>
-              <th>样本</th><th>笔数坏率</th><th>坏样本</th>
+              <th>样本</th><th>笔数坏率</th><th>lift</th><th>坏样本</th>
+              <th>样本</th><th>笔数坏率</th><th>lift</th><th>坏样本</th>
             </tr>
           </thead>
           <tbody>{''.join(rows)}</tbody>
@@ -717,28 +721,29 @@ def swap_html(data, window_key) -> str:
         c = cells[key]
         accent = ' accent' if key in ("new_only", "old_only") else ""
         tag = f'<em>{label}</em>' if label else ""
+        lift = (c["rate"] / swap["overall_rate"]) if swap["overall_rate"] and c["rate"] is not None else None
         return f"""
         <div class="cell{accent}">
           {tag}
-          <b>{fmt_pct(c['rate'])}</b>
+          <b>{fmt_pct(c['rate'])}<i>{fmt_num(lift, 2)}×</i></b>
           <span>{fmt_int(c['n'])} 人 · 坏 {fmt_int(c['bad'])} 笔</span>
         </div>"""
 
     return f"""
       <div class="swap">
         <div></div>
-        <div class="colhead">旧模型 · 通过</div>
-        <div class="colhead">旧模型 · 拒绝</div>
-        <div class="rowhead">新模型 · 通过</div>
+        <div class="colhead">线上模型 · 通过</div>
+        <div class="colhead">线上模型 · 拒绝</div>
+        <div class="rowhead">新戳额模型 · 通过</div>
         {cell('both_pass')}
-        {cell('old_only', '旧模型独有拦截')}
-        <div class="rowhead">新模型 · 拒绝</div>
-        {cell('new_only', '新模型独有拦截')}
+        {cell('old_only', '线上模型独有拦截')}
+        <div class="rowhead">新戳额模型 · 拒绝</div>
+        {cell('new_only', '新戳额模型独有拦截')}
         {cell('both_reject')}
       </div>
       <p class="note">按分数各拒绝最差的 {swap['reject_pct']}%（{fmt_int(swap['reject_n'])} 人）后交叉分组；
-      全体坏率 {fmt_pct(swap['overall_rate'])}。两模型都拒绝的人群坏率最高，都通过的最低——
-      分歧人群的坏率差距说明谁的判断更准。</p>
+      全体坏率 {fmt_pct(swap['overall_rate'])}，坏率后的 × 为该组相对全体坏率的 lift。
+      两模型都拒绝的人群坏率最高，都通过的最低——分歧人群的坏率差距说明谁的判断更准。</p>
     """
 
 
@@ -794,12 +799,12 @@ def kpi_html(data) -> str:
     return f"""
     <div class="kpis">
       <div class="kpi">
-        <span class="label"><i class="dot new"></i>新模型 FPD15 AUC</span>
+        <span class="label"><i class="dot new"></i>新戳额模型 FPD15 AUC</span>
         <b>{fmt_num(new['auc'])}</b>
         <span class="sub">Gini {fmt_num(new['gini'])} · KS {fmt_num(new['ks'])}</span>
       </div>
       <div class="kpi">
-        <span class="label"><i class="dot old"></i>旧模型 FPD15 AUC</span>
+        <span class="label"><i class="dot old"></i>线上模型 FPD15 AUC</span>
         <b>{fmt_num(old['auc'])}</b>
         <span class="sub">Gini {fmt_num(old['gini'])} · KS {fmt_num(old['ks'])}</span>
       </div>
@@ -811,7 +816,7 @@ def kpi_html(data) -> str:
       <div class="kpi">
         <span class="label">拒绝 {reject}% 后的通过坏率</span>
         <b>{fmt_pct(cut_new['kept_rate'])} <span class="vs">vs</span> {fmt_pct(cut_old['kept_rate'])}</b>
-        <span class="sub">新 vs 旧 · 笔数坏率</span>
+        <span class="sub">口径：笔数坏率</span>
       </div>
     </div>
     """
@@ -839,17 +844,17 @@ def summary_html(data) -> str:
     <section class="card conclus">
       <h2>结论</h2>
       <ul>
-        <li><b>区分度</b>：新模型 FPD15 AUC {fmt_num(new['auc'])}，旧模型 {fmt_num(old['auc'])}，
+        <li><b>区分度</b>：新戳额模型 FPD15 AUC {fmt_num(new['auc'])}，线上模型 {fmt_num(old['auc'])}，
             提升 {fmt_signed(delta['diff'])}（95% CI {fmt_signed(delta['ci_low'])} ~ {fmt_signed(delta['ci_high'])}，
             {fmt_p(delta['p'])}）；FPD7 口径同样提升 {fmt_signed(f7['delta']['diff'])}，结论不依赖单一标签。</li>
-        <li><b>同样风控强度下坏率更低</b>：拒绝最差 {reject}% 时，新模型通过人群坏率 {fmt_pct(cut_new['kept_rate'])}，
-            旧模型 {fmt_pct(cut_old['kept_rate'])}（{ratio_txt}）；新模型拦下 {fmt_pct(cut_new['capture'], 1)} 的坏账，旧模型 {fmt_pct(cut_old['capture'], 1)}。</li>
-        <li><b>同样坏率预算下通过更多</b>：把通过坏率压在同一水平，新模型能多放客户。以 {ref['target']}% 为例，
-            旧模型最多通过 {fmt_pct(ref['old']['approval'], 1)}（{fmt_int(ref['old']['kept'])} 笔），新模型
+        <li><b>同样风控强度下坏率更低</b>：拒绝最差 {reject}% 时，新戳额模型通过人群坏率 {fmt_pct(cut_new['kept_rate'])}，
+            线上模型 {fmt_pct(cut_old['kept_rate'])}（{ratio_txt}）；新戳额模型拦下 {fmt_pct(cut_new['capture'], 1)} 的坏账，线上模型 {fmt_pct(cut_old['capture'], 1)}。</li>
+        <li><b>同样坏率预算下通过更多</b>：把通过坏率压在同一水平，新戳额模型能多放客户。以 {ref['target']}% 为例，
+            线上模型最多通过 {fmt_pct(ref['old']['approval'], 1)}（{fmt_int(ref['old']['kept'])} 笔），新戳额模型
             {fmt_pct(ref['new']['approval'], 1)}（{fmt_int(ref['new']['kept'])} 笔），多 {fmt_int(ref['extra'])} 位客户、
             {fmt_money(ref['extra_good_amt'])} 好客户本金。</li>
-        <li><b>分歧人群以新模型判断为准</b>：新模型拒绝而旧模型放行的 {fmt_int(new_only['n'])} 人坏率
-            {fmt_pct(new_only['rate'])}，旧模型拒绝而新模型放行的 {fmt_int(old_only['n'])} 人坏率仅
+        <li><b>分歧人群以新戳额模型判断为准</b>：新戳额模型拒绝而线上模型放行的 {fmt_int(new_only['n'])} 人坏率
+            {fmt_pct(new_only['rate'])}，线上模型拒绝而新戳额模型放行的 {fmt_int(old_only['n'])} 人坏率仅
             {fmt_pct(old_only['rate'])}{gap_txt}。</li>
       </ul>
     </section>
@@ -869,15 +874,15 @@ def roc_card(data) -> str:
           <div class="tip" id="rocTip{w}"></div>
         </div>
         <div class="legend">
-          <span><i class="dot new"></i>新模型 <b>AUC {fmt_num(entry['models']['new']['auc'])}</b></span>
-          <span><i class="dot old"></i>旧模型 <b>AUC {fmt_num(entry['models']['old']['auc'])}</b></span>
+          <span><i class="dot new"></i>新戳额模型 <b>AUC {fmt_num(entry['models']['new']['auc'])}</b></span>
+          <span><i class="dot old"></i>线上模型 <b>AUC {fmt_num(entry['models']['old']['auc'])}</b></span>
         </div>
       </div>"""
         )
     return f"""
     <section class="card">
       <h2>ROC 曲线<span class="tag" title="横轴假阳率、纵轴真阳率；对角线为随机模型">AUC 比较</span></h2>
-      <p class="desc">曲线越靠左上越好；新模型在两个标签口径下都明显更靠左上。</p>
+      <p class="desc">曲线越靠左上越好；新戳额模型在两个标签口径下都明显更靠左上。</p>
       <div class="grid2">{''.join(panels)}</div>
       <p class="note">ROC 按分数降序逐点计算，等距抽样至 200 个点绘制；表值见上方「核心指标」。</p>
     </section>
@@ -900,16 +905,17 @@ def decile_card(data) -> str:
     return f"""
     <section class="card">
       <h2>十分位坏率<span class="tag" title="按各模型分数升序切 10 等份，第 10 档风险最高">FPD15</span></h2>
-      <p class="desc">新模型{'从第 1 档到第 10 档单调上升' if mono else '各档基本拉开'}，最高档 {fmt_pct(new_dec[-1]['rate'])}；
-      旧模型前 9 档挤在 {fmt_pct(old_low)}–{fmt_pct(old_high)} 之间，只有最高档才拉开。</p>
+      <p class="desc">新戳额模型{'从第 1 档到第 10 档单调上升' if mono else '各档基本拉开'}，最高档 {fmt_pct(new_dec[-1]['rate'])}、
+      lift {fmt_num(new_dec[-1]['lift'], 2)}×；线上模型前 9 档挤在 {fmt_pct(old_low)}–{fmt_pct(old_high)} 之间，
+      最高档 {fmt_pct(old_dec[-1]['rate'])}、lift {fmt_num(old_dec[-1]['lift'], 2)}×。</p>
       <div class="chart-wrap">
         <svg id="decileChart" viewBox="0 0 1000 340" role="img" aria-label="FPD15 十分位坏率对比"></svg>
         <div class="tip" id="decileTip"></div>
       </div>
       <div class="legend">
-        <span><i class="dot new"></i>新模型</span>
-        <span><i class="dot old"></i>旧模型</span>
-        <span class="muted">横轴：第 1 档 = 分数最低（最安全）</span>
+        <span><i class="dot new"></i>新戳额模型</span>
+        <span><i class="dot old"></i>线上模型</span>
+        <span class="muted">横轴：第 1 档 = 分数最低（最安全）· lift = 该档坏率 / 全体坏率</span>
       </div>
       <div class="subhead">分档明细</div>
       {decile_table(data, '15')}
@@ -924,15 +930,15 @@ def capture_card(data) -> str:
     return f"""
     <section class="card">
       <h2>拦截收益<span class="tag" title="按分数从高到低拒绝，横轴为拒绝比例，纵轴为被拒样本中的坏账占比">FPD15</span></h2>
-      <p class="desc">拒绝同样比例的人，新模型能拦下更多坏账。拒绝 {reject}% 时，新模型捕获
-      {fmt_pct(cut_new['capture'], 1)} 的坏账，旧模型 {fmt_pct(cut_old['capture'], 1)}。</p>
+      <p class="desc">拒绝同样比例的人，新戳额模型能拦下更多坏账。拒绝 {reject}% 时，新戳额模型捕获
+      {fmt_pct(cut_new['capture'], 1)} 的坏账，线上模型 {fmt_pct(cut_old['capture'], 1)}。</p>
       <div class="chart-wrap">
         <svg id="captureChart" viewBox="0 0 1000 340" role="img" aria-label="坏账捕获曲线"></svg>
         <div class="tip" id="captureTip"></div>
       </div>
       <div class="legend">
-        <span><i class="dot new"></i>新模型</span>
-        <span><i class="dot old"></i>旧模型</span>
+        <span><i class="dot new"></i>新戳额模型</span>
+        <span><i class="dot old"></i>线上模型</span>
         <span><i class="linekey"></i>随机拦截</span>
       </div>
 
@@ -941,7 +947,7 @@ def capture_card(data) -> str:
       <div class="subhead">FPD7 · 通过率情景</div>
       {scenario_table(data, '7')}
       <p class="note">通过坏率 = 未被拒绝样本的笔数坏率；拦截坏账 = 被拒坏样本 / 全部坏样本。
-      通过笔数按新模型样本计（旧模型缺失 5 笔，各情景差异在 5 笔以内）。
+      通过笔数按新戳额模型样本计（线上模型缺失 5 笔，各情景差异在 5 笔以内）。
       通过率 {100 - data['meta']['reject_pct']}% 为上方「结论」引用的口径。</p>
     </section>
     """
@@ -976,8 +982,8 @@ def through_table(data, window_key) -> str:
           <thead>
             <tr>
               <th>通过坏率预算</th>
-              <th>旧模型通过率</th>
-              <th>新模型通过率</th>
+              <th>线上模型通过率</th>
+              <th>新戳额模型通过率</th>
               <th>多通过客户</th>
               <th>多通过好客户</th>
               <th>多通过好客户本金</th>
@@ -996,16 +1002,16 @@ def through_card(data) -> str:
     return f"""
     <section class="card">
       <h2>通过收益<span class="tag" title="把通过坏率控制在同一水平，各模型能达到的最高通过率">FPD15</span></h2>
-      <p class="desc">拦截的反面是通过。同样把通过坏率压在 {ref['target']}% 以内，旧模型只能通过
-      {fmt_pct(o['approval'], 1)}（{fmt_int(o['kept'])} 笔），新模型可以通过 {fmt_pct(n['approval'], 1)}（{fmt_int(n['kept'])} 笔），
+      <p class="desc">拦截的反面是通过。同样把通过坏率压在 {ref['target']}% 以内，线上模型只能通过
+      {fmt_pct(o['approval'], 1)}（{fmt_int(o['kept'])} 笔），新戳额模型可以通过 {fmt_pct(n['approval'], 1)}（{fmt_int(n['kept'])} 笔），
       多 {fmt_int(ref['extra'])} 位客户、{fmt_money(ref['extra_good_amt'])} 好客户本金。</p>
       <div class="chart-wrap">
         <svg id="approvalChart" viewBox="0 0 1000 340" role="img" aria-label="同一坏率预算下的可达通过率"></svg>
         <div class="tip" id="approvalTip"></div>
       </div>
       <div class="legend">
-        <span><i class="dot new"></i>新模型</span>
-        <span><i class="dot old"></i>旧模型</span>
+        <span><i class="dot new"></i>新戳额模型</span>
+        <span><i class="dot old"></i>线上模型</span>
         <span class="muted">纵轴：该坏率下可达到的最高通过率</span>
       </div>
 
@@ -1014,8 +1020,8 @@ def through_card(data) -> str:
       <div class="subhead">FPD7 · 同一坏率预算下的通过空间</div>
       {through_table(data, '7')}
       <p class="note">坏率预算 = 通过样本的笔数坏率上限；通过率 = 该预算下可放行的最大比例，
-      多通过本金 = 两边"好客户"（未坏样本）的放款本金之差。旧模型缺失 5 笔，两个样本相差 5 笔以内。
-      本金为放款金额 real_amount，不含利息与费用。旧模型在低预算档只放得出极少数人，说明它无法在该坏率水平上开展业务。</p>
+      多通过本金 = 两边"好客户"（未坏样本）的放款本金之差。线上模型缺失 5 笔，两个样本相差 5 笔以内。
+      本金为放款金额 real_amount，不含利息与费用。线上模型在低预算档只放得出极少数人，说明它无法在该坏率水平上开展业务。</p>
     </section>
     """
 
@@ -1042,8 +1048,8 @@ def weekly_card(data) -> str:
             new_vals = [r["auc_new"] for r in rows]
             all_better = all_better and min(new_vals) > max(old_vals)
             span = (
-                f"旧模型 {min(old_vals):.2f}–{max(old_vals):.2f}，"
-                f"新模型 {min(new_vals):.2f}–{max(new_vals):.2f}"
+                f"线上模型 {min(old_vals):.2f}–{max(old_vals):.2f}，"
+                f"新戳额模型 {min(new_vals):.2f}–{max(new_vals):.2f}"
             )
             weeks_txt = f"{len(rows)} 周"
         else:
@@ -1051,9 +1057,9 @@ def weekly_card(data) -> str:
         parts.append(f"<span class=\"muted\">{entry['label']}（{weeks_txt}）：{span}</span>")
 
     desc_head = (
-        "新模型在每一个可评估的周都高于旧模型"
+        "新戳额模型在每一个可评估的周都高于线上模型"
         if all_better
-        else "新模型整体领先，个别周有波动"
+        else "新戳额模型整体领先，个别周有波动"
     )
     return f"""
     <section class="card">
@@ -1077,8 +1083,8 @@ def weekly_panel(data, w) -> str:
           <div class="tip" id="weekTip{w}"></div>
         </div>
         <div class="legend">
-          <span><i class="dot new"></i>新模型</span>
-          <span><i class="dot old"></i>旧模型</span>
+          <span><i class="dot new"></i>新戳额模型</span>
+          <span><i class="dot old"></i>线上模型</span>
         </div>
       </div>
     """
@@ -1095,18 +1101,20 @@ def footer_html(data, generated_at, label_name, score_name) -> str:
     <footer class="foot">
       <ul class="notes">
         <li><b>样本口径</b>：wagego_02 的新客首笔成交样本（application_rank = 1，按戳额时间 {escape(meta['start'])} 至 {escape(meta['end_display'])} 筛选），
-            与新模型打分文件按 last_limit_flow_id = flow_id 关联，共 {fmt_int(meta['n_sample'])} 人。
+            与新戳额模型打分文件按 last_limit_flow_id = flow_id 关联，共 {fmt_int(meta['n_sample'])} 人。
             样本表中另有 {fmt_int(meta['n_unscored'])} 笔未打分、不入样：{unscored_note}</li>
-        <li><b>模型口径</b>：新模型 {escape(NEW_SCORE)}（戳额场景，{NEW_DESC}）；旧模型 {escape(OLD_SCORE)}（发标场景，{OLD_DESC}）。
+        <li><b>模型口径</b>：新戳额模型 {escape(NEW_SCORE)}（戳额场景，{NEW_DESC}）；线上模型 {escape(OLD_SCORE)}（发标场景，{OLD_DESC}）。
             两者决策时点接近——中位 {fmt_days(meta['median_days'])}、75 分位 {fmt_days(meta['p75_days'])}内即放款，比较视为同点。
-            旧模型有 {fmt_int(meta['old_missing'])} 笔缺失（含 -1 哨兵值），按缺失处理，不参与排序。</li>
+            线上模型有 {fmt_int(meta['old_missing'])} 笔缺失（含 -1 哨兵值），按缺失处理，不参与排序。</li>
         <li><b>坏率口径</b>：笔数坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和；成熟条件为 due + N &lt; 观察日（{escape(meta['obs_dt'])}），
             未成熟不判坏。本报告坏率均为笔数口径；金额仅出现在「通过收益」卡，为放款本金 real_amount，
             好客户本金 = 未坏样本的放款本金之和，不含利息与费用。</li>
-        <li><b>指标口径</b>：AUC / Gini / KS 在成熟样本内计算；AUC 置信区间与新旧差异用 DeLong 法（差异检验为配对 DeLong）。
+        <li><b>指标口径</b>：AUC / Gini / KS 在成熟样本内计算；AUC 置信区间与两模型差异用 DeLong 法（差异检验为配对 DeLong）。
             十分位在成熟样本内按分数升序等分，第 1 档最低风险。</li>
+        <li><b>lift 口径</b>：lift = 该组笔数坏率 / 全体笔数坏率。分档 lift 按档计算（第 10 档即最高档坏率 / 全体坏率）；
+            互换矩阵按格计算，基数取该口径下的全体坏率；拦截 lift = 被拒人群坏率 / 全体坏率，也等于拦截坏账占比 / 拒绝比例。</li>
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
-            若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新模型特征时点，
+            若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
         <li><b>数据源</b>：{escape(label_name)}、{escape(score_name)}；生成脚本 build_model_compare.py；生成时间 {escape(generated_at)}。</li>
       </ul>
@@ -1122,7 +1130,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WageGo 新客模型效果对比</title>
+<title>WageGo · 新戳额模型与线上模型效果对比</title>
 <style>
   :root {
     color-scheme: light;
@@ -1167,6 +1175,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }
   h1 { font-size: 30px; line-height: 1.25; margin: 0 0 5px; }
   .sub { color: var(--ink-2); margin: 0; font-size: 14px; }
+  .models {
+    display: flex; flex-wrap: wrap; gap: 6px 26px;
+    margin-top: 12px; font-size: 12px; color: var(--ink-2);
+  }
+  .models > span { display: inline-flex; align-items: center; gap: 6px; }
+  .models .dot { margin-right: 0; }
+  .models b { color: var(--ink); font-weight: 600; }
+  .models code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; color: var(--muted);
+  }
   .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
   .chip {
     border: 1px solid var(--ring); background: var(--surface);
@@ -1249,10 +1268,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   td.strong { font-weight: 600; }
   td.soft { color: var(--ink-2); }
   td.dim { color: var(--muted); }
+  td .n { display: block; color: var(--muted); font-size: 10.5px; line-height: 1.35; }
   td.good { color: var(--ink-2); }
   td.bad { color: var(--ink-2); }
   table.metrics tr.delta td { border-bottom: 1px solid var(--grid); background: var(--page); }
   table.metrics tr.delta td.strong { font-weight: 600; }
+  table.decile td.lift { color: var(--ink-2); }
   .subhead { color: var(--muted); font-size: 11.5px; font-weight: 600; margin: 14px 1px 3px; }
   .note { color: var(--muted); font-size: 12px; line-height: 1.65; margin: 8px 2px 4px; }
   .swap {
@@ -1272,6 +1293,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     font-size: 10.5px; margin-bottom: 2px;
   }
   .swap .cell b { display: block; font-size: 22px; line-height: 1.25; }
+  .swap .cell b i {
+    font-style: normal; font-size: 12.5px; font-weight: 500;
+    color: var(--ink-2); margin-left: 5px;
+  }
   .swap .cell span { display: block; color: var(--ink-2); font-size: 11.5px; }
   .foot { margin-top: 18px; }
   ul.notes { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 12px; }
@@ -1469,8 +1494,8 @@ function drawRoc(windowKey) {
     tip.show({
       title: 'FPR ' + fmtPct(picks[0][0], 1),
       rows: [
-        { value: fmtPct(picks[1][1], 1), name: '新模型 TPR', color: 'var(--c1)' },
-        { value: fmtPct(picks[0][1], 1), name: '旧模型 TPR', color: 'var(--c2)' }
+        { value: fmtPct(picks[1][1], 1), name: '新戳额模型 TPR', color: 'var(--c1)' },
+        { value: fmtPct(picks[0][1], 1), name: '线上模型 TPR', color: 'var(--c2)' }
       ]
     }, px, y(Math.max(picks[0][1], picks[1][1])));
   }
@@ -1547,7 +1572,7 @@ function drawDeciles() {
     svgEl(svg, 'text', {
       x: cx(10) + dx + barW / 2, y: y(d.rate) - 7, 'text-anchor': 'middle',
       fill: 'var(--ink)', 'font-size': 11.5, 'font-weight': 600
-    }, fmtPct(d.rate));
+    }, fmtPct(d.rate) + ' · ' + d.lift.toFixed(2) + '×');
   });
 
   const hoverRect = svgEl(svg, 'rect', {
@@ -1562,8 +1587,8 @@ function drawDeciles() {
     tip.show({
       title: '第 ' + q + ' 档' + (q === 1 ? '（最安全）' : q === 10 ? '（最高风险）' : ''),
       rows: [
-        { value: fmtPct(newD[q - 1].rate), name: '新模型 · n=' + fmtInt(newD[q - 1].n), color: 'var(--c1)' },
-        { value: fmtPct(oldD[q - 1].rate), name: '旧模型 · n=' + fmtInt(oldD[q - 1].n), color: 'var(--c2)' }
+        { value: fmtPct(newD[q - 1].rate), name: '新戳额模型 n=' + fmtInt(newD[q - 1].n) + ' · lift ' + newD[q - 1].lift.toFixed(2) + '×', color: 'var(--c1)' },
+        { value: fmtPct(oldD[q - 1].rate), name: '线上模型 n=' + fmtInt(oldD[q - 1].n) + ' · lift ' + oldD[q - 1].lift.toFixed(2) + '×', color: 'var(--c2)' }
       ]
     }, cx(q), y(Math.max(newD[q - 1].rate, oldD[q - 1].rate)) - 6);
   }
@@ -1650,8 +1675,8 @@ function drawCapture() {
     tip.show({
       title: '拒绝 ' + rej + '%',
       rows: [
-        { value: fmtPct(entry.models.new.capture[rej][1], 1), name: '新模型捕获率', color: 'var(--c1)' },
-        { value: fmtPct(entry.models.old.capture[rej][1], 1), name: '旧模型捕获率', color: 'var(--c2)' }
+        { value: fmtPct(entry.models.new.capture[rej][1], 1), name: '新戳额模型捕获率', color: 'var(--c1)' },
+        { value: fmtPct(entry.models.old.capture[rej][1], 1), name: '线上模型捕获率', color: 'var(--c2)' }
       ]
     }, px, y(Math.max(entry.models.new.capture[rej][1], entry.models.old.capture[rej][1])) - 6);
   }
@@ -1746,8 +1771,8 @@ function drawApproval() {
     tip.show({
       title: '坏率预算 ' + fmtPct(picks[0][0], 1),
       rows: [
-        { value: fmtPct(picks[1][1], 1), name: '新模型可达通过率', color: 'var(--c1)' },
-        { value: fmtPct(picks[0][1], 1), name: '旧模型可达通过率', color: 'var(--c2)' }
+        { value: fmtPct(picks[1][1], 1), name: '新戳额模型可达通过率', color: 'var(--c1)' },
+        { value: fmtPct(picks[0][1], 1), name: '线上模型可达通过率', color: 'var(--c2)' }
       ]
     }, px, y(Math.max(picks[0][1], picks[1][1])) - 6);
   }
@@ -1844,8 +1869,8 @@ function drawWeekly(w) {
     tip.show({
       title: r.week + ' 起 · 成熟 ' + fmtInt(r.n) + ' 笔',
       rows: [
-        { value: r.auc_new == null ? '—' : r.auc_new.toFixed(3), name: '新模型 AUC', color: 'var(--c1)' },
-        { value: r.auc_old == null ? '—' : r.auc_old.toFixed(3), name: '旧模型 AUC', color: 'var(--c2)' }
+        { value: r.auc_new == null ? '—' : r.auc_new.toFixed(3), name: '新戳额模型 AUC', color: 'var(--c1)' },
+        { value: r.auc_old == null ? '—' : r.auc_old.toFixed(3), name: '线上模型 AUC', color: 'var(--c2)' }
       ]
     }, x(i), y(Math.max.apply(null, tops.length ? tops : [axis.max])) - 10);
   }
@@ -1881,9 +1906,14 @@ def build_html(data, generated_at: str, label_name: str, score_name: str) -> str
     meta = data["meta"]
     header = f"""
     <header>
-      <p class="eyebrow">WageGo · 新客首借成交样本 · 模型效果对比</p>
-      <h1>新模型 vs 旧模型：区分度与决策效果</h1>
-      <p class="sub">首笔成交新客，戳额时间 {escape(meta['start'])} 至 {escape(meta['end_display'])}，观察日 {meta['obs_dt']}</p>
+      <p class="eyebrow">WAGEGO · 风险模型评估 · 新客首借成交样本</p>
+      <h1>新戳额模型与线上模型效果对比</h1>
+      <p class="sub">从区分度、决策收益到周度稳定性，评估新戳额模型相对线上模型的增量价值。
+      首笔成交新客，戳额时间 {escape(meta['start'])} 至 {escape(meta['end_display'])}，观察日 {meta['obs_dt']}。</p>
+      <div class="models">
+        <span><i class="dot new"></i><b>{NEW_NAME}</b><code>{escape(NEW_SCORE)}</code><span class="muted">戳额场景</span></span>
+        <span><i class="dot old"></i><b>{OLD_NAME}</b><code>{escape(OLD_SCORE)}</code><span class="muted">发标场景</span></span>
+      </div>
       <div class="chips">
         <span class="chip">样本 {fmt_int(meta['n_sample'])} 人</span>
         <span class="chip">FPD15 成熟 {fmt_int(data['windows']['15']['n_obs'])} 笔</span>
@@ -1896,8 +1926,8 @@ def build_html(data, generated_at: str, label_name: str, score_name: str) -> str
     metrics_card = f"""
     <section class="card">
       <h2>核心指标<span class="tag" title="AUC / Gini / KS 均在成熟样本内计算">排序能力</span></h2>
-      <p class="desc">两个标签口径、两个模型放在同一批成熟样本上比。新模型 AUC {fmt_num(f15m['new']['auc'], 2)}、KS {fmt_num(f15m['new']['ks'], 2)}，
-      旧模型 AUC {fmt_num(f15m['old']['auc'], 2)}、KS {fmt_num(f15m['old']['ks'], 2)}。</p>
+      <p class="desc">两个标签口径、两个模型放在同一批成熟样本上比。新戳额模型 AUC {fmt_num(f15m['new']['auc'], 2)}、KS {fmt_num(f15m['new']['ks'], 2)}，
+      线上模型 AUC {fmt_num(f15m['old']['auc'], 2)}、KS {fmt_num(f15m['old']['ks'], 2)}。</p>
       {metrics_table(data)}
     </section>
     """
@@ -1919,9 +1949,9 @@ def build_html(data, generated_at: str, label_name: str, score_name: str) -> str
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="新客样本新旧模型效果对比")
+    parser = argparse.ArgumentParser(description="新客样本新戳额模型与线上模型效果对比")
     parser.add_argument("--label-csv", default=str(DEFAULT_LABEL), help="主表 CSV")
-    parser.add_argument("--score-csv", default=str(DEFAULT_SCORE), help="新模型分 CSV")
+    parser.add_argument("--score-csv", default=str(DEFAULT_SCORE), help="新戳额模型分 CSV")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="输出 HTML")
     parser.add_argument("--start", default="2026-08-01", help="戳额起始日")
     parser.add_argument("--end", default="2026-10-24", help="戳额结束日（不含）")
