@@ -76,10 +76,11 @@ def read_csvs(input_path: Path):
         files = {p.name: p.read_bytes() for p in input_path.glob("vintage_*.csv")}
     elif input_path.is_file() and input_path.suffix.lower() == ".zip":
         with zipfile.ZipFile(input_path) as archive:
+            # zip 里可能还有整表拉取的 table_*.csv，只读看板需要的块结果
             files = {
                 Path(name).name: archive.read(name)
                 for name in archive.namelist()
-                if name.lower().endswith(".csv")
+                if Path(name).name in REQUIRED_FILES
             }
     else:
         raise ValueError(f"输入既不是 zip 也不是目录：{input_path}")

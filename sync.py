@@ -2,6 +2,8 @@
 
 SQL 文件按「块 N」注释组织；脚本按分号拆分语句，开头的 SET 作为全局会话设置，
 其余 SELECT 按 QUERY_SPECS 的顺序执行，每个结果写一个 CSV。
+另外按 DEFAULT_TABLES（或 --tables 指定）整表拉取底表，输出 table_<表名>.csv，
+一并打进 zip，方便本地看明细。
 数据库连接由外部 hive_config.query_to_df(sql) 提供，本脚本不负责建连。
 """
 
@@ -47,6 +49,10 @@ QUERY_SPECS = (
     {"id": "7", "file": "vintage_07_application_rank", "title": "老客复借期数（FPD15）"},
 )
 
+# 整表拉取：默认把样本主表拉回本地，输出 table_<表名>.csv
+DEFAULT_TABLES = ("model.tmp_eliam_wagego_dwd_loan_apply_label",)
+
+_TABLE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$")
 _BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", flags=re.S)
 _LINE_COMMENT_RE = re.compile(r"--[^\n]*")
 
@@ -112,13 +118,53 @@ def relative_path(query):
     return f"{RAW_DIR_NAME}/{query['file']}.csv"
 
 
+def select_tables(raw, no_tables):
+    """解析 --tables；默认拉 DEFAULT_TABLES，--no-tables 时返回空。"""
+    if no_tables:
+        return []
+    names = DEFAULT_TABLES if raw is None else tuple(
+        name.strip() for name in raw.split(",") if name.strip()
+    )
+    invalid = [name for name in names if not _TABLE_NAME_RE.match(name)]
+    if invalid:
+        raise ValueError(f"表名不合法：{', '.join(invalid)}（只允许字母、数字、下划线、点）")
+    return names
+
+
+def table_file(table):
+    """model.tmp_xxx → table_tmp_xxx.csv"""
+    return f"table_{table.split('.')[-1]}.csv"
+
+
+def run_query_to_csv(sql, path, query_fn):
+    """执行一条查询并把结果写到 path；返回 (行数, 列名)。失败时抛异常。"""
+    # 删掉上一次的文件，失败时目录里不会留下看似成功的旧结果。
+    if path.exists():
+        path.unlink()
+
+    df = query_fn(sql)
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError("查询未返回 DataFrame")
+    if len(df) == 0:
+        print("警告 | 查询返回 0 行，请确认底表是否有数据")
+
+    temporary = path.with_suffix(".csv.tmp")
+    try:
+        df.to_csv(temporary, index=False, encoding="utf-8-sig")
+        temporary.replace(path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return int(len(df)), list(df.columns)
+
+
 def save_manifest(manifest):
     temporary = MANIFEST_FILE.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(MANIFEST_FILE)
 
 
-def run_sync(setup_statements, queries, query_fn):
+def run_sync(setup_statements, queries, tables, query_fn, table_limit=0):
     for folder in (RAW_DIR, LOG_DIR):
         folder.mkdir(parents=True, exist_ok=True)
 
@@ -127,6 +173,7 @@ def run_sync(setup_statements, queries, query_fn):
         "sql_sha256": query_digest(SQL_FILE.read_text(encoding="utf-8")),
         "run_at": now().isoformat(timespec="seconds"),
         "queries": {},
+        "tables": {},
     }
     save_manifest(manifest)
 
@@ -155,39 +202,68 @@ def run_sync(setup_statements, queries, query_fn):
         manifest["queries"][block] = entry
         save_manifest(manifest)
 
-        # 删掉上一次的文件，失败时目录里不会留下看似成功的旧结果。
-        if path.exists():
-            path.unlink()
-
         try:
-            df = query_fn(query["sql"])
-            if not isinstance(df, pd.DataFrame):
-                raise ValueError("查询未返回 DataFrame")
-            if len(df) == 0:
-                print("警告 | 查询返回 0 行，请确认底表是否有数据")
-
-            temporary = path.with_suffix(".csv.tmp")
-            try:
-                df.to_csv(temporary, index=False, encoding="utf-8-sig")
-                temporary.replace(path)
-            finally:
-                if temporary.exists():
-                    temporary.unlink()
+            rows, columns = run_query_to_csv(query["sql"], path, query_fn)
 
             entry.update(
                 status="success",
-                rows=int(len(df)),
-                columns=list(df.columns),
+                rows=rows,
+                columns=columns,
                 file_sha256=file_digest(path),
             )
             succeeded.append((path, relative_path(query)))
-            print(f"成功 | {len(df)} 行 × {len(df.columns)} 列 | {path}")
+            print(f"成功 | {rows} 行 × {len(columns)} 列 | {path}")
         except Exception as exc:
             entry.update(status="failed", error=str(exc))
             failed.append(
                 {
                     "block": block,
                     "file": query["file"],
+                    "error": str(exc),
+                    "run_time": entry["started_at"],
+                }
+            )
+            print(f"失败 | {exc}")
+        finally:
+            entry["finished_at"] = now().isoformat(timespec="seconds")
+            save_manifest(manifest)
+
+    # 整表拉取：底表明细拉回本地，方便离线看数
+    for table in tables:
+        filename = table_file(table)
+        path = RAW_DIR / filename
+        sql = f"SELECT * FROM {table}"
+        if table_limit > 0:
+            sql += f" LIMIT {table_limit}"
+        print(f"\n[表] {table} → {RAW_DIR_NAME}/{filename}")
+
+        entry = {
+            "table": table,
+            "file": f"{RAW_DIR_NAME}/{filename}",
+            "sql": sql,
+            "started_at": now().isoformat(timespec="seconds"),
+            "status": "running",
+        }
+        manifest["tables"][table] = entry
+        save_manifest(manifest)
+
+        try:
+            rows, columns = run_query_to_csv(sql, path, query_fn)
+
+            entry.update(
+                status="success",
+                rows=rows,
+                columns=columns,
+                file_sha256=file_digest(path),
+            )
+            succeeded.append((path, f"{RAW_DIR_NAME}/{filename}"))
+            print(f"成功 | {rows} 行 × {len(columns)} 列 | {path}")
+        except Exception as exc:
+            entry.update(status="failed", error=str(exc))
+            failed.append(
+                {
+                    "block": f"table:{table}",
+                    "file": filename,
                     "error": str(exc),
                     "run_time": entry["started_at"],
                 }
@@ -223,19 +299,35 @@ def run_sync(setup_statements, queries, query_fn):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="执行 wagego_04_vintage分析.sql 并打包产出数据。")
     parser.add_argument("--blocks", help="只执行指定块，逗号分隔，如 1,3,5a,5b,6,7")
+    parser.add_argument(
+        "--tables",
+        help=f"整表拉取的表名，逗号分隔；默认拉 {','.join(DEFAULT_TABLES)}；用 --no-tables 关闭",
+    )
+    parser.add_argument("--no-tables", action="store_true", help="不整表拉取底表")
+    parser.add_argument(
+        "--table-limit",
+        type=int,
+        default=0,
+        help="整表拉取只取前 N 行（0 = 全量）",
+    )
     parser.add_argument("--dry-run", action="store_true", help="只检查块号和输出文件名，不连接数据库")
     args = parser.parse_args(argv)
 
     try:
         setup, queries = build_queries()
         queries = select_queries(queries, args.blocks)
+        tables = select_tables(args.tables, args.no_tables)
     except ValueError as exc:
         parser.error(str(exc))
 
     print(f"共 {len(queries)} 条查询：{SQL_FILE}")
+    if tables:
+        print(f"整表拉取：{', '.join(tables)}")
     if args.dry_run:
         for query in queries:
             print(f"- {query['id']}. {query['title']} → {relative_path(query)}")
+        for table in tables:
+            print(f"- [表] {table} → {RAW_DIR_NAME}/{table_file(table)}")
         return 0
 
     try:
@@ -244,7 +336,7 @@ def main(argv=None):
         print("未找到 hive_config.py：请把提供 query_to_df(sql) 的模块放到本脚本同目录或 PYTHONPATH 中。")
         return 2
 
-    return run_sync(setup, queries, query_to_df)
+    return run_sync(setup, queries, tables, query_to_df, args.table_limit)
 
 
 if __name__ == "__main__":
