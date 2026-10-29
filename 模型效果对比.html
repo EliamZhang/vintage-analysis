@@ -185,6 +185,13 @@
   .heat-legend .sw.h5 { background: rgba(192,57,43,0.66); }
   .heat-legend .sw.keep { background: var(--keep); }
   .heat-legend .sw.loss { background: var(--loss); }
+  .defs {
+    display: flex; flex-wrap: wrap; gap: 6px 22px;
+    margin: 8px 0 10px; font-size: 12px; color: var(--ink-2);
+  }
+  .defs span { display: inline-flex; align-items: baseline; gap: 6px; }
+  .defs b { color: var(--ink); font-weight: 600; }
+  .defs em { font-style: normal; color: var(--muted); }
   .subhead { color: var(--muted); font-size: 11.5px; font-weight: 600; margin: 14px 1px 3px; }
   .note { color: var(--muted); font-size: 12px; line-height: 1.65; margin: 8px 2px 4px; }
   .swap {
@@ -557,11 +564,17 @@
     
 
     <section class="card">
-      <h2>置入与置出<span class="tag" title="置入 = 放款本金 real_amount 之和；置出 = due+N 当天借据快照的未还本金之和">放款规模与坏账损失</span></h2>
+      <h2>置入与置出<span class="tag" title="置入 = 放款本金 real_amount 之和；置出 = due+N 当天借据快照的未还本金之和">放款本金 vs 未还本金</span></h2>
       <p class="desc">前面所有坏率都是笔数口径，这里换成钱。FPD15 成熟样本上，新戳额模型口径的置入
       1,087,800、置出 107,250，置出率 9.86%，
       比同口径的笔数坏率 10.35% 低 0.49pp——坏样本的单笔金额小于整体平均。最高档只占置入的 8.2%，
       却贡献 35.4% 的置出（线上模型最高档 15.5%）。</p>
+      <div class="defs">
+        <span><b>置入</b><em>放款本金（real_amount）之和</em></span>
+        <span><b>置出</b><em>到期未还本金（due + N 当天借据快照）</em></span>
+        <span><b>置出率</b><em>置出 ÷ 置入</em></span>
+        <span><b>留存</b><em>置入 − 置出</em></span>
+      </div>
       <div class="grid2">
       <div class="panel">
         <h3>新戳额模型<span class="muted">　置入 1,087,800 · 置出 107,250（9.86%）</span></h3>
@@ -578,8 +591,8 @@
         </div>
       </div></div>
       <div class="heat-legend">
-        <span class="muted">柱高 = 置入</span>
-        <span><i class="sw loss"></i>置出（坏账损失）</span>
+        <span class="muted">柱高 = 置入（放款本金）</span>
+        <span><i class="sw loss"></i>置出（未还本金）</span>
         <span><i class="sw keep"></i>留存</span>
       </div>
       <div class="subhead">整体</div>
@@ -588,7 +601,7 @@
         <table class="money">
           <thead>
             <tr>
-              <th>窗口</th><th>模型</th><th>置入</th><th>置出（坏账损失）</th>
+              <th>窗口</th><th>模型</th><th>置入（放款本金）</th><th>置出（未还本金）</th>
               <th>置出率</th><th>留存</th><th>笔数坏率（对照）</th>
             </tr>
           </thead>
@@ -1193,7 +1206,7 @@
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_model_compare.py；生成时间 2026-10-29 15:21。</li>
+        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_model_compare.py；生成时间 2026-10-29 15:25。</li>
       </ul>
     </footer>
     
@@ -1779,7 +1792,7 @@ function drawMoney(key) {
   axes(svg, {
     W, H, m, x: v => v, y, xTicks: [], yTicks: ticks, tickSize: 11,
     xFmt: t => '', yFmt: v => (v === 0 ? '0' : (v / 1000) + 'K'),
-    xLabel: '分档（1 = 分数最低）', yLabel: '金额'
+    xLabel: '分档（1 = 分数最低）', yLabel: '金额（放款本金）'
   });
 
   const band = svgEl(svg, 'rect', {
@@ -1824,8 +1837,8 @@ function drawMoney(key) {
     tip.show({
       title: '第 ' + q + ' 档',
       rows: [
-        { value: fmtInt(d.amt), name: '置入', color: 'var(--keep)' },
-        { value: fmtInt(d.loss_amt), name: '置出', color: 'var(--loss)' },
+        { value: fmtInt(d.amt), name: '置入（放款本金）', color: 'var(--keep)' },
+        { value: fmtInt(d.loss_amt), name: '置出（未还本金）', color: 'var(--loss)' },
         { value: fmtPct(d.amt_rate), name: '置出率', color: null }
       ]
     }, cx(q), y(d.amt) - 6);

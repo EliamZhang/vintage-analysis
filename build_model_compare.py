@@ -1093,7 +1093,7 @@ def money_overall_table(data) -> str:
         <table class="money">
           <thead>
             <tr>
-              <th>窗口</th><th>模型</th><th>置入</th><th>置出（坏账损失）</th>
+              <th>窗口</th><th>模型</th><th>置入（放款本金）</th><th>置出（未还本金）</th>
               <th>置出率</th><th>留存</th><th>笔数坏率（对照）</th>
             </tr>
           </thead>
@@ -1169,15 +1169,21 @@ def money_card(data) -> str:
       </div>"""
     return f"""
     <section class="card">
-      <h2>置入与置出<span class="tag" title="置入 = 放款本金 real_amount 之和；置出 = due+N 当天借据快照的未还本金之和">放款规模与坏账损失</span></h2>
+      <h2>置入与置出<span class="tag" title="置入 = 放款本金 real_amount 之和；置出 = due+N 当天借据快照的未还本金之和">放款本金 vs 未还本金</span></h2>
       <p class="desc">前面所有坏率都是笔数口径，这里换成钱。FPD15 成熟样本上，新戳额模型口径的置入
       {fmt_int(m['amt'])}、置出 {fmt_int(m['loss_amt'])}，置出率 {fmt_pct(m['amt_rate'])}，
       比同口径的笔数坏率 {fmt_pct(m['rate'])} {gap_txt}。最高档只占置入的 {top_amt_share:.1f}%，
       却贡献 {top_loss_share:.1f}% 的置出（线上模型最高档 {old_top_loss:.1f}%）。</p>
+      <div class="defs">
+        <span><b>置入</b><em>放款本金（real_amount）之和</em></span>
+        <span><b>置出</b><em>到期未还本金（due + N 当天借据快照）</em></span>
+        <span><b>置出率</b><em>置出 ÷ 置入</em></span>
+        <span><b>留存</b><em>置入 − 置出</em></span>
+      </div>
       <div class="grid2">{panels}</div>
       <div class="heat-legend">
-        <span class="muted">柱高 = 置入</span>
-        <span><i class="sw loss"></i>置出（坏账损失）</span>
+        <span class="muted">柱高 = 置入（放款本金）</span>
+        <span><i class="sw loss"></i>置出（未还本金）</span>
         <span><i class="sw keep"></i>留存</span>
       </div>
       <div class="subhead">整体</div>
@@ -1580,6 +1586,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .heat-legend .sw.h5 { background: rgba(192,57,43,0.66); }
   .heat-legend .sw.keep { background: var(--keep); }
   .heat-legend .sw.loss { background: var(--loss); }
+  .defs {
+    display: flex; flex-wrap: wrap; gap: 6px 22px;
+    margin: 8px 0 10px; font-size: 12px; color: var(--ink-2);
+  }
+  .defs span { display: inline-flex; align-items: baseline; gap: 6px; }
+  .defs b { color: var(--ink); font-weight: 600; }
+  .defs em { font-style: normal; color: var(--muted); }
   .subhead { color: var(--muted); font-size: 11.5px; font-weight: 600; margin: 14px 1px 3px; }
   .note { color: var(--muted); font-size: 12px; line-height: 1.65; margin: 8px 2px 4px; }
   .swap {
@@ -2216,7 +2229,7 @@ function drawMoney(key) {
   axes(svg, {
     W, H, m, x: v => v, y, xTicks: [], yTicks: ticks, tickSize: 11,
     xFmt: t => '', yFmt: v => (v === 0 ? '0' : (v / 1000) + 'K'),
-    xLabel: '分档（1 = 分数最低）', yLabel: '金额'
+    xLabel: '分档（1 = 分数最低）', yLabel: '金额（放款本金）'
   });
 
   const band = svgEl(svg, 'rect', {
@@ -2261,8 +2274,8 @@ function drawMoney(key) {
     tip.show({
       title: '第 ' + q + ' 档',
       rows: [
-        { value: fmtInt(d.amt), name: '置入', color: 'var(--keep)' },
-        { value: fmtInt(d.loss_amt), name: '置出', color: 'var(--loss)' },
+        { value: fmtInt(d.amt), name: '置入（放款本金）', color: 'var(--keep)' },
+        { value: fmtInt(d.loss_amt), name: '置出（未还本金）', color: 'var(--loss)' },
         { value: fmtPct(d.amt_rate), name: '置出率', color: null }
       ]
     }, cx(q), y(d.amt) - 6);
