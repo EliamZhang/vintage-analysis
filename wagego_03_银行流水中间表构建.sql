@@ -2,8 +2,12 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 
 -- 样本：model.tmp_eliam_wagego_new_user_credit_20260801_20261023_samples（每个用户第一次戳额申请）
 -- 数据源：ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log.model_input
--- 关联键：样本 flow_id = 日志 scene_id
+-- 关联键：样本 flow_id（戳额流水）= 日志 scene_id
 -- 模型：model_code = aus_wagego_new_risk_3rd_v1_0（其 model_input 带银行流水明细）
+-- scene_id 口径（2026-10-28 实测）：同一 model_code 在戳额、发标两个时点都会打日志，
+--   戳额调用的 scene_id = 戳额流水，发标调用的 scene_id = 借据号 loan_no（wagego_01 取模型分走的是后者）。
+--   两套 id 在同一张日志表里并存，本文件只关联戳额流水，不要改成 loan_no；
+--   实测样本命中 48,032 个戳额流水 / 48,037 条日志，其中 5 个流水有多次调用，故下方按 scene_id 取最新一次。
 -- 去重：同一 flow_id 可能多次调用模型，统一取 inserttime 最新的一次
 -- 说明：model_input 里的 raw_transactions、day_end_balances 分别展开成流水、余额两张中间表；
 --       银行卡信息直接拼在流水表上；数组为空则该样本不产出记录
