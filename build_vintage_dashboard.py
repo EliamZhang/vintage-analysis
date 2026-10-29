@@ -330,7 +330,7 @@ def build_data(raw):
         }
 
     score_chart = {
-        "labels": [f"Q{q}" for q in range(1, 6)],
+        "labels": [f"{q}档" for q in range(1, 6)],
         "series": [
             score_series("ALL", "整体", "var(--ink-2)"),
             score_series("New", "新客", "var(--c1)"),
@@ -441,7 +441,7 @@ def header_html(data):
   <div class="hero-copy">
     <p class="eyebrow">WAGEGO · RISK MONITORING</p>
     <h1>Vintage 监控看板</h1>
-    <p class="sub">按放款周看首期逾期率（FPD），并用模型分五分位和复借期数拆分；除标注“金额”外，坏率均为笔数口径。</p>
+    <p class="sub">按放款周看首期逾期率（FPD），并用模型分分档和复借期数拆分；除标注“金额”外，坏率均为笔数口径。</p>
   </div>
   <div class="chips">{chip_html}</div>
 </header>
@@ -476,9 +476,9 @@ def kpi_html(data):
     <span class="sub">gap {fmt_delta(gap)} · n={fmt_int(new15['obs'])} / {fmt_int(old15['obs'])} · 金额 {fmt_rate(new15['amtRate'])} / {fmt_rate(old15['amtRate'])}</span>
   </div>
   <div class="kpi">
-    <span class="label">模型 Q5 / Q1 · 坏率（笔数）</span>
+    <span class="label">模型 5档 / 1档 · 坏率（笔数）</span>
     <b>{lift:.2f}x</b>
-    <span class="sub">Q5 {fmt_rate(q5['rate'])} · Q1 {fmt_rate(q1['rate'])} · 覆盖 {data['coverage']['pct']:.2f}%</span>
+    <span class="sub">5档 {fmt_rate(q5['rate'])} · 1档 {fmt_rate(q1['rate'])} · 覆盖 {data['coverage']['pct']:.2f}%</span>
   </div>
 </section>
 """
@@ -655,7 +655,7 @@ def score_table(score):
     rows = []
     for q in range(1, 6):
         rows.append(
-            f"<tr><td>Q{q}</td><td class='range'>{range_text(q)}</td>"
+            f"<tr><td>{q}档</td><td class='range'>{range_text(q)}</td>"
             f"{rate_cell('ALL', q)}{rate_cell('New', q)}{rate_cell('Old', q)}</tr>"
         )
     return f"""
@@ -693,7 +693,7 @@ def score_week_table(data):
                 )
             else:
                 cells.append(f'<td class="num">{fmt_rate(row["rate"])}</td>')
-        rows.append(f"<tr><td>Q{q}</td>{''.join(cells)}</tr>")
+        rows.append(f"<tr><td>{q}档</td>{''.join(cells)}</tr>")
     return f"""
 <div class="table-wrap">
 <div class="subhead">分档 × 放款周（FPD15 笔数坏率）</div>
@@ -711,10 +711,10 @@ def score_card_html(data):
     shape = (
         "整体、新客、老客均基本单调。"
         if all(monotonic.values())
-        else "整体与新客基本单调；老客 Q2/Q4 低于前一档，排序弱于新客。"
+        else "整体与新客基本单调；老客 2档/4档 低于前一档，排序弱于新客。"
     )
     sentinel = (
-        "Q1 分数下限 -1.0，疑似缺分哨兵；分档按原查询结果展示，未单独剔除。"
+        "1档分数下限 -1.0，疑似缺分哨兵；分档按原查询结果展示，未单独剔除。"
         if data["q1Sentinel"]
         else ""
     )
@@ -743,17 +743,17 @@ def score_card_html(data):
         heat_bits.append(f"{low_text} 灰显，仅参考")
     heat_note = "；".join(heat_bits) + "。" if heat_bits else ""
     note = (
-        f"坏率均为 FPD15 笔数口径。Q1 最低分，Q5 最高分。整体 Q5/Q1 = {lift['ALL']:.2f}x，"
+        f"坏率均为 FPD15 笔数口径。1档最低分，5档最高分。整体 5档/1档 = {lift['ALL']:.2f}x，"
         f"新客 {lift['New']:.2f}x，老客 {lift['Old']:.2f}x。{shape}"
         f"覆盖 {data['coverage']['pct']:.2f}%（{fmt_int(data['coverage']['scored'])}/{fmt_int(data['coverage']['obs'])}），"
         f"缺分 {fmt_int(data['coverage']['missing'])}。{heat_note}{sentinel}"
     )
     return f"""
 <section class="card">
-  <h2>模型分五分位{TAG_COUNT}</h2>
-  <p class="desc">Q1 最低分 → Q5 最高分；整体、新客、老客的 FPD15 笔数坏率（y_fpd15_ovd / y_fpd15_obs）。</p>
+  <h2>模型分分档{TAG_COUNT}</h2>
+  <p class="desc">1档最低分 → 5档最高分（FPD15 成熟样本内 pooled 五分位）；整体、新客、老客的 FPD15 笔数坏率（y_fpd15_ovd / y_fpd15_obs）。</p>
   <div class="chart-wrap">
-    <svg id="scoreChart" viewBox="0 0 1040 300" role="img" aria-label="模型分五分位的整体、新客、老客 FPD15 笔数坏率"></svg>
+    <svg id="scoreChart" viewBox="0 0 1040 300" role="img" aria-label="模型分分档的整体、新客、老客 FPD15 笔数坏率"></svg>
     <div class="tip" id="scoreTip"></div>
   </div>
   <div class="legend">
@@ -833,7 +833,7 @@ def quality_card_html(data):
     latest_obs = data["latestWeek"]["windows"][3]["obs"]
     prev_obs = previous["windows"][3]["obs"] if previous else None
     sentinel = (
-        "Q1 下限 -1.0，疑似缺分哨兵。"
+        "1档分数下限 -1.0，疑似缺分哨兵。"
         if data["q1Sentinel"]
         else "分档内无 -1.0 哨兵。"
     )
@@ -871,7 +871,7 @@ def footer_html(data, generated_at, input_name):
     <li>金额坏率（仅总览表与 KPI 子行）：estimate_principal_remaining_fpdN 之和 / 全部成熟样本放款本金；余额取 due+X 当天借据快照（FPD14 同机制），当天无快照的不计入分子。</li>
     <li>成熟度：该窗口成熟样本 / 当周 FPD3 样本；星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示；FPD30 采用 90% 阈值。</li>
     <li>新老客：user_type 按首笔放款；复借期数 application_rank，1st = 首借，2nd 起为 Old，4th+ 含 4 次及以上。</li>
-    <li>模型分：FPD15 成熟样本内 pooled 五分位，Q1 最低分、Q5 最高分；分数越高越坏。</li>
+    <li>模型分：FPD15 成熟样本内 pooled 五分位切 5 档，1档最低分、5档最高分；分数越高越坏。</li>
     <li>数据源：{escape(input_name)}（8 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：{escape(generated_at)}。</li>
   </ul>
 </footer>
@@ -1381,7 +1381,7 @@ makeLineChart('scoreChart', 'scoreTip', {
   width: 1040, height: 300, margin: { t: 30, r: 135, b: 46, l: 56 },
   labels: DATA.scoreChart.labels,
   series: scoreSeries,
-  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '模型分五分位（低 → 高）', yLabel: '笔数坏率',
+  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '模型分分档（低 → 高）', yLabel: '笔数坏率',
   directLabels: scoreSeries.map((series, index) => ({
     series: index, index: 4,
     text: `${series.name} ${fmtRate(series.points[4].rate)}`,
@@ -1457,7 +1457,7 @@ def main(argv=None):
     print(f"已生成：{output_path}")
     print(f"图表周：{data['chartWeeks'][0]['week']} ~ {data['latestWeek']['week']}（{len(data['chartWeeks'])} 周）")
     print(f"FPD15 最新可用周：{data['latest']['week']}（{fmt_pct0(data['latest']['fpd15Maturity'])} 成熟）")
-    print(f"整体 FPD15：{fmt_rate(data['overallBy'][15]['rate'])}；模型 Q5/Q1：{data['lift']['ALL']:.2f}x")
+    print(f"整体 FPD15：{fmt_rate(data['overallBy'][15]['rate'])}；模型 5档/1档：{data['lift']['ALL']:.2f}x")
     return 0
 
 
