@@ -28,9 +28,21 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 PROJECT_DIR = Path(__file__).resolve().parent
-DEFAULT_LABEL = PROJECT_DIR / "原始数据" / "table_tmp_eliam_wagego_dwd_loan_apply_label.csv"
-DEFAULT_SCORE = PROJECT_DIR / "aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv"
-DEFAULT_LIMIT_SCORE = PROJECT_DIR / "wagego_new_user_credit_20260801_20261023_score.csv"
+RAW_DIR = PROJECT_DIR / "原始数据"
+
+
+def _input_path(name: str) -> Path:
+    """优先用同步脚本输出到 原始数据/ 的文件，其次用项目根目录的手工导出。"""
+    for folder in (RAW_DIR, PROJECT_DIR):
+        path = folder / name
+        if path.exists():
+            return path
+    return PROJECT_DIR / name
+
+
+DEFAULT_LABEL = RAW_DIR / "table_tmp_eliam_wagego_dwd_loan_apply_label.csv"
+DEFAULT_SCORE = _input_path("aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv")
+DEFAULT_LIMIT_SCORE = _input_path("wagego_new_user_credit_20260801_20261023_score.csv")
 DEFAULT_OUTPUT = PROJECT_DIR / "模型效果对比.html"
 
 OLD_SCORE = "aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626"

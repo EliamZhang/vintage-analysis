@@ -2,8 +2,8 @@
 
 SQL 文件按「块 N」注释组织；脚本按分号拆分语句，开头的 SET 作为全局会话设置，
 其余 SELECT 按 QUERY_SPECS 的顺序执行，每个结果写一个 CSV。
-另外按 DEFAULT_TABLES（或 --tables 指定）整表拉取底表，输出 table_<表名>.csv，
-一并打进 zip，方便本地看明细。
+另外按 DEFAULT_TABLES（或 --tables 指定）整表拉取底表，输出 CSV（默认 table_<表名>.csv，
+模型对比的两张分数表保持约定文件名），一并打进 zip，方便本地看明细。
 数据库连接由外部 hive_config.query_to_df(sql) 提供，本脚本不负责建连。
 """
 
@@ -49,8 +49,20 @@ QUERY_SPECS = (
     {"id": "7", "file": "vintage_07_application_rank", "title": "老客复借期数（FPD15）"},
 )
 
-# 整表拉取：默认把样本主表拉回本地，输出 table_<表名>.csv
-DEFAULT_TABLES = ("model.tmp_eliam_wagego_dwd_loan_apply_label",)
+# 整表拉取：默认把样本主表和模型对比的输入表拉回本地
+DEFAULT_TABLES = (
+    "model.tmp_eliam_wagego_dwd_loan_apply_label",
+    "model.tmp_eliam_aus_new_wagego_credit_20261028_v1_0_txn_lgb_score",
+    "model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score",
+)
+
+# 模型对比脚本按这两个文件名读取，整表拉取时保持同名
+TABLE_EXPORTS = {
+    "model.tmp_eliam_aus_new_wagego_credit_20261028_v1_0_txn_lgb_score":
+        "aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv",
+    "model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score":
+        "wagego_new_user_credit_20260801_20261023_score.csv",
+}
 
 _TABLE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$")
 _BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", flags=re.S)
@@ -132,7 +144,9 @@ def select_tables(raw, no_tables):
 
 
 def table_file(table):
-    """model.tmp_xxx → table_tmp_xxx.csv"""
+    """model.tmp_xxx → table_tmp_xxx.csv；模型对比的输入表按约定文件名导出。"""
+    if table in TABLE_EXPORTS:
+        return TABLE_EXPORTS[table]
     return f"table_{table.split('.')[-1]}.csv"
 
 
