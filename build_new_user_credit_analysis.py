@@ -367,8 +367,8 @@ def load_sample(label_csv: Path, score_csv: Path, start: str, end: str) -> pd.Da
     return merged
 
 
-def segment_metrics(base, ovd_col, mask):
-    """成熟样本内某一段的 AUC / KS / 配对 ΔAUC。"""
+def segment_metrics(base, ovd_col, mask, reject_pct):
+    """成熟样本内某一段的 AUC / KS / 配对 ΔAUC 与拒绝阈值表现。"""
     seg = base[mask]
     out = {
         "n": int(len(seg)),
@@ -386,6 +386,7 @@ def segment_metrics(base, ovd_col, mask):
             "bad": int(y.sum()),
             "auc": round(auc, 4) if auc is not None else None,
             "ks": round(ks, 4) if ks is not None else None,
+            "cut": cutoff_stats(s, y, reject_pct),
         }
     pair = seg.dropna(subset=["old_score", "new_score"])
     if len(pair):
@@ -790,12 +791,12 @@ def build_data(sample: pd.DataFrame, reject_pct: int, oot_start: str) -> dict:
             "z": round(delta["z"], 2),
         }
 
-        # 样本内 / OOT 分段指标（OOT 按戳额时间切）
+        # OOT 前 / OOT 后分段指标（按戳额时间切）
         oot_mask = (base["last_limit_time"] >= pd.Timestamp(oot_start)).to_numpy()
         entry["segments"] = {
-            "all": segment_metrics(base, ovd_col, np.ones(len(base), dtype=bool)),
-            "pre_oot": segment_metrics(base, ovd_col, ~oot_mask),
-            "oot": segment_metrics(base, ovd_col, oot_mask),
+            "all": segment_metrics(base, ovd_col, np.ones(len(base), dtype=bool), reject_pct),
+            "pre_oot": segment_metrics(base, ovd_col, ~oot_mask, reject_pct),
+            "oot": segment_metrics(base, ovd_col, oot_mask, reject_pct),
         }
 
         # 决策互换矩阵
@@ -1129,7 +1130,7 @@ def oot_card(data) -> str:
     rows = []
     for w in WINDOWS:
         entry = data["windows"][str(w)]
-        for key, name in (("all", "全样本"), ("pre_oot", "OOT 前"), ("oot", "OOT 后")):
+        for key, name in (("oot", "OOT 后"), ("pre_oot", "OOT 前"), ("all", "全样本")):
             seg = entry["segments"][key]
             new_m, old_m, delta = seg["models"]["new"], seg["models"]["old"], seg["delta"]
             cls = ' class="oot"' if key == "oot" else ""
@@ -1151,11 +1152,10 @@ def oot_card(data) -> str:
             )
     return f"""
     <section class="card" id="oot">
-      <h2>OOT 表现<span class="tag" title="OOT 后 = 戳额时间不早于 {escape(oot_start)} 的样本；OOT 前 = 早于该切点的样本">OOT 后 vs OOT 前</span></h2>
-      <p class="desc">把 OOT 前和 OOT 后分开看，避免整体表现掩盖上线后的真实区分度。两个分段都用原始分数、各自的成熟样本重新计算 AUC / KS，
-      不与前面的全样本指标混算。下图每行是一组对照，蓝点越靠右区分度越高，右侧数字为 ΔAUC。</p>
+      <h2>OOT 后表现<span class="tag" title="主口径 = OOT 后（测试集），戳额时间不早于 {escape(oot_start)}；OOT 前 = 早于该切点">主口径 · OOT 后 vs OOT 前</span></h2>
+      <p class="desc">这是本报告的主口径：OOT 后是模型未见过的测试时段，最能反映上线后的真实区分度。OOT 后 / OOT 前 / 全样本三组都用原始分数、各自的成熟样本重新计算 AUC / KS，不混算。下图每行一组对照，蓝点越靠右区分度越高，右侧数字为 ΔAUC。</p>
       <div class="chart-wrap">
-        <svg id="ootChart" viewBox="0 0 1000 320" role="img" aria-label="全样本、OOT 前与 OOT 后的 AUC 对比"></svg>
+        <svg id="ootChart" viewBox="0 0 1000 320" role="img" aria-label="OOT 后、OOT 前与全样本的 AUC 对比"></svg>
         <div class="tip" id="ootTip"></div>
       </div>
       <div class="legend">
@@ -1167,7 +1167,7 @@ def oot_card(data) -> str:
         <table class="oot">
           <thead>
             <tr>
-              <th>窗口</th><th>分段</th><th>成熟样本</th><th>坏样本</th><th>笔数坏率</th>
+              <th>窗口</th><th>分段</th><th>成熟笔数</th><th>坏样本</th><th>笔数坏率</th>
               <th>新 AUC</th><th>线上 AUC</th><th>ΔAUC（新 − 旧）</th><th>ΔAUC 95% CI</th>
               <th>新 KS</th><th>线上 KS</th>
             </tr>
@@ -1646,32 +1646,38 @@ def weekly_table(data) -> str:
 
 def kpi_html(data) -> str:
     f15 = data["windows"]["15"]
+    f7 = data["windows"]["7"]
     reject = data["meta"]["reject_pct"]
-    new, old, delta = f15["models"]["new"], f15["models"]["old"], f15["delta"]
-    cut_new, cut_old = cut_for(f15, "new", reject), cut_for(f15, "old", reject)
+    oot = f15["segments"]["oot"]
+    new, old, delta = oot["models"]["new"], oot["models"]["old"], oot["delta"]
+    cut_new, cut_old = new["cut"], old["cut"]
+    new_all, old_all, delta_all = f15["models"]["new"], f15["models"]["old"], f15["delta"]
+    pre = f15["segments"]["pre_oot"]["delta"]
     return f"""
     <div class="kpis">
       <div class="kpi">
-        <span class="label"><i class="dot new"></i>新戳额模型 FPD15 AUC</span>
+        <span class="label"><i class="dot new"></i>新戳额模型 · OOT 后 FPD15 AUC</span>
         <b>{fmt_num(new['auc'])}</b>
-        <span class="sub">全样本成熟 {fmt_int(new['n'])} 笔 · Gini {fmt_num(new['gini'])} · KS {fmt_num(new['ks'])}</span>
+        <span class="sub">OOT 成熟 {fmt_int(new['n'])} 笔 · Gini {fmt_num(2 * new['auc'] - 1)} · KS {fmt_num(new['ks'])}</span>
       </div>
       <div class="kpi">
-        <span class="label"><i class="dot old"></i>线上模型 FPD15 AUC</span>
+        <span class="label"><i class="dot old"></i>线上模型 · OOT 后 FPD15 AUC</span>
         <b>{fmt_num(old['auc'])}</b>
-        <span class="sub">全样本成熟 {fmt_int(old['n'])} 笔 · Gini {fmt_num(old['gini'])} · KS {fmt_num(old['ks'])}</span>
+        <span class="sub">OOT 成熟 {fmt_int(old['n'])} 笔 · Gini {fmt_num(2 * old['auc'] - 1)} · KS {fmt_num(old['ks'])}</span>
       </div>
       <div class="kpi">
-        <span class="label">AUC 提升</span>
+        <span class="label">OOT 后 AUC 提升</span>
         <b>{fmt_signed(delta['diff'])}</b>
-        <span class="sub">全样本配对 {fmt_int(delta['n'])} 笔 · 95% CI {fmt_signed(delta['ci_low'])} ~ {fmt_signed(delta['ci_high'])} · {fmt_p(delta['p'])}</span>
+        <span class="sub">配对 {fmt_int(delta['n'])} 笔 · 95% CI {fmt_signed(delta['ci_low'])} ~ {fmt_signed(delta['ci_high'])} · {fmt_p(delta['p'])}</span>
       </div>
       <div class="kpi">
-        <span class="label">拒绝 {reject}% 后的通过坏率</span>
+        <span class="label">OOT 后拒绝 {reject}% 的通过坏率</span>
         <b>{fmt_pct(cut_new['kept_rate'])} <span class="vs">vs</span> {fmt_pct(cut_old['kept_rate'])}</b>
-        <span class="sub">全样本成熟 · 笔数坏率</span>
+        <span class="sub">OOT FPD15 成熟 · 笔数坏率</span>
       </div>
     </div>
+    <p class="kpi-ref"><b>参考 · 全样本成熟（含 OOT）</b>：FPD15 新 {fmt_num(new_all['auc'])} / 旧 {fmt_num(old_all['auc'])} / Δ {fmt_signed(delta_all['diff'])}；
+    FPD7 Δ {fmt_signed(f7['delta']['diff'])}。OOT 前 FPD15 Δ {fmt_signed(pre['diff'])} → OOT 后 {fmt_signed(delta['diff'])}，方向一致。</p>
     """
 
 
@@ -1694,6 +1700,7 @@ def summary_html(data) -> str:
     ref = next(r for r in f15["through"]["rows"] if r["target"] == THROUGH_REF)
     oot15, oot7 = f15["segments"]["oot"], f7["segments"]["oot"]
     oot_start = data["meta"]["oot_start"]
+    oot_cut_new, oot_cut_old = oot15["models"]["new"]["cut"], oot15["models"]["old"]["cut"]
     oot_consistent = oot15["delta"]["diff"] > 0 and oot7["delta"]["diff"] > 0
     oot_txt = "与 OOT 前方向一致" if oot_consistent else "需关注 OOT 前后差异"
 
@@ -1712,16 +1719,18 @@ def summary_html(data) -> str:
     return f"""
     <section class="card conclus" id="conclusion">
       <h2>结论</h2>
+      <p class="desc">主口径为 OOT 后（测试集）；全样本成熟作为参考。</p>
       <ul>
-        <li><b>区分度</b>（全样本成熟）：新戳额模型 FPD15 AUC {fmt_num(new['auc'])}，线上模型 {fmt_num(old['auc'])}，
-            提升 {fmt_signed(delta['diff'])}（95% CI {fmt_signed(delta['ci_low'])} ~ {fmt_signed(delta['ci_high'])}，
-            {fmt_p(delta['p'])}）；FPD7 口径同样提升 {fmt_signed(f7['delta']['diff'])}，结论不依赖单一标签。</li>
-        <li><b>OOT 表现</b>（OOT 后，{escape(oot_start)} 起）：FPD15 成熟 {fmt_int(oot15['n'])} 笔，
+        <li><b>OOT 后区分度</b>（测试集，{escape(oot_start)} 起）：FPD15 成熟 {fmt_int(oot15['n'])} 笔，
             新戳额模型 AUC {fmt_num(oot15['models']['new']['auc'])} vs 线上 {fmt_num(oot15['models']['old']['auc'])}，
-            提升 {fmt_signed(oot15['delta']['diff'])}；FPD7 成熟 {fmt_int(oot7['n'])} 笔，
-            AUC {fmt_num(oot7['models']['new']['auc'])} vs {fmt_num(oot7['models']['old']['auc'])}，
+            提升 {fmt_signed(oot15['delta']['diff'])}（95% CI {fmt_signed(oot15['delta']['ci_low'])} ~ {fmt_signed(oot15['delta']['ci_high'])}）；
+            FPD7 成熟 {fmt_int(oot7['n'])} 笔，AUC {fmt_num(oot7['models']['new']['auc'])} vs {fmt_num(oot7['models']['old']['auc'])}，
             提升 {fmt_signed(oot7['delta']['diff'])}，{oot_txt}。</li>
-        <li><b>同样风控强度下坏率更低</b>（全样本成熟）：拒绝最差 {reject}% 时，新戳额模型通过人群坏率 {fmt_pct(cut_new['kept_rate'])}，
+        <li><b>全样本成熟参考</b>（含 OOT）：FPD15 新戳额模型 AUC {fmt_num(new['auc'])}，线上模型 {fmt_num(old['auc'])}，
+            提升 {fmt_signed(delta['diff'])}（{fmt_p(delta['p'])}）；FPD7 口径同样提升 {fmt_signed(f7['delta']['diff'])}，结论不依赖单一标签。</li>
+        <li><b>OOT 后同样风控强度下坏率更低</b>（测试集）：拒绝最差 {reject}% 时，新戳额模型通过人群坏率 {fmt_pct(oot_cut_new['kept_rate'])}，
+            线上模型 {fmt_pct(oot_cut_old['kept_rate'])}；新戳额模型拦下 {fmt_pct(oot_cut_new['capture'], 1)} 的坏账，线上模型 {fmt_pct(oot_cut_old['capture'], 1)}。</li>
+        <li><b>全样本成熟决策收益</b>（参考）：拒绝最差 {reject}% 时，新戳额模型通过人群坏率 {fmt_pct(cut_new['kept_rate'])}，
             线上模型 {fmt_pct(cut_old['kept_rate'])}（{ratio_txt}）；新戳额模型拦下 {fmt_pct(cut_new['capture'], 1)} 的坏账，线上模型 {fmt_pct(cut_old['capture'], 1)}。</li>
         <li><b>同样坏率预算下通过更多</b>（全样本成熟）：把通过坏率压在同一水平，新戳额模型能多放客户。以 {ref['target']}% 为例，
             线上模型最多通过 {fmt_pct(ref['old']['approval'], 1)}（{fmt_int(ref['old']['kept'])} 笔），新戳额模型
@@ -1756,7 +1765,7 @@ def roc_card(data) -> str:
     return f"""
     <section class="card" id="roc">
       <h2>ROC 曲线<span class="tag" title="横轴假阳率、纵轴真阳率；对角线为随机模型；全样本成熟成交样本（含 OOT）">全样本成熟 · AUC 比较</span></h2>
-      <p class="desc">曲线越靠左上越好；这里展示全样本成熟成交样本（含 OOT），OOT 切点前后的分段表现见「OOT 表现」卡。
+      <p class="desc">曲线越靠左上越好；这里展示全样本成熟成交样本（含 OOT）的参考曲线，OOT 后的主口径见上方「OOT 后表现」卡。
       新戳额模型在两个标签口径下都明显更靠左上。</p>
       <div class="grid2">{''.join(panels)}</div>
       <p class="note">ROC 按分数降序逐点计算，等距抽样至 200 个点绘制；表值见上方「核心指标」。</p>
@@ -2127,8 +2136,8 @@ def weekly_card(data) -> str:
     )
     return f"""
     <section class="card" id="weekly">
-      <h2>分周稳定性<span class="tag" title="按放款周逐周重算；不是 OOT 的单一切分，OOT 见上一张卡">逐周重算 · AUC</span></h2>
-      <p class="desc">{desc_head}。这是按放款周在每一周的成熟样本上逐周重算，和「OOT 表现」的单一切分不同。{'；'.join(parts)}。</p>
+      <h2>分周稳定性<span class="tag" title="按放款周逐周重算；不是 OOT 的单一切分，OOT 见上方卡">逐周重算 · AUC</span></h2>
+      <p class="desc">{desc_head}。这是按放款周在每一周的成熟样本上逐周重算，和上方「OOT 后表现」的单一切分不同。{'；'.join(parts)}。</p>
       <div class="grid2">
         {''.join(weekly_panel(data, w) for w in WINDOWS)}
       </div>
@@ -2141,7 +2150,7 @@ def weekly_panel(data, w) -> str:
     entry = data["windows"][str(w)]
     return f"""
       <div class="panel">
-        <h3>{entry['label']} · AUC 按周<span class="muted">　当周成熟 {fmt_int(entry['n_obs'])} 笔 · 坏 {fmt_int(entry['n_bad'])} 笔</span></h3>
+        <h3>{entry['label']} · AUC 按周<span class="muted">　全期成熟 {fmt_int(entry['n_obs'])} 笔 · 坏 {fmt_int(entry['n_bad'])} 笔</span></h3>
         <div class="chart-wrap">
           <svg id="week{w}" viewBox="0 0 500 330" role="img" aria-label="{entry['label']} 周度 AUC"></svg>
           <div class="tip" id="weekTip{w}"></div>
@@ -2178,15 +2187,15 @@ def footer_html(data, generated_at, label_name, score_name, limit=None, limit_na
             样本表中另有 {fmt_int(meta['n_unscored'])} 笔未打分、不入样：{unscored_note}</li>
         <li><b>OOT 口径</b>：OOT 按戳额时间 last_limit_time ≥ {escape(oot_start)} 划分；OOT 后为 {escape(oot_start)} 及以后，
             OOT 前（切点之前）为 {escape(meta['start'])} 至 {escape(pre_end)}。
-            OOT 分段的 AUC / KS / ΔAUC 见「OOT 表现」卡，未成熟样本不计入对应窗口。</li>{limit_note}
+            OOT 后 / OOT 前分段的 AUC / KS / ΔAUC 见「OOT 后表现」卡，未成熟样本不计入对应窗口。</li>{limit_note}
         <li><b>模型口径</b>：新戳额模型 {escape(NEW_SCORE)}（戳额场景，{NEW_DESC}）；线上模型 {escape(OLD_SCORE)}（发标场景，{OLD_DESC}）。
             两者决策时点接近——中位 {fmt_days(meta['median_days'])}、75 分位 {fmt_days(meta['p75_days'])}内即放款，比较视为同点。
             线上模型有 {fmt_int(meta['old_missing'])} 笔缺失（含 -1 哨兵值），按缺失处理，不参与排序。</li>
         <li><b>坏率口径</b>：笔数坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和；成熟条件为 due + N &lt; 观察日（{escape(meta['obs_dt'])}），
             未成熟不判坏。本报告坏率均为笔数口径；金额仅出现在「通过收益」卡，为放款本金 real_amount，
             好客户本金 = 未坏样本的放款本金之和，不含利息与费用。</li>
-        <li><b>指标口径</b>：除「OOT 表现」「分周稳定性」单独标注外，正文 AUC / Gini / KS 均为<b>全样本成熟成交样本</b>口径
-            （全部成熟样本，含 OOT 时段，不是只算 OOT，也不是只算 OOT 前）。OOT 卡为切点后 / 切点前子样本，
+        <li><b>指标口径</b>：报告主口径为 OOT 后（{escape(oot_start)} 起，模型未见过的测试时段）；
+            未标注 OOT 的卡片为<b>全样本成熟成交样本</b>参考口径（全部成熟样本，含 OOT 时段，不是只算 OOT，也不是只算 OOT 前）。
             周度卡为逐周成熟子样本。各模型 AUC 用各自有分样本计算；AUC 置信区间与两模型差异用 DeLong 法（差异检验为配对 DeLong）。
             两个模型的十分位均按各自的固定分箱规则切档（切点见「十分位坏率」分档明细），第 1 档最低风险。</li>
         <li><b>lift 口径</b>：lift = 该组笔数坏率 / 全体笔数坏率。分档 lift 按档计算（第 10 档即最高档坏率 / 全体坏率）；
@@ -2296,6 +2305,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .kpi b { display: block; font-size: 27px; line-height: 1.2; margin: 4px 0 1px; }
   .kpi b .vs { color: var(--muted); font-size: 15px; font-weight: 400; }
   .kpi .sub { display: block; color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
+  .kpi-ref {
+    margin: 0 1px 4px; color: var(--muted);
+    font-size: 11.5px; line-height: 1.6;
+  }
+  .kpi-ref b { color: var(--ink-2); font-weight: 600; }
   .toc {
     position: fixed; top: 36px; z-index: 20;
     left: max(24px, calc((100vw - 1532px) / 2));
@@ -2523,13 +2537,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 __TOC__
 __HEADER__
 __KPIS__
-__CONVERSION_CARD__
+__OOT_CARD__
 __METRICS_CARD__
 __ROC_CARD__
 __DECILE_CARD__
 __CROSS_CARD__
-__OOT_CARD__
 __WEEKLY_CARD__
+__CONVERSION_CARD__
 __MONEY_CARD__
 __CAPTURE_CARD__
 __THROUGH_CARD__
@@ -3151,7 +3165,7 @@ function drawOot() {
   const rows = [];
   ['15', '7'].forEach(w => {
     const segs = DATA.windows[w].segments;
-    [['all', '全样本'], ['pre_oot', 'OOT 前'], ['oot', 'OOT 后']].forEach(pair => {
+    [['oot', 'OOT 后'], ['pre_oot', 'OOT 前'], ['all', '全样本']].forEach(pair => {
       const seg = segs[pair[0]];
       rows.push({
         label: 'FPD' + w + ' · ' + pair[1],
@@ -3493,19 +3507,18 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
       <h1>新客戳额风险模型效果评估报告</h1>
       <p class="sub">从区分度、决策收益到周度稳定性，评估新戳额模型相对线上模型的增量价值。
       首笔成交新客，戳额时间 {escape(meta['start'])} 至 {escape(meta['end_display'])}，观察日 {meta['obs_dt']}。
-      除特别标注外，正文 AUC / KS / 坏率均为<b>全样本成熟成交样本</b>口径（含 OOT 时段）；OOT 与周度稳定性单独切分。</p>
+      本报告以<b>OOT 后（测试集）</b>为主口径；未标注 OOT 的卡片为全样本成熟成交样本（含 OOT）参考口径。</p>
       <div class="models">
         <span><i class="dot new"></i><b>{NEW_NAME}</b><code>{escape(NEW_SCORE)}</code><span class="muted">戳额场景</span></span>
         <span><i class="dot old"></i><b>{OLD_NAME}</b><code>{escape(OLD_SCORE)}</code><span class="muted">发标场景</span></span>
       </div>
       <div class="chips">
+        <span class="chip">主指标：OOT 后（测试集）</span>
+        <span class="chip">OOT 切点 {escape(meta['oot_start'])}</span>
+        <span class="chip">OOT 成熟 FPD15 {fmt_int(data['windows']['15']['segments']['oot']['n'])} · FPD7 {fmt_int(data['windows']['7']['segments']['oot']['n'])} 笔</span>
         <span class="chip">样本 {fmt_int(meta['n_sample'])} 人（每人一笔）</span>
         {f'<span class="chip">戳额全量 {fmt_int(limit["n"])} 人</span>' if limit else ''}
         {f'<span class="chip">戳额→成交 {fmt_pct(limit["conversion"]["disburse_rate"])}</span>' if limit and limit.get("conversion") else ''}
-        <span class="chip">主指标：全样本成熟（含 OOT）</span>
-        <span class="chip">FPD15 成熟 {fmt_int(data['windows']['15']['n_obs'])} 笔</span>
-        <span class="chip">FPD7 成熟 {fmt_int(data['windows']['7']['n_obs'])} 笔</span>
-        <span class="chip">OOT 切点 {escape(meta['oot_start'])}</span>
         <span class="chip">笔数坏率</span>
       </div>
     </header>
@@ -3513,23 +3526,24 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
     f15m = data["windows"]["15"]["models"]
     metrics_card = f"""
     <section class="card" id="metrics">
-      <h2>核心指标<span class="tag" title="AUC / Gini / KS 均在全样本成熟成交样本上计算（含 OOT 时段）">全样本成熟 · 排序能力</span></h2>
-      <p class="desc">两个标签口径、两个模型都在全样本成熟成交样本上计算；ΔAUC 另取两个模型都有分的配对样本。
-      新戳额模型 AUC {fmt_num(f15m['new']['auc'], 2)}、KS {fmt_num(f15m['new']['ks'], 2)}，
-      线上模型 AUC {fmt_num(f15m['old']['auc'], 2)}、KS {fmt_num(f15m['old']['ks'], 2)}。</p>
+      <h2>核心指标<span class="tag" title="AUC / Gini / KS 均在全样本成熟成交样本上计算（含 OOT 时段）；OOT 后主口径见上卡">全样本成熟 · 参考</span></h2>
+      <p class="desc">OOT 后为主口径（见上卡）；这里列出全样本成熟成交样本（含 OOT）的完整指标，便于与历史报告对照。
+      ΔAUC 另取两个模型都有分的配对样本。新戳额模型 AUC {fmt_num(f15m['new']['auc'])}、KS {fmt_num(f15m['new']['ks'])}，
+      线上模型 AUC {fmt_num(f15m['old']['auc'])}、KS {fmt_num(f15m['old']['ks'])}。</p>
       {metrics_table(data)}
     </section>
     """
-    toc_entries = []
-    if limit and limit.get("conversion"):
-        toc_entries.append(("conversion", "转化漏斗"))
-    toc_entries += [
+    toc_entries = [
+        ("oot", "OOT 后表现"),
         ("metrics", "核心指标"),
         ("roc", "ROC 曲线"),
         ("decile", "十分位坏率"),
         ("cross", "五分位交叉矩阵"),
-        ("oot", "OOT 表现"),
         ("weekly", "分周稳定性"),
+    ]
+    if limit and limit.get("conversion"):
+        toc_entries.append(("conversion", "转化漏斗"))
+    toc_entries += [
         ("money", "置入与置出"),
         ("capture", "拦截收益"),
         ("through", "通过收益"),
