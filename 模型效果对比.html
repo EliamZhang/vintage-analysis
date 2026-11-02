@@ -255,8 +255,8 @@
     <div class="kpis">
       <div class="kpi">
         <span class="label"><i class="dot new"></i>新戳额模型 FPD15 AUC</span>
-        <b>0.826</b>
-        <span class="sub">Gini 0.652 · KS 0.501</span>
+        <b>0.803</b>
+        <span class="sub">Gini 0.606 · KS 0.474</span>
       </div>
       <div class="kpi">
         <span class="label"><i class="dot old"></i>线上模型 FPD15 AUC</span>
@@ -265,12 +265,12 @@
       </div>
       <div class="kpi">
         <span class="label">AUC 提升</span>
-        <b>+0.193</b>
-        <span class="sub">95% CI +0.172 ~ +0.214 · p &lt; 0.001</span>
+        <b>+0.170</b>
+        <span class="sub">95% CI +0.149 ~ +0.191 · p &lt; 0.001</span>
       </div>
       <div class="kpi">
         <span class="label">拒绝 30% 后的通过坏率</span>
-        <b>3.98% <span class="vs">vs</span> 8.10%</b>
+        <b>4.36% <span class="vs">vs</span> 8.10%</b>
         <span class="sub">口径：笔数坏率</span>
       </div>
     </div>
@@ -279,25 +279,25 @@
     <section class="card conclus">
       <h2>结论</h2>
       <ul>
-        <li><b>区分度</b>：新戳额模型 FPD15 AUC 0.826，线上模型 0.633，
-            提升 +0.193（95% CI +0.172 ~ +0.214，
-            p &lt; 0.001）；FPD7 口径同样提升 +0.134，结论不依赖单一标签。</li>
-        <li><b>同样风控强度下坏率更低</b>：拒绝最差 30% 时，新戳额模型通过人群坏率 3.98%，
-            线上模型 8.10%（约 2.0 倍）；新戳额模型拦下 73.1% 的坏账，线上模型 45.2%。</li>
+        <li><b>区分度</b>：新戳额模型 FPD15 AUC 0.803，线上模型 0.633，
+            提升 +0.170（95% CI +0.149 ~ +0.191，
+            p &lt; 0.001）；FPD7 口径同样提升 +0.122，结论不依赖单一标签。</li>
+        <li><b>同样风控强度下坏率更低</b>：拒绝最差 30% 时，新戳额模型通过人群坏率 4.36%，
+            线上模型 8.10%（约 1.9 倍）；新戳额模型拦下 70.5% 的坏账，线上模型 45.2%。</li>
         <li><b>同样坏率预算下通过更多</b>：把通过坏率压在同一水平，新戳额模型能多放客户。以 8% 为例，
             线上模型最多通过 69.2%（5,259 笔），新戳额模型
-            93.5%（7,107 笔），多 1,848 位客户、
-            179,200 好客户本金。</li>
-        <li><b>分歧人群以新戳额模型判断为准</b>：新戳额模型拒绝而线上模型放行的 1,215 人坏率
-            23.29%，线上模型拒绝而新戳额模型放行的 1,215 人坏率仅
-            5.27%，相差 4.4 倍。</li>
+            92.4%（7,027 笔），多 1,768 位客户、
+            169,800 好客户本金。</li>
+        <li><b>分歧人群以新戳额模型判断为准</b>：新戳额模型拒绝而线上模型放行的 1,186 人坏率
+            22.51%，线上模型拒绝而新戳额模型放行的 1,186 人坏率仅
+            5.65%，相差 4.0 倍。</li>
       </ul>
     </section>
     
 
     <section class="card">
       <h2>核心指标<span class="tag" title="AUC / Gini / KS 均在成熟样本内计算">排序能力</span></h2>
-      <p class="desc">两个标签口径、两个模型放在同一批成熟样本上比。新戳额模型 AUC 0.83、KS 0.50，
+      <p class="desc">两个标签口径、两个模型放在同一批成熟样本上比。新戳额模型 AUC 0.80、KS 0.47，
       线上模型 AUC 0.63、KS 0.19。</p>
       
       <div class="table-wrap">
@@ -316,12 +316,12 @@
           <td>7,605</td>
           <td>787</td>
           <td>10.35%</td>
-          <td class="strong">0.826</td>
-          <td class="soft">0.812–0.840</td>
-          <td>0.652</td>
-          <td>0.501</td>
-          <td>41.00%</td>
-          <td>3.96×</td>
+          <td class="strong">0.803</td>
+          <td class="soft">0.788–0.818</td>
+          <td>0.606</td>
+          <td>0.474</td>
+          <td>36.79%</td>
+          <td>3.56×</td>
         </tr>
         <tr>
           <td class="w">FPD15</td>
@@ -340,10 +340,10 @@
           <td class="w">FPD15</td>
           <td class="model">ΔAUC（新 − 旧）</td>
           <td colspan="3" class="soft">配对样本 7,600</td>
-          <td class="strong">+0.193</td>
-          <td class="soft">+0.172 ~ +0.214</td>
+          <td class="strong">+0.170</td>
+          <td class="soft">+0.149 ~ +0.191</td>
           <td colspan="2" class="soft">95% CI · p &lt; 0.001</td>
-          <td colspan="2" class="soft">z = 18.2</td>
+          <td colspan="2" class="soft">z = 15.8</td>
         </tr>
         <tr>
           <td class="w">FPD7</td>
@@ -351,12 +351,12 @@
           <td>11,316</td>
           <td>1,587</td>
           <td>14.02%</td>
-          <td class="strong">0.763</td>
-          <td class="soft">0.751–0.776</td>
-          <td>0.527</td>
-          <td>0.397</td>
-          <td>43.37%</td>
-          <td>3.09×</td>
+          <td class="strong">0.751</td>
+          <td class="soft">0.739–0.764</td>
+          <td>0.502</td>
+          <td>0.381</td>
+          <td>40.11%</td>
+          <td>2.86×</td>
         </tr>
         <tr>
           <td class="w">FPD7</td>
@@ -375,10 +375,10 @@
           <td class="w">FPD7</td>
           <td class="model">ΔAUC（新 − 旧）</td>
           <td colspan="3" class="soft">配对样本 11,311</td>
-          <td class="strong">+0.134</td>
-          <td class="soft">+0.118 ~ +0.149</td>
+          <td class="strong">+0.122</td>
+          <td class="soft">+0.106 ~ +0.137</td>
           <td colspan="2" class="soft">95% CI · p &lt; 0.001</td>
-          <td colspan="2" class="soft">z = 16.7</td>
+          <td colspan="2" class="soft">z = 15.5</td>
         </tr></tbody>
         </table>
       </div>
@@ -398,7 +398,7 @@
           <div class="tip" id="rocTip15"></div>
         </div>
         <div class="legend">
-          <span><i class="dot new"></i>新戳额模型 <b>AUC 0.826</b></span>
+          <span><i class="dot new"></i>新戳额模型 <b>AUC 0.803</b></span>
           <span><i class="dot old"></i>线上模型 <b>AUC 0.633</b></span>
         </div>
       </div>
@@ -409,7 +409,7 @@
           <div class="tip" id="rocTip7"></div>
         </div>
         <div class="legend">
-          <span><i class="dot new"></i>新戳额模型 <b>AUC 0.763</b></span>
+          <span><i class="dot new"></i>新戳额模型 <b>AUC 0.751</b></span>
           <span><i class="dot old"></i>线上模型 <b>AUC 0.630</b></span>
         </div>
       </div></div>
@@ -419,8 +419,8 @@
 
     <section class="card">
       <h2>十分位坏率<span class="tag" title="按各模型分数升序切 10 等份，第 10 档风险最高">FPD15</span></h2>
-      <p class="desc">新戳额模型从第 1 档到第 10 档单调上升，最高档 41.00%、
-      lift 3.96×；线上模型前 9 档挤在 4.08%–13.68% 之间，
+      <p class="desc">新戳额模型从第 1 档到第 10 档单调上升，最高档 36.79%、
+      lift 3.56×；线上模型前 9 档挤在 4.08%–13.68% 之间，
       最高档 20.92%、lift 2.02×。</p>
       <div class="chart-wrap">
         <svg id="decileChart" viewBox="0 0 1000 340" role="img" aria-label="FPD15 十分位坏率对比"></svg>
@@ -461,9 +461,9 @@
             <tr>
               <td>2</td>
               <td>761</td>
-              <td class="strong">1.05%</td>
-              <td class="lift">0.10×</td>
-              <td class="soft">8</td>
+              <td class="strong">1.84%</td>
+              <td class="lift">0.18×</td>
+              <td class="soft">14</td>
               <td>760</td>
               <td>5.53%</td>
               <td class="lift">0.53×</td>
@@ -472,9 +472,9 @@
             <tr>
               <td>3</td>
               <td>760</td>
-              <td class="strong">1.58%</td>
-              <td class="lift">0.15×</td>
-              <td class="soft">12</td>
+              <td class="strong">1.97%</td>
+              <td class="lift">0.19×</td>
+              <td class="soft">15</td>
               <td>760</td>
               <td>7.24%</td>
               <td class="lift">0.70×</td>
@@ -483,9 +483,9 @@
             <tr>
               <td>4</td>
               <td>761</td>
-              <td class="strong">2.63%</td>
-              <td class="lift">0.25×</td>
-              <td class="soft">20</td>
+              <td class="strong">3.02%</td>
+              <td class="lift">0.29×</td>
+              <td class="soft">23</td>
               <td>760</td>
               <td>7.89%</td>
               <td class="lift">0.76×</td>
@@ -494,9 +494,9 @@
             <tr>
               <td>5</td>
               <td>760</td>
-              <td class="strong">3.82%</td>
-              <td class="lift">0.37×</td>
-              <td class="soft">29</td>
+              <td class="strong">4.87%</td>
+              <td class="lift">0.47×</td>
+              <td class="soft">37</td>
               <td>760</td>
               <td>10.79%</td>
               <td class="lift">1.04×</td>
@@ -505,9 +505,9 @@
             <tr>
               <td>6</td>
               <td>761</td>
-              <td class="strong">7.62%</td>
-              <td class="lift">0.74×</td>
-              <td class="soft">58</td>
+              <td class="strong">7.36%</td>
+              <td class="lift">0.71×</td>
+              <td class="soft">56</td>
               <td>760</td>
               <td>9.74%</td>
               <td class="lift">0.94×</td>
@@ -516,9 +516,9 @@
             <tr>
               <td>7</td>
               <td>760</td>
-              <td class="strong">10.79%</td>
-              <td class="lift">1.04×</td>
-              <td class="soft">82</td>
+              <td class="strong">11.05%</td>
+              <td class="lift">1.07×</td>
+              <td class="soft">84</td>
               <td>760</td>
               <td>11.45%</td>
               <td class="lift">1.11×</td>
@@ -527,9 +527,9 @@
             <tr>
               <td>8</td>
               <td>761</td>
-              <td class="strong">13.01%</td>
-              <td class="lift">1.26×</td>
-              <td class="soft">99</td>
+              <td class="strong">14.98%</td>
+              <td class="lift">1.45×</td>
+              <td class="soft">114</td>
               <td>760</td>
               <td>12.11%</td>
               <td class="lift">1.17×</td>
@@ -538,9 +538,9 @@
             <tr>
               <td>9</td>
               <td>760</td>
-              <td class="strong">21.58%</td>
-              <td class="lift">2.09×</td>
-              <td class="soft">164</td>
+              <td class="strong">21.18%</td>
+              <td class="lift">2.05×</td>
+              <td class="soft">161</td>
               <td>760</td>
               <td>13.68%</td>
               <td class="lift">1.32×</td>
@@ -549,9 +549,9 @@
             <tr>
               <td>10</td>
               <td>761</td>
-              <td class="strong">41.00%</td>
-              <td class="lift">3.96×</td>
-              <td class="soft">312</td>
+              <td class="strong">36.79%</td>
+              <td class="lift">3.56×</td>
+              <td class="soft">280</td>
               <td>760</td>
               <td>20.92%</td>
               <td class="lift">2.02×</td>
@@ -568,7 +568,7 @@
       <p class="desc">前面所有坏率都是笔数口径，这里换成钱。FPD15 成熟样本上，新戳额模型口径的置入
       1,087,800、置出 107,250，置出率 9.86%，
       比同口径的笔数坏率 10.35% 低 0.49pp——坏样本的单笔金额小于整体平均。最高档只占置入的 8.2%，
-      却贡献 35.4% 的置出（线上模型最高档 15.5%）。</p>
+      却贡献 31.6% 的置出（线上模型最高档 15.5%）。</p>
       <div class="defs">
         <span><b>置入</b><em>放款本金（real_amount）之和</em></span>
         <span><b>置出</b><em>到期未还本金（due + N 当天借据快照）</em></span>
@@ -663,90 +663,90 @@
           <tbody>
             <tr>
               <td>1</td>
-              <td>140,250</td>
-              <td class="soft">850</td>
-              <td class="strong">0.61%</td>
+              <td>137,250</td>
+              <td class="soft">750</td>
+              <td class="strong">0.55%</td>
               <td>171,000</td>
               <td class="soft">6,900</td>
               <td>4.04%</td>
             </tr>
             <tr>
               <td>2</td>
-              <td>127,200</td>
-              <td class="soft">1,700</td>
-              <td class="strong">1.34%</td>
+              <td>131,100</td>
+              <td class="soft">3,150</td>
+              <td class="strong">2.40%</td>
               <td>160,800</td>
               <td class="soft">10,100</td>
               <td>6.28%</td>
             </tr>
             <tr>
               <td>3</td>
-              <td>116,850</td>
-              <td class="soft">2,750</td>
-              <td class="strong">2.35%</td>
+              <td>119,450</td>
+              <td class="soft">2,600</td>
+              <td class="strong">2.18%</td>
               <td>133,500</td>
               <td class="soft">10,400</td>
               <td>7.79%</td>
             </tr>
             <tr>
               <td>4</td>
-              <td>113,100</td>
-              <td class="soft">3,650</td>
-              <td class="strong">3.23%</td>
+              <td>112,850</td>
+              <td class="soft">3,250</td>
+              <td class="strong">2.88%</td>
               <td>102,700</td>
               <td class="soft">9,050</td>
               <td>8.81%</td>
             </tr>
             <tr>
               <td>5</td>
-              <td>108,100</td>
-              <td class="soft">4,800</td>
-              <td class="strong">4.44%</td>
+              <td>106,250</td>
+              <td class="soft">6,150</td>
+              <td class="strong">5.79%</td>
               <td>99,250</td>
               <td class="soft">10,900</td>
               <td>10.98%</td>
             </tr>
             <tr>
               <td>6</td>
-              <td>104,850</td>
-              <td class="soft">8,750</td>
-              <td class="strong">8.35%</td>
+              <td>102,750</td>
+              <td class="soft">9,850</td>
+              <td class="strong">9.59%</td>
               <td>94,150</td>
               <td class="soft">10,000</td>
               <td>10.62%</td>
             </tr>
             <tr>
               <td>7</td>
-              <td>95,600</td>
-              <td class="soft">12,400</td>
-              <td class="strong">12.97%</td>
+              <td>100,150</td>
+              <td class="soft">12,000</td>
+              <td class="strong">11.98%</td>
               <td>83,650</td>
               <td class="soft">10,200</td>
               <td>12.19%</td>
             </tr>
             <tr>
               <td>8</td>
-              <td>99,350</td>
-              <td class="soft">13,300</td>
-              <td class="strong">13.39%</td>
+              <td>95,100</td>
+              <td class="soft">15,050</td>
+              <td class="strong">15.83%</td>
               <td>83,450</td>
               <td class="soft">10,650</td>
               <td>12.76%</td>
             </tr>
             <tr>
               <td>9</td>
-              <td>93,050</td>
-              <td class="soft">21,050</td>
-              <td class="strong">22.62%</td>
+              <td>93,500</td>
+              <td class="soft">20,600</td>
+              <td class="strong">22.03%</td>
               <td>82,950</td>
               <td class="soft">12,250</td>
               <td>14.77%</td>
             </tr>
             <tr>
               <td>10</td>
-              <td>89,450</td>
-              <td class="soft">38,000</td>
-              <td class="strong">42.48%</td>
+              <td>89,400</td>
+              <td class="soft">33,850</td>
+              <td class="strong">37.86%</td>
               <td>75,700</td>
               <td class="soft">16,600</td>
               <td>21.93%</td>
@@ -762,7 +762,7 @@
     <section class="card">
       <h2>五分位交叉矩阵<span class="tag" title="行 = 新戳额模型五分位，列 = 线上模型五分位，每格为该组合的笔数坏率">FPD15</span></h2>
       <p class="desc">每格是落在该组合的样本的笔数坏率。横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差
-      7.8pp；纵向看（线上档固定、新戳额模型 1→5 档）至少差 25.2pp
+      6.4pp；纵向看（线上档固定、新戳额模型 1→5 档）至少差 24.8pp
       ——风险差异主要由新戳额模型的分档解释，线上模型分档带来的额外区分很小。</p>
       
       <div class="table-wrap">
@@ -771,7 +771,7 @@
             <tr><th class="corner"></th><th colspan="5" class="group">线上模型 · 五分位</th></tr>
             <tr><th class="rowhead">新戳额模型</th><th>1 档</th><th>2 档</th><th>3 档</th><th>4 档</th><th>5 档</th></tr>
           </thead>
-          <tbody><tr><th class="rowhead">1 档</th><td class="h1" title="新戳额 1 档 × 线上 1 档：597 笔，坏 3 笔，坏率 0.50%"><b>0.50%</b><span>597 笔</span></td><td class="h2" title="新戳额 1 档 × 线上 2 档：397 笔，坏 5 笔，坏率 1.26%"><b>1.26%</b><span>397 笔</span></td><td class="h1" title="新戳额 1 档 × 线上 3 档：267 笔，坏 2 笔，坏率 0.75%"><b>0.75%</b><span>267 笔</span></td><td class="h1" title="新戳额 1 档 × 线上 4 档：164 笔，坏 1 笔，坏率 0.61%"><b>0.61%</b><span>164 笔</span></td><td class="h1" title="新戳额 1 档 × 线上 5 档：95 笔，坏 0 笔，坏率 0.00%"><b>0.00%</b><span>95 笔</span></td></tr><tr><th class="rowhead">2 档</th><td class="h2" title="新戳额 2 档 × 线上 1 档：388 笔，坏 11 笔，坏率 2.84%"><b>2.84%</b><span>388 笔</span></td><td class="h2" title="新戳额 2 档 × 线上 2 档：366 笔，坏 5 笔，坏率 1.37%"><b>1.37%</b><span>366 笔</span></td><td class="h2" title="新戳额 2 档 × 线上 3 档：317 笔，坏 8 笔，坏率 2.52%"><b>2.52%</b><span>317 笔</span></td><td class="h2" title="新戳额 2 档 × 线上 4 档：272 笔，坏 6 笔，坏率 2.21%"><b>2.21%</b><span>272 笔</span></td><td class="h2" title="新戳额 2 档 × 线上 5 档：177 笔，坏 2 笔，坏率 1.13%"><b>1.13%</b><span>177 笔</span></td></tr><tr><th class="rowhead">3 档</th><td class="h3" title="新戳额 3 档 × 线上 1 档：284 笔，坏 17 笔，坏率 5.99%"><b>5.99%</b><span>284 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 2 档：321 笔，坏 20 笔，坏率 6.23%"><b>6.23%</b><span>321 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 3 档：286 笔，坏 16 笔，坏率 5.59%"><b>5.59%</b><span>286 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 4 档：344 笔，坏 13 笔，坏率 3.78%"><b>3.78%</b><span>344 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 5 档：285 笔，坏 19 笔，坏率 6.67%"><b>6.67%</b><span>285 笔</span></td></tr><tr><th class="rowhead">4 档</th><td class="h4" title="新戳额 4 档 × 线上 1 档：146 笔，坏 15 笔，坏率 10.27%"><b>10.27%</b><span>146 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 2 档：276 笔，坏 32 笔，坏率 11.59%"><b>11.59%</b><span>276 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 3 档：328 笔，坏 44 笔，坏率 13.41%"><b>13.41%</b><span>328 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 4 档：379 笔，坏 38 笔，坏率 10.03%"><b>10.03%</b><span>379 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 5 档：391 笔，坏 53 笔，坏率 13.55%"><b>13.55%</b><span>391 笔</span></td></tr><tr><th class="rowhead">5 档</th><td class="h5" title="新戳额 5 档 × 线上 1 档：105 笔，坏 27 笔，坏率 25.71%"><b>25.71%</b><span>105 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 2 档：160 笔，坏 53 笔，坏率 33.12%"><b>33.12%</b><span>160 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 3 档：322 笔，坏 86 笔，坏率 26.71%"><b>26.71%</b><span>322 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 4 档：361 笔，坏 121 笔，坏率 33.52%"><b>33.52%</b><span>361 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 5 档：572 笔，坏 189 笔，坏率 33.04%"><b>33.04%</b><span>572 笔</span></td></tr></tbody>
+          <tbody><tr><th class="rowhead">1 档</th><td class="h2" title="新戳额 1 档 × 线上 1 档：608 笔，坏 10 笔，坏率 1.64%"><b>1.64%</b><span>608 笔</span></td><td class="h1" title="新戳额 1 档 × 线上 2 档：406 笔，坏 2 笔，坏率 0.49%"><b>0.49%</b><span>406 笔</span></td><td class="h1" title="新戳额 1 档 × 线上 3 档：264 笔，坏 2 笔，坏率 0.76%"><b>0.76%</b><span>264 笔</span></td><td class="h2" title="新戳额 1 档 × 线上 4 档：159 笔，坏 2 笔，坏率 1.26%"><b>1.26%</b><span>159 笔</span></td><td class="h2" title="新戳额 1 档 × 线上 5 档：83 笔，坏 1 笔，坏率 1.20%"><b>1.20%</b><span>83 笔</span></td></tr><tr><th class="rowhead">2 档</th><td class="h2" title="新戳额 2 档 × 线上 1 档：387 笔，坏 9 笔，坏率 2.33%"><b>2.33%</b><span>387 笔</span></td><td class="h2" title="新戳额 2 档 × 线上 2 档：373 笔，坏 9 笔，坏率 2.41%"><b>2.41%</b><span>373 笔</span></td><td class="h2" title="新戳额 2 档 × 线上 3 档：292 笔，坏 7 笔，坏率 2.40%"><b>2.40%</b><span>292 笔</span></td><td class="h2" title="新戳额 2 档 × 线上 4 档：279 笔，坏 7 笔，坏率 2.51%"><b>2.51%</b><span>279 笔</span></td><td class="h3" title="新戳额 2 档 × 线上 5 档：189 笔，坏 6 笔，坏率 3.17%"><b>3.17%</b><span>189 笔</span></td></tr><tr><th class="rowhead">3 档</th><td class="h3" title="新戳额 3 档 × 线上 1 档：259 笔，坏 14 笔，坏率 5.41%"><b>5.41%</b><span>259 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 2 档：312 笔，坏 21 笔，坏率 6.73%"><b>6.73%</b><span>312 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 3 档：354 笔，坏 24 笔，坏率 6.78%"><b>6.78%</b><span>354 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 4 档：331 笔，坏 18 笔，坏率 5.44%"><b>5.44%</b><span>331 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 5 档：264 笔，坏 15 笔，坏率 5.68%"><b>5.68%</b><span>264 笔</span></td></tr><tr><th class="rowhead">4 档</th><td class="h4" title="新戳额 4 档 × 线上 1 档：178 笔，坏 15 笔，坏率 8.43%"><b>8.43%</b><span>178 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 2 档：243 笔，坏 36 笔，坏率 14.81%"><b>14.81%</b><span>243 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 3 档：300 笔，坏 37 笔，坏率 12.33%"><b>12.33%</b><span>300 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 4 档：402 笔，坏 54 笔，坏率 13.43%"><b>13.43%</b><span>402 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 5 档：397 笔，坏 56 笔，坏率 14.11%"><b>14.11%</b><span>397 笔</span></td></tr><tr><th class="rowhead">5 档</th><td class="h5" title="新戳额 5 档 × 线上 1 档：88 笔，坏 25 笔，坏率 28.41%"><b>28.41%</b><span>88 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 2 档：186 笔，坏 47 笔，坏率 25.27%"><b>25.27%</b><span>186 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 3 档：310 笔，坏 86 笔，坏率 27.74%"><b>27.74%</b><span>310 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 4 档：349 笔，坏 98 笔，坏率 28.08%"><b>28.08%</b><span>349 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 5 档：587 笔，坏 185 笔，坏率 31.52%"><b>31.52%</b><span>587 笔</span></td></tr></tbody>
         </table>
       </div>
     
@@ -784,15 +784,15 @@
         <span><i class="sw h5"></i>≥15%</span>
       </div>
       <p class="note">行 = 新戳额模型五分位，列 = 线上模型五分位，1 档风险最低。样本为 FPD15 成熟且两个模型都有分的
-      7,600 笔，每格最少 95 笔；两模型落在同一档（对角线）的占
-      28.9%，其余是重排。悬停方格可看该格坏样本数。</p>
+      7,600 笔，每格最少 83 笔；两模型落在同一档（对角线）的占
+      30.6%，其余是重排。悬停方格可看该格坏样本数。</p>
     </section>
     
 
     <section class="card">
       <h2>拦截收益<span class="tag" title="按分数从高到低拒绝，横轴为拒绝比例，纵轴为被拒样本中的坏账占比">FPD15</span></h2>
       <p class="desc">拒绝同样比例的人，新戳额模型能拦下更多坏账。拒绝 30% 时，新戳额模型捕获
-      73.1% 的坏账，线上模型 45.2%。</p>
+      70.5% 的坏账，线上模型 45.2%。</p>
       <div class="chart-wrap">
         <svg id="captureChart" viewBox="0 0 1000 340" role="img" aria-label="坏账捕获曲线"></svg>
         <div class="tip" id="captureTip"></div>
@@ -823,47 +823,47 @@
             <tr>
               <td class="strong">90%</td>
               <td>6,845</td>
-              <td class="strong">6.94%</td>
-              <td class="soft">39.6%<span class="n">lift 3.96× · 金额 35.4%</span></td>
+              <td class="strong">7.41%</td>
+              <td class="soft">35.6%<span class="n">lift 3.56× · 金额 31.6%</span></td>
               <td>9.17%</td>
               <td class="soft">20.2%<span class="n">lift 2.02× · 金额 15.5%</span></td>
-              <td>−2.23pp</td>
+              <td>−1.76pp</td>
             </tr>
             <tr>
               <td class="strong">80%</td>
               <td>6,084</td>
-              <td class="strong">5.11%</td>
-              <td class="soft">60.5%<span class="n">lift 3.02× · 金额 55.1%</span></td>
+              <td class="strong">5.69%</td>
+              <td class="soft">56.0%<span class="n">lift 2.80× · 金额 50.8%</span></td>
               <td>8.60%</td>
               <td class="soft">33.5%<span class="n">lift 1.67× · 金额 26.9%</span></td>
-              <td>−3.49pp</td>
+              <td>−2.92pp</td>
             </tr>
             <tr>
               <td class="strong">70%</td>
               <td>5,323</td>
-              <td class="strong">3.98%</td>
-              <td class="soft">73.1%<span class="n">lift 2.44× · 金额 67.5%</span></td>
+              <td class="strong">4.36%</td>
+              <td class="soft">70.5%<span class="n">lift 2.35× · 金额 64.8%</span></td>
               <td>8.10%</td>
               <td class="soft">45.2%<span class="n">lift 1.51× · 金额 36.9%</span></td>
-              <td>−4.12pp</td>
+              <td>−3.74pp</td>
             </tr>
             <tr>
               <td class="strong">60%</td>
               <td>4,563</td>
-              <td class="strong">2.85%</td>
-              <td class="soft">83.5%<span class="n">lift 2.09× · 金额 79.0%</span></td>
+              <td class="strong">3.24%</td>
+              <td class="soft">81.2%<span class="n">lift 2.03× · 金额 76.0%</span></td>
               <td>7.54%</td>
               <td class="soft">56.2%<span class="n">lift 1.41× · 金额 46.4%</span></td>
-              <td>−4.69pp</td>
+              <td>−4.30pp</td>
             </tr>
             <tr>
               <td class="strong">50%</td>
               <td>3,803</td>
-              <td class="strong">1.89%</td>
-              <td class="soft">90.8%<span class="n">lift 1.82× · 金额 87.2%</span></td>
+              <td class="strong">2.42%</td>
+              <td class="soft">88.3%<span class="n">lift 1.77× · 金额 85.2%</span></td>
               <td>7.11%</td>
               <td class="soft">65.7%<span class="n">lift 1.31× · 金额 55.8%</span></td>
-              <td>−5.21pp</td>
+              <td>−4.69pp</td>
             </tr></tbody>
         </table>
       </div>
@@ -888,47 +888,47 @@
             <tr>
               <td class="strong">90%</td>
               <td>10,184</td>
-              <td class="strong">10.76%</td>
-              <td class="soft">30.9%<span class="n">lift 3.09× · 金额 26.5%</span></td>
+              <td class="strong">11.12%</td>
+              <td class="soft">28.6%<span class="n">lift 2.86× · 金额 24.9%</span></td>
               <td>12.69%</td>
               <td class="soft">18.5%<span class="n">lift 1.85× · 金额 13.8%</span></td>
-              <td>−1.93pp</td>
+              <td>−1.57pp</td>
             </tr>
             <tr>
               <td class="strong">80%</td>
               <td>9,053</td>
-              <td class="strong">8.84%</td>
-              <td class="soft">49.6%<span class="n">lift 2.48× · 金额 43.6%</span></td>
+              <td class="strong">9.30%</td>
+              <td class="soft">46.9%<span class="n">lift 2.35× · 金额 41.6%</span></td>
               <td>12.00%</td>
               <td class="soft">31.5%<span class="n">lift 1.58× · 金额 24.5%</span></td>
-              <td>−3.16pp</td>
+              <td>−2.70pp</td>
             </tr>
             <tr>
               <td class="strong">70%</td>
               <td>7,921</td>
-              <td class="strong">7.58%</td>
-              <td class="soft">62.2%<span class="n">lift 2.07× · 金额 56.3%</span></td>
+              <td class="strong">7.73%</td>
+              <td class="soft">61.4%<span class="n">lift 2.05× · 金额 55.1%</span></td>
               <td>11.23%</td>
               <td class="soft">44.0%<span class="n">lift 1.47× · 金额 34.8%</span></td>
-              <td>−3.65pp</td>
+              <td>−3.50pp</td>
             </tr>
             <tr>
               <td class="strong">60%</td>
               <td>6,790</td>
-              <td class="strong">6.05%</td>
-              <td class="soft">74.1%<span class="n">lift 1.85× · 金额 69.3%</span></td>
+              <td class="strong">6.45%</td>
+              <td class="soft">72.4%<span class="n">lift 1.81× · 金额 66.6%</span></td>
               <td>10.55%</td>
               <td class="soft">54.9%<span class="n">lift 1.37× · 金额 44.1%</span></td>
-              <td>−4.50pp</td>
+              <td>−4.10pp</td>
             </tr>
             <tr>
               <td class="strong">50%</td>
               <td>5,658</td>
-              <td class="strong">4.91%</td>
-              <td class="soft">82.5%<span class="n">lift 1.65× · 金额 78.4%</span></td>
+              <td class="strong">5.48%</td>
+              <td class="soft">80.5%<span class="n">lift 1.61× · 金额 76.1%</span></td>
               <td>9.64%</td>
               <td class="soft">65.6%<span class="n">lift 1.31× · 金额 54.4%</span></td>
-              <td>−4.72pp</td>
+              <td>−4.16pp</td>
             </tr></tbody>
         </table>
       </div>
@@ -943,8 +943,8 @@
     <section class="card">
       <h2>通过收益<span class="tag" title="把通过坏率控制在同一水平，各模型能达到的最高通过率">FPD15</span></h2>
       <p class="desc">拦截的反面是通过。同样把通过坏率压在 8% 以内，线上模型只能通过
-      69.2%（5,259 笔），新戳额模型可以通过 93.5%（7,107 笔），
-      多 1,848 位客户、179,200 好客户本金。</p>
+      69.2%（5,259 笔），新戳额模型可以通过 92.4%（7,027 笔），
+      多 1,768 位客户、169,800 好客户本金。</p>
       <div class="chart-wrap">
         <svg id="approvalChart" viewBox="0 0 1000 340" role="img" aria-label="同一坏率预算下的可达通过率"></svg>
         <div class="tip" id="approvalTip"></div>
@@ -973,50 +973,50 @@
             <tr>
               <td class="strong">≤ 4%</td>
               <td>12.6%<span class="n">959 笔</span></td>
-              <td class="strong">70.2%<span class="n">5,341 笔</span></td>
-              <td>+4,382</td>
-              <td class="soft">+4,207</td>
-              <td>571,200</td>
+              <td class="strong">67.4%<span class="n">5,126 笔</span></td>
+              <td>+4,167</td>
+              <td class="soft">+4,000</td>
+              <td>547,050</td>
             </tr>
             <tr>
               <td class="strong">≤ 5%</td>
               <td>21.5%<span class="n">1,633 笔</span></td>
-              <td class="strong">78.8%<span class="n">5,995 笔</span></td>
-              <td>+4,362</td>
-              <td class="soft">+4,144</td>
-              <td>514,150</td>
+              <td class="strong">75.1%<span class="n">5,708 笔</span></td>
+              <td>+4,075</td>
+              <td class="soft">+3,871</td>
+              <td>479,850</td>
             </tr>
             <tr>
               <td class="strong">≤ 6%</td>
               <td>38.4%<span class="n">2,922 笔</span></td>
-              <td class="strong">86.1%<span class="n">6,550 笔</span></td>
-              <td>+3,628</td>
-              <td class="soft">+3,410</td>
-              <td>390,100</td>
+              <td class="strong">81.7%<span class="n">6,212 笔</span></td>
+              <td>+3,290</td>
+              <td class="soft">+3,093</td>
+              <td>351,450</td>
             </tr>
             <tr>
               <td class="strong">≤ 7%</td>
               <td>48.2%<span class="n">3,664 笔</span></td>
-              <td class="strong">90.3%<span class="n">6,864 笔</span></td>
-              <td>+3,200</td>
-              <td class="soft">+2,976</td>
-              <td>329,150</td>
+              <td class="strong">87.1%<span class="n">6,623 笔</span></td>
+              <td>+2,959</td>
+              <td class="soft">+2,752</td>
+              <td>302,700</td>
             </tr>
             <tr>
               <td class="strong">≤ 8%</td>
               <td>69.2%<span class="n">5,259 笔</span></td>
-              <td class="strong">93.5%<span class="n">7,107 笔</span></td>
-              <td>+1,848</td>
-              <td class="soft">+1,700</td>
-              <td>179,200</td>
+              <td class="strong">92.4%<span class="n">7,027 笔</span></td>
+              <td>+1,768</td>
+              <td class="soft">+1,626</td>
+              <td>169,800</td>
             </tr>
             <tr>
               <td class="strong">≤ 9%</td>
               <td>85.9%<span class="n">6,529 笔</span></td>
-              <td class="strong">96.7%<span class="n">7,356 笔</span></td>
-              <td>+827</td>
-              <td class="soft">+752</td>
-              <td>75,700</td>
+              <td class="strong">96.2%<span class="n">7,318 笔</span></td>
+              <td>+789</td>
+              <td class="soft">+718</td>
+              <td>71,200</td>
             </tr></tbody>
         </table>
       </div>
@@ -1039,50 +1039,50 @@
             <tr>
               <td class="strong">≤ 4%</td>
               <td>0.2%<span class="n">20 笔</span></td>
-              <td class="strong">38.4%<span class="n">4,341 笔</span></td>
-              <td>+4,321</td>
-              <td class="soft">+4,148</td>
-              <td>704,150</td>
+              <td class="strong">35.3%<span class="n">3,993 笔</span></td>
+              <td>+3,973</td>
+              <td class="soft">+3,814</td>
+              <td>660,000</td>
             </tr>
             <tr>
               <td class="strong">≤ 5%</td>
               <td>2.4%<span class="n">271 笔</span></td>
-              <td class="strong">50.8%<span class="n">5,750 笔</span></td>
-              <td>+5,479</td>
-              <td class="soft">+5,205</td>
-              <td>832,700</td>
+              <td class="strong">45.6%<span class="n">5,155 笔</span></td>
+              <td>+4,884</td>
+              <td class="soft">+4,640</td>
+              <td>755,550</td>
             </tr>
             <tr>
               <td class="strong">≤ 6%</td>
               <td>13.8%<span class="n">1,558 笔</span></td>
-              <td class="strong">58.9%<span class="n">6,663 笔</span></td>
-              <td>+5,105</td>
-              <td class="soft">+4,799</td>
-              <td>677,100</td>
+              <td class="strong">57.0%<span class="n">6,454 笔</span></td>
+              <td>+4,896</td>
+              <td class="soft">+4,602</td>
+              <td>649,600</td>
             </tr>
             <tr>
               <td class="strong">≤ 7%</td>
               <td>22.9%<span class="n">2,587 笔</span></td>
-              <td class="strong">66.6%<span class="n">7,532 笔</span></td>
-              <td>+4,945</td>
-              <td class="soft">+4,599</td>
-              <td>572,250</td>
+              <td class="strong">64.3%<span class="n">7,275 笔</span></td>
+              <td>+4,688</td>
+              <td class="soft">+4,360</td>
+              <td>539,850</td>
             </tr>
             <tr>
               <td class="strong">≤ 8%</td>
               <td>35.1%<span class="n">3,971 笔</span></td>
-              <td class="strong">73.1%<span class="n">8,267 笔</span></td>
-              <td>+4,296</td>
-              <td class="soft">+3,952</td>
-              <td>445,250</td>
+              <td class="strong">71.5%<span class="n">8,095 笔</span></td>
+              <td>+4,124</td>
+              <td class="soft">+3,794</td>
+              <td>429,900</td>
             </tr>
             <tr>
               <td class="strong">≤ 9%</td>
               <td>45.3%<span class="n">5,125 笔</span></td>
-              <td class="strong">81.1%<span class="n">9,181 笔</span></td>
-              <td>+4,056</td>
-              <td class="soft">+3,691</td>
-              <td>409,850</td>
+              <td class="strong">78.1%<span class="n">8,836 笔</span></td>
+              <td>+3,711</td>
+              <td class="soft">+3,377</td>
+              <td>369,450</td>
             </tr></tbody>
         </table>
       </div>
@@ -1105,27 +1105,27 @@
         
         <div class="cell">
           
-          <b>3.61%<i>0.35×</i></b>
-          <span>4,105 人 · 坏 148 笔</span>
+          <b>3.97%<i>0.38×</i></b>
+          <span>4,134 人 · 坏 164 笔</span>
         </div>
         
         <div class="cell accent">
           <em>线上模型独有拦截</em>
-          <b>5.27%<i>0.51×</i></b>
-          <span>1,215 人 · 坏 64 笔</span>
+          <b>5.65%<i>0.55×</i></b>
+          <span>1,186 人 · 坏 67 笔</span>
         </div>
         <div class="rowhead">新戳额模型 · 拒绝</div>
         
         <div class="cell accent">
           <em>新戳额模型独有拦截</em>
-          <b>23.29%<i>2.25×</i></b>
-          <span>1,215 人 · 坏 283 笔</span>
+          <b>22.51%<i>2.18×</i></b>
+          <span>1,186 人 · 坏 267 笔</span>
         </div>
         
         <div class="cell">
           
-          <b>27.32%<i>2.64×</i></b>
-          <span>1,065 人 · 坏 291 笔</span>
+          <b>26.33%<i>2.55×</i></b>
+          <span>1,094 人 · 坏 288 笔</span>
         </div>
       </div>
       <p class="note">按分数各拒绝最差的 30%（2,280 人）后交叉分组；
@@ -1137,7 +1137,7 @@
 
     <section class="card">
       <h2>分周稳定性<span class="tag" title="按放款周（周一起）计算成熟样本内的 AUC">周度 AUC</span></h2>
-      <p class="desc">新戳额模型在每一个可评估的周都高于线上模型。<span class="muted">FPD15（6 周）：线上模型 0.61–0.66，新戳额模型 0.80–0.84</span>；<span class="muted">FPD7（9 周）：线上模型 0.61–0.65，新戳额模型 0.72–0.83</span>。</p>
+      <p class="desc">新戳额模型在每一个可评估的周都高于线上模型。<span class="muted">FPD15（6 周）：线上模型 0.61–0.66，新戳额模型 0.79–0.81</span>；<span class="muted">FPD7（9 周）：线上模型 0.61–0.65，新戳额模型 0.70–0.82</span>。</p>
       <div class="grid2">
         
       <div class="panel">
@@ -1179,7 +1179,7 @@
               <th>成熟</th><th>坏率</th><th>AUC 旧</th><th>AUC 新</th>
             </tr>
           </thead>
-          <tbody><tr><td>08-03</td><td>5</td><td class="soft">5</td><td>20.00%</td><td>—</td><td>—</td><td class="soft">5</td><td>20.00%</td><td>—</td><td>—</td></tr><tr><td>08-17</td><td>8</td><td class="soft">8</td><td>12.50%</td><td>—</td><td>—</td><td class="soft">8</td><td>12.50%</td><td>—</td><td>—</td></tr><tr><td>08-24</td><td>85</td><td class="soft">85</td><td>9.41%</td><td>—</td><td>—</td><td class="soft">85</td><td>11.76%</td><td>0.639</td><td>0.797</td></tr><tr><td>08-31</td><td>601</td><td class="soft">601</td><td>11.81%</td><td>0.647</td><td>0.843</td><td class="soft">601</td><td>14.31%</td><td>0.648</td><td>0.832</td></tr><tr><td>09-07</td><td>1,010</td><td class="soft">1,010</td><td>10.50%</td><td>0.611</td><td>0.822</td><td class="soft">1,010</td><td>14.26%</td><td>0.613</td><td>0.772</td></tr><tr><td>09-14</td><td>1,271</td><td class="soft">1,220</td><td>10.16%</td><td>0.612</td><td>0.816</td><td class="soft">1,271</td><td>14.16%</td><td>0.613</td><td>0.774</td></tr><tr><td>09-21</td><td>1,798</td><td class="soft">1,683</td><td>11.17%</td><td>0.631</td><td>0.834</td><td class="soft">1,794</td><td>15.44%</td><td>0.632</td><td>0.787</td></tr><tr><td>09-28</td><td>2,494</td><td class="soft">2,039</td><td>8.83%</td><td>0.637</td><td>0.832</td><td class="soft">2,472</td><td>12.94%</td><td>0.632</td><td>0.777</td></tr><tr><td>10-05</td><td>2,439</td><td class="soft">908</td><td>11.45%</td><td>0.664</td><td>0.798</td><td class="soft">2,314</td><td>13.44%</td><td>0.627</td><td>0.733</td></tr><tr><td>10-12</td><td>2,463</td><td class="soft">46</td><td>8.70%</td><td>—</td><td>—</td><td class="soft">1,555</td><td>14.41%</td><td>0.646</td><td>0.717</td></tr><tr><td>10-19</td><td>1,257</td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td class="soft">201</td><td>16.42%</td><td>0.622</td><td>0.728</td></tr></tbody>
+          <tbody><tr><td>08-03</td><td>5</td><td class="soft">5</td><td>20.00%</td><td>—</td><td>—</td><td class="soft">5</td><td>20.00%</td><td>—</td><td>—</td></tr><tr><td>08-17</td><td>8</td><td class="soft">8</td><td>12.50%</td><td>—</td><td>—</td><td class="soft">8</td><td>12.50%</td><td>—</td><td>—</td></tr><tr><td>08-24</td><td>85</td><td class="soft">85</td><td>9.41%</td><td>—</td><td>—</td><td class="soft">85</td><td>11.76%</td><td>0.639</td><td>0.819</td></tr><tr><td>08-31</td><td>601</td><td class="soft">601</td><td>11.81%</td><td>0.647</td><td>0.812</td><td class="soft">601</td><td>14.31%</td><td>0.648</td><td>0.806</td></tr><tr><td>09-07</td><td>1,010</td><td class="soft">1,010</td><td>10.50%</td><td>0.611</td><td>0.791</td><td class="soft">1,010</td><td>14.26%</td><td>0.613</td><td>0.750</td></tr><tr><td>09-14</td><td>1,271</td><td class="soft">1,220</td><td>10.16%</td><td>0.612</td><td>0.792</td><td class="soft">1,271</td><td>14.16%</td><td>0.613</td><td>0.757</td></tr><tr><td>09-21</td><td>1,798</td><td class="soft">1,683</td><td>11.17%</td><td>0.631</td><td>0.791</td><td class="soft">1,794</td><td>15.44%</td><td>0.632</td><td>0.761</td></tr><tr><td>09-28</td><td>2,494</td><td class="soft">2,039</td><td>8.83%</td><td>0.637</td><td>0.812</td><td class="soft">2,472</td><td>12.94%</td><td>0.632</td><td>0.768</td></tr><tr><td>10-05</td><td>2,439</td><td class="soft">908</td><td>11.45%</td><td>0.664</td><td>0.812</td><td class="soft">2,314</td><td>13.44%</td><td>0.627</td><td>0.738</td></tr><tr><td>10-12</td><td>2,463</td><td class="soft">46</td><td>8.70%</td><td>—</td><td>—</td><td class="soft">1,555</td><td>14.41%</td><td>0.646</td><td>0.705</td></tr><tr><td>10-19</td><td>1,257</td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td class="soft">201</td><td>16.42%</td><td>0.622</td><td>0.744</td></tr></tbody>
         </table>
       </div>
       <p class="note">AUC 在当周成熟样本内计算，坏样本或好样本少于 10 笔的周不计算（显示 —）。
@@ -1206,13 +1206,13 @@
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_model_compare.py；生成时间 2026-10-29 15:25。</li>
+        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_model_compare.py；生成时间 2026-11-02 10:24。</li>
       </ul>
     </footer>
     
 </main>
 <script>
-const DATA = {"meta":{"n_sample":13431,"obs_dt":"2026-10-29","weeks":["2026-08-03","2026-08-17","2026-08-24","2026-08-31","2026-09-07","2026-09-14","2026-09-21","2026-09-28","2026-10-05","2026-10-12","2026-10-19"],"new_missing":0,"old_missing":5,"median_days":0.006574074074074074,"p75_days":0.2417476851851852,"reject_pct":30,"n_unscored":769,"unscored_immature":true,"start":"2026-08-01","end_display":"2026-10-23"},"windows":{"15":{"label":"FPD15","n_obs":7605,"n_bad":787,"maturity":56.6,"models":{"old":{"n":7600,"bad":786,"rate":10.34,"amt":1087150.0,"loss_amt":107050.0,"amt_rate":9.85,"auc":0.6331,"se":0.0103,"auc_lo":0.6129,"auc_hi":0.6534,"gini":0.2663,"ks":0.1855,"top_rate":20.92105263157895,"top_lift":2.02,"deciles":[{"q":1,"n":760,"bad":31,"rate":4.078947368421053,"amt":171000.0,"loss_amt":6900.0,"amt_rate":4.04,"lift":0.39},{"q":2,"n":760,"bad":42,"rate":5.526315789473684,"amt":160800.0,"loss_amt":10100.0,"amt_rate":6.28,"lift":0.53},{"q":3,"n":760,"bad":55,"rate":7.236842105263158,"amt":133500.0,"loss_amt":10400.0,"amt_rate":7.79,"lift":0.7},{"q":4,"n":760,"bad":60,"rate":7.894736842105263,"amt":102700.0,"loss_amt":9050.0,"amt_rate":8.81,"lift":0.76},{"q":5,"n":760,"bad":82,"rate":10.789473684210527,"amt":99250.0,"loss_amt":10900.0,"amt_rate":10.98,"lift":1.04},{"q":6,"n":760,"bad":74,"rate":9.736842105263158,"amt":94150.0,"loss_amt":10000.0,"amt_rate":10.62,"lift":0.94},{"q":7,"n":760,"bad":87,"rate":11.447368421052632,"amt":83650.0,"loss_amt":10200.0,"amt_rate":12.19,"lift":1.11},{"q":8,"n":760,"bad":92,"rate":12.105263157894736,"amt":83450.0,"loss_amt":10650.0,"amt_rate":12.76,"lift":1.17},{"q":9,"n":760,"bad":104,"rate":13.684210526315791,"amt":82950.0,"loss_amt":12250.0,"amt_rate":14.77,"lift":1.32},{"q":10,"n":760,"bad":159,"rate":20.92105263157895,"amt":75700.0,"loss_amt":16600.0,"amt_rate":21.93,"lift":2.02}],"roc":[[0.0,0.0],[0.4,1.4],[0.76,3.05],[1.14,4.58],[1.58,5.6],[1.98,7.0],[2.42,8.27],[2.83,9.54],[3.26,10.69],[3.67,11.96],[4.08,13.23],[4.53,14.12],[5.03,14.76],[5.56,15.01],[6.02,15.9],[6.53,16.28],[7.0,17.05],[7.47,17.94],[7.95,18.58],[8.41,19.47],[8.88,20.23],[9.36,20.87],[9.79,22.01],[10.29,22.65],[10.83,22.77],[11.33,23.28],[11.86,23.54],[12.31,24.43],[12.8,25.19],[13.25,26.08],[13.77,26.46],[14.26,26.97],[14.75,27.61],[15.25,28.12],[15.69,29.26],[16.19,29.77],[16.66,30.53],[17.17,31.04],[17.6,32.19],[18.12,32.57],[18.56,33.59],[19.09,33.84],[19.64,33.97],[20.15,34.35],[20.66,34.73],[21.15,35.5],[21.62,36.26],[22.09,37.02],[22.59,37.53],[23.04,38.42],[23.54,39.06],[23.99,39.95],[24.51,40.33],[25.02,40.71],[25.48,41.6],[25.99,41.98],[26.45,43.0],[26.96,43.38],[27.49,43.64],[27.94,44.53],[28.41,45.29],[28.87,46.31],[29.31,47.33],[29.76,48.22],[30.28,48.6],[30.79,48.98],[31.3,49.36],[31.82,49.87],[32.29,50.64],[32.8,51.02],[33.34,51.15],[33.81,51.91],[34.36,52.16],[34.87,52.54],[35.31,53.56],[35.85,53.69],[36.31,54.58],[36.81,55.09],[37.31,55.73],[37.83,55.98],[38.35,56.36],[38.83,57.0],[39.32,57.63],[39.84,58.02],[40.31,58.78],[40.83,59.16],[41.36,59.41],[41.86,59.92],[42.35,60.43],[42.9,60.69],[43.43,60.94],[43.89,61.7],[44.41,62.09],[44.94,62.34],[45.41,63.23],[45.93,63.49],[46.42,64.12],[46.93,64.5],[47.45,64.89],[47.96,65.27],[48.44,66.03],[48.94,66.54],[49.47,66.79],[49.97,67.3],[50.41,68.32],[50.94,68.58],[51.48,68.83],[51.98,69.34],[52.49,69.72],[53.01,70.1],[53.46,70.99],[53.93,71.88],[54.46,72.14],[54.96,72.77],[55.44,73.41],[55.96,73.79],[56.44,74.43],[56.94,75.06],[57.46,75.45],[57.95,75.95],[58.45,76.46],[58.95,76.97],[59.48,77.35],[59.96,77.99],[60.49,78.24],[61.01,78.63],[61.51,79.13],[62.02,79.52],[62.55,79.9],[63.05,80.41],[63.57,80.66],[64.09,81.04],[64.6,81.42],[65.12,81.93],[65.66,82.06],[66.19,82.32],[66.67,82.95],[67.21,83.08],[67.7,83.72],[68.27,83.72],[68.81,83.84],[69.27,84.73],[69.78,85.11],[70.27,85.75],[70.8,86.13],[71.31,86.51],[71.87,86.51],[72.4,86.77],[72.95,86.77],[73.5,86.9],[74.04,87.15],[74.58,87.28],[75.02,88.3],[75.54,88.68],[76.08,88.8],[76.62,89.06],[77.14,89.44],[77.65,89.82],[78.13,90.46],[78.68,90.59],[79.2,90.84],[79.7,91.48],[80.22,91.86],[80.75,92.11],[81.23,92.75],[81.79,92.75],[82.35,92.88],[82.9,92.88],[83.46,92.88],[83.96,93.38],[84.52,93.38],[85.03,93.77],[85.56,94.15],[86.04,94.78],[86.56,95.17],[87.1,95.29],[87.64,95.42],[88.2,95.55],[88.71,95.93],[89.26,96.06],[89.8,96.18],[90.31,96.56],[90.86,96.69],[91.4,96.95],[91.93,97.2],[92.47,97.33],[93.03,97.33],[93.53,97.84],[94.09,97.96],[94.63,98.09],[95.16,98.35],[95.69,98.6],[96.23,98.73],[96.74,99.11],[97.29,99.36],[97.83,99.49],[98.39,99.49],[98.93,99.62],[99.46,99.87],[100.0,100.0]],"capture":[[0,0.0],[1,3.05],[2,5.6],[3,8.27],[4,10.56],[5,13.1],[6,14.76],[7,15.78],[8,17.05],[9,18.45],[10,20.23],[11,21.88],[12,22.65],[13,23.54],[14,25.06],[15,26.46],[16,27.61],[17,29.13],[18,30.53],[19,32.06],[20,33.46],[21,33.97],[22,34.73],[23,36.13],[24,37.4],[25,38.8],[26,40.08],[27,41.22],[28,42.37],[29,43.64],[30,45.17],[31,46.82],[32,48.6],[33,49.24],[34,50.51],[35,51.15],[36,52.04],[37,52.93],[38,54.2],[39,55.47],[40,56.23],[41,57.38],[42,58.52],[43,59.29],[44,60.31],[45,60.81],[46,61.96],[47,62.98],[48,63.74],[49,64.63],[50,65.65],[51,66.67],[52,67.68],[53,68.83],[54,69.47],[55,70.61],[56,72.01],[57,73.28],[58,73.92],[59,75.19],[60,76.08]],"cutoffs":[{"reject_pct":10,"reject_n":760,"kept_n":6840,"kept_bad":627,"kept_rate":9.167,"capture":20.23,"rejected_bad":159,"kept_amt":1011450.0,"kept_loss":90450.0,"capture_amt":15.51},{"reject_pct":20,"reject_n":1520,"kept_n":6080,"kept_bad":523,"kept_rate":8.602,"capture":33.46,"rejected_bad":263,"kept_amt":928500.0,"kept_loss":78200.0,"capture_amt":26.95},{"reject_pct":30,"reject_n":2280,"kept_n":5320,"kept_bad":431,"kept_rate":8.102,"capture":45.17,"rejected_bad":355,"kept_amt":845050.0,"kept_loss":67550.0,"capture_amt":36.9},{"reject_pct":40,"reject_n":3040,"kept_n":4560,"kept_bad":344,"kept_rate":7.544,"capture":56.23,"rejected_bad":442,"kept_amt":761400.0,"kept_loss":57350.0,"capture_amt":46.43},{"reject_pct":50,"reject_n":3800,"kept_n":3800,"kept_bad":270,"kept_rate":7.105,"capture":65.65,"rejected_bad":516,"kept_amt":667250.0,"kept_loss":47350.0,"capture_amt":55.77}]},"new":{"n":7605,"bad":787,"rate":10.35,"amt":1087800.0,"loss_amt":107250.0,"amt_rate":9.86,"auc":0.8262,"se":0.0072,"auc_lo":0.8122,"auc_hi":0.8403,"gini":0.6525,"ks":0.5011,"top_rate":40.99868593955322,"top_lift":3.96,"deciles":[{"q":1,"n":760,"bad":3,"rate":0.39473684210526316,"amt":140250.0,"loss_amt":850.0,"amt_rate":0.61,"lift":0.04},{"q":2,"n":761,"bad":8,"rate":1.0512483574244416,"amt":127200.0,"loss_amt":1700.0,"amt_rate":1.34,"lift":0.1},{"q":3,"n":760,"bad":12,"rate":1.5789473684210527,"amt":116850.0,"loss_amt":2750.0,"amt_rate":2.35,"lift":0.15},{"q":4,"n":761,"bad":20,"rate":2.628120893561104,"amt":113100.0,"loss_amt":3650.0,"amt_rate":3.23,"lift":0.25},{"q":5,"n":760,"bad":29,"rate":3.8157894736842106,"amt":108100.0,"loss_amt":4800.0,"amt_rate":4.44,"lift":0.37},{"q":6,"n":761,"bad":58,"rate":7.6215505913272015,"amt":104850.0,"loss_amt":8750.0,"amt_rate":8.35,"lift":0.74},{"q":7,"n":760,"bad":82,"rate":10.789473684210527,"amt":95600.0,"loss_amt":12400.0,"amt_rate":12.97,"lift":1.04},{"q":8,"n":761,"bad":99,"rate":13.009198423127463,"amt":99350.0,"loss_amt":13300.0,"amt_rate":13.39,"lift":1.26},{"q":9,"n":760,"bad":164,"rate":21.578947368421055,"amt":93050.0,"loss_amt":21050.0,"amt_rate":22.62,"lift":2.09},{"q":10,"n":761,"bad":312,"rate":40.99868593955322,"amt":89450.0,"loss_amt":38000.0,"amt_rate":42.48,"lift":3.96}],"roc":[[0.0,0.0],[0.15,3.43],[0.44,5.72],[0.75,7.88],[1.04,10.17],[1.32,12.58],[1.67,14.36],[1.98,16.52],[2.26,18.93],[2.58,20.97],[2.9,22.87],[3.29,24.4],[3.73,25.41],[4.06,27.45],[4.36,29.73],[4.68,31.77],[5.07,33.16],[5.47,34.56],[5.76,36.85],[6.16,38.25],[6.54,39.64],[6.94,41.04],[7.29,42.82],[7.69,44.22],[8.02,46.12],[8.49,46.89],[8.92,48.03],[9.3,49.56],[9.75,50.44],[10.19,51.46],[10.63,52.35],[11.09,53.24],[11.59,53.75],[12.07,54.38],[12.5,55.53],[12.97,56.29],[13.42,57.18],[13.9,57.81],[14.34,58.83],[14.81,59.59],[15.3,60.1],[15.74,61.12],[16.28,61.25],[17.51,63.15],[18.04,63.41],[18.5,64.29],[18.94,65.31],[19.39,66.2],[19.9,66.58],[20.37,67.34],[20.87,67.73],[21.37,68.23],[21.87,68.74],[22.37,69.25],[22.84,70.01],[23.31,70.78],[23.83,71.03],[24.29,71.92],[24.76,72.68],[25.24,73.32],[25.71,73.95],[26.2,74.59],[26.64,75.6],[27.13,76.11],[27.65,76.49],[28.1,77.38],[28.6,77.89],[29.06,78.78],[29.54,79.42],[30.02,80.05],[30.55,80.18],[31.05,80.69],[31.58,80.94],[32.11,81.19],[32.59,81.83],[33.12,82.08],[33.65,82.34],[34.14,82.85],[34.67,83.1],[35.14,83.86],[35.64,84.24],[36.18,84.37],[36.67,85.01],[37.17,85.51],[37.67,86.02],[38.18,86.4],[38.69,86.79],[39.23,86.91],[39.73,87.42],[40.25,87.8],[40.75,88.18],[41.24,88.69],[41.76,89.07],[42.3,89.2],[42.83,89.45],[43.34,89.83],[43.88,89.96],[44.4,90.34],[44.91,90.72],[45.44,90.98],[45.92,91.49],[46.47,91.61],[46.98,91.99],[47.52,92.12],[48.08,92.12],[48.62,92.25],[49.16,92.38],[49.71,92.5],[50.22,92.88],[50.76,93.01],[51.31,93.01],[51.83,93.27],[52.35,93.65],[52.9,93.65],[53.46,93.65],[53.99,93.9],[54.55,93.9],[55.06,94.41],[55.6,94.54],[56.16,94.54],[56.69,94.66],[57.22,94.92],[57.76,95.04],[58.3,95.17],[58.86,95.17],[59.4,95.3],[59.96,95.3],[60.49,95.55],[61.03,95.68],[61.57,95.81],[62.1,95.93],[62.64,96.06],[63.19,96.19],[63.71,96.44],[64.27,96.44],[64.8,96.7],[65.34,96.82],[65.88,96.95],[66.44,96.95],[66.98,97.08],[67.48,97.46],[68.04,97.46],[68.6,97.46],[69.16,97.46],[69.7,97.59],[70.26,97.59],[70.81,97.59],[71.37,97.59],[71.91,97.71],[72.46,97.84],[72.98,97.97],[73.54,97.97],[74.08,98.09],[74.64,98.09],[75.18,98.22],[75.74,98.22],[76.3,98.22],[76.84,98.35],[77.38,98.48],[77.93,98.6],[78.44,98.86],[78.98,98.98],[79.54,98.98],[80.08,99.11],[80.64,99.11],[81.2,99.11],[81.75,99.11],[82.3,99.24],[82.85,99.24],[83.41,99.24],[83.94,99.36],[84.5,99.36],[85.05,99.36],[85.6,99.49],[86.14,99.62],[86.7,99.62],[87.25,99.62],[87.81,99.62],[88.37,99.62],[88.91,99.75],[89.45,99.75],[90.01,99.75],[90.55,99.87],[91.11,99.87],[91.67,99.87],[92.23,99.87],[92.78,99.87],[93.34,100.0],[93.9,100.0],[94.46,100.0],[95.0,100.0],[95.56,100.0],[96.11,100.0],[96.67,100.0],[97.23,100.0],[97.79,100.0],[98.34,100.0],[98.9,100.0],[99.46,100.0],[100.0,100.0]],"capture":[[0,0.0],[1,5.84],[2,10.17],[3,14.49],[4,19.06],[5,23.13],[6,25.54],[7,29.73],[8,33.16],[9,36.85],[10,39.64],[11,42.95],[12,46.25],[13,48.16],[14,50.57],[15,52.48],[16,53.88],[17,55.53],[18,57.43],[19,59.09],[20,60.48],[21,61.5],[22,63.15],[23,63.91],[24,66.07],[25,67.22],[26,67.85],[27,68.87],[28,70.39],[29,71.41],[30,73.06],[31,74.33],[32,75.86],[33,76.75],[34,78.53],[35,79.8],[36,80.69],[37,81.19],[38,82.08],[39,82.72],[40,83.48],[41,84.37],[42,85.51],[43,86.28],[44,86.91],[45,87.67],[46,88.44],[47,89.2],[48,89.83],[49,90.22],[50,90.85],[51,91.49],[52,92.12],[53,92.25],[54,92.5],[55,93.01],[56,93.27],[57,93.65],[58,93.9],[59,94.28],[60,94.54]],"cutoffs":[{"reject_pct":10,"reject_n":760,"kept_n":6845,"kept_bad":475,"kept_rate":6.939,"capture":39.64,"rejected_bad":312,"kept_amt":998450.0,"kept_loss":69250.0,"capture_amt":35.43},{"reject_pct":20,"reject_n":1521,"kept_n":6084,"kept_bad":311,"kept_rate":5.112,"capture":60.48,"rejected_bad":476,"kept_amt":905300.0,"kept_loss":48200.0,"capture_amt":55.06},{"reject_pct":30,"reject_n":2282,"kept_n":5323,"kept_bad":212,"kept_rate":3.983,"capture":73.06,"rejected_bad":575,"kept_amt":805950.0,"kept_loss":34900.0,"capture_amt":67.46},{"reject_pct":40,"reject_n":3042,"kept_n":4563,"kept_bad":130,"kept_rate":2.849,"capture":83.48,"rejected_bad":657,"kept_amt":710350.0,"kept_loss":22500.0,"capture_amt":79.02},{"reject_pct":50,"reject_n":3802,"kept_n":3803,"kept_bad":72,"kept_rate":1.893,"capture":90.85,"rejected_bad":715,"kept_amt":605650.0,"kept_loss":13750.0,"capture_amt":87.18}]}},"delta":{"n":7600,"diff":0.1932,"ci_low":0.1725,"ci_high":0.214,"p":0.0,"z":18.23},"swap":{"reject_pct":30,"reject_n":2280,"n":7600,"cells":[{"key":"both_pass","new_reject":false,"old_reject":false,"n":4105,"share":54.0,"bad":148,"rate":3.61},{"key":"old_only","new_reject":false,"old_reject":true,"n":1215,"share":16.0,"bad":64,"rate":5.27},{"key":"new_only","new_reject":true,"old_reject":false,"n":1215,"share":16.0,"bad":283,"rate":23.29},{"key":"both_reject","new_reject":true,"old_reject":true,"n":1065,"share":14.0,"bad":291,"rate":27.32}],"overall_rate":10.34},"cross":{"rows":[{"q":1,"cells":[{"n":597,"bad":3,"rate":0.5,"level":1},{"n":397,"bad":5,"rate":1.26,"level":2},{"n":267,"bad":2,"rate":0.75,"level":1},{"n":164,"bad":1,"rate":0.61,"level":1},{"n":95,"bad":0,"rate":0.0,"level":1}]},{"q":2,"cells":[{"n":388,"bad":11,"rate":2.84,"level":2},{"n":366,"bad":5,"rate":1.37,"level":2},{"n":317,"bad":8,"rate":2.52,"level":2},{"n":272,"bad":6,"rate":2.21,"level":2},{"n":177,"bad":2,"rate":1.13,"level":2}]},{"q":3,"cells":[{"n":284,"bad":17,"rate":5.99,"level":3},{"n":321,"bad":20,"rate":6.23,"level":3},{"n":286,"bad":16,"rate":5.59,"level":3},{"n":344,"bad":13,"rate":3.78,"level":3},{"n":285,"bad":19,"rate":6.67,"level":3}]},{"q":4,"cells":[{"n":146,"bad":15,"rate":10.27,"level":4},{"n":276,"bad":32,"rate":11.59,"level":4},{"n":328,"bad":44,"rate":13.41,"level":4},{"n":379,"bad":38,"rate":10.03,"level":4},{"n":391,"bad":53,"rate":13.55,"level":4}]},{"q":5,"cells":[{"n":105,"bad":27,"rate":25.71,"level":5},{"n":160,"bad":53,"rate":33.12,"level":5},{"n":322,"bad":86,"rate":26.71,"level":5},{"n":361,"bad":121,"rate":33.52,"level":5},{"n":572,"bad":189,"rate":33.04,"level":5}]}],"n":7600,"min_cell":95,"diag_share":28.9,"row_spread_max":7.81,"col_spread_min":25.21},"through":{"targets":[4,5,6,7,8,9],"rows":[{"target":4,"old":{"kept":959,"approval":12.6,"bad":38,"good":921,"rate":3.96,"amt":214400.0,"good_amt":206600.0,"bad_amt":7800.0,"hit_rate":3.96},"new":{"kept":5341,"approval":70.2,"bad":213,"good":5128,"rate":3.99,"amt":808350.0,"good_amt":777800.0,"bad_amt":30550.0,"hit_rate":3.99},"extra":4382,"extra_good":4207,"extra_good_amt":571200.0},{"target":5,"old":{"kept":1633,"approval":21.5,"bad":81,"good":1552,"rate":4.96,"amt":355550.0,"good_amt":338700.0,"bad_amt":16850.0,"hit_rate":4.96},"new":{"kept":5995,"approval":78.8,"bad":299,"good":5696,"rate":4.99,"amt":894200.0,"good_amt":852850.0,"bad_amt":41350.0,"hit_rate":4.99},"extra":4362,"extra_good":4144,"extra_good_amt":514150.0},{"target":6,"old":{"kept":2922,"approval":38.4,"bad":175,"good":2747,"rate":5.99,"amt":551600.0,"good_amt":520150.0,"bad_amt":31450.0,"hit_rate":5.99},"new":{"kept":6550,"approval":86.1,"bad":393,"good":6157,"rate":6.0,"amt":964050.0,"good_amt":910250.0,"bad_amt":53800.0,"hit_rate":6.0},"extra":3628,"extra_good":3410,"extra_good_amt":390100.0},{"target":7,"old":{"kept":3664,"approval":48.2,"bad":256,"good":3408,"rate":6.99,"amt":649750.0,"good_amt":607700.0,"bad_amt":42050.0,"hit_rate":6.99},"new":{"kept":6864,"approval":90.3,"bad":480,"good":6384,"rate":6.99,"amt":1000850.0,"good_amt":936850.0,"bad_amt":64000.0,"hit_rate":6.99},"extra":3200,"extra_good":2976,"extra_good_amt":329150.0},{"target":8,"old":{"kept":5259,"approval":69.2,"bad":420,"good":4839,"rate":7.99,"amt":838350.0,"good_amt":776550.0,"bad_amt":61800.0,"hit_rate":7.99},"new":{"kept":7107,"approval":93.5,"bad":568,"good":6539,"rate":7.99,"amt":1029850.0,"good_amt":955750.0,"bad_amt":74100.0,"hit_rate":7.99},"extra":1848,"extra_good":1700,"extra_good_amt":179200.0},{"target":9,"old":{"kept":6529,"approval":85.9,"bad":587,"good":5942,"rate":8.99,"amt":977600.0,"good_amt":897450.0,"bad_amt":80150.0,"hit_rate":8.99},"new":{"kept":7356,"approval":96.7,"bad":662,"good":6694,"rate":9.0,"amt":1058650.0,"good_amt":973150.0,"bad_amt":85500.0,"hit_rate":9.0},"extra":827,"extra_good":752,"extra_good_amt":75700.0}],"curve":{"old":[[0.0,0.0],[0.0,0.1],[0.0,0.1],[0.0,0.1],[0.0,0.2],[3.0,2.6],[3.55,3.7],[3.83,7.6],[3.92,12.4],[4.09,13.2],[4.26,17.6],[4.39,18.0],[4.57,19.0],[4.7,19.3],[4.79,20.6],[4.91,21.4],[5.05,21.9],[5.12,23.6],[5.23,27.7],[5.27,28.2],[5.34,28.6],[5.42,29.1],[5.48,30.7],[5.57,31.6],[5.63,33.2],[5.71,33.7],[5.73,34.4],[5.79,35.4],[5.85,36.0],[5.86,36.8],[5.92,37.1],[5.96,38.4],[6.07,39.2],[6.13,39.7],[6.18,40.2],[6.24,40.7],[6.29,41.6],[6.36,41.8],[6.42,43.0],[6.5,43.1],[6.55,44.2],[6.62,44.6],[6.69,44.7],[6.75,45.0],[6.82,45.2],[6.86,47.7],[6.91,48.0],[6.99,48.2],[7.02,49.1],[7.08,49.8],[7.13,50.7],[7.16,51.9],[7.21,52.9],[7.25,53.1],[7.29,54.5],[7.33,56.0],[7.36,57.4],[7.39,58.1],[7.45,58.8],[7.49,59.6],[7.51,60.6],[7.54,61.1],[7.57,61.7],[7.62,62.0],[7.65,62.8],[7.71,63.0],[7.74,65.9],[7.78,66.3],[7.81,67.2],[7.84,68.3],[7.87,68.5],[7.9,68.8],[7.95,69.1],[8.0,69.2],[8.05,69.6],[8.09,69.8],[8.12,70.3],[8.16,70.6],[8.2,71.5],[8.23,71.9],[8.26,72.8],[8.31,73.0],[8.35,74.5],[8.41,74.7],[8.42,75.0],[8.47,75.5],[8.51,75.9],[8.53,76.4],[8.56,76.6],[8.57,77.1],[8.6,79.9],[8.62,80.2],[8.65,80.8],[8.67,81.0],[8.72,81.2],[8.74,81.6],[8.78,82.3],[8.81,82.4],[8.86,83.0],[8.88,83.7],[8.91,83.9],[8.93,84.8],[8.94,85.5],[8.98,85.7],[9.01,86.2],[9.04,88.5],[9.06,88.7],[9.09,89.2],[9.12,89.9],[9.16,90.0],[9.2,90.4],[9.23,90.5],[9.26,91.0],[9.27,91.4],[9.3,91.8],[9.32,92.2],[9.35,93.0],[9.37,93.3],[9.39,94.6],[9.41,94.8],[9.44,94.9],[9.47,95.1],[9.5,95.2],[9.54,95.5],[9.56,95.7],[9.59,95.9],[9.62,96.0],[9.66,96.2],[9.68,96.4],[9.71,96.6],[9.74,96.8],[9.76,96.9],[9.8,97.1],[9.82,97.2],[9.86,97.5],[9.89,97.7],[9.93,97.8],[9.95,98.1],[9.99,98.4],[10.02,98.7],[10.05,98.7],[10.08,98.9],[10.12,99.0],[10.15,99.2],[10.18,99.3],[10.22,99.4],[10.25,99.5],[10.29,99.6],[10.31,99.8],[10.34,100.0]],"new":[[0.0,0.0],[0.0,0.1],[0.0,0.2],[0.0,0.3],[0.0,0.4],[0.0,0.6],[0.0,0.7],[0.0,0.8],[0.0,0.9],[0.0,1.0],[0.0,1.1],[0.0,1.2],[0.0,1.3],[0.0,1.4],[0.0,1.5],[0.0,1.6],[0.0,1.7],[0.0,1.9],[0.0,2.0],[0.0,2.1],[0.0,2.2],[0.0,2.3],[0.0,2.4],[0.0,2.5],[0.0,2.6],[0.0,2.7],[0.0,2.8],[0.0,2.9],[0.0,3.1],[0.0,3.2],[0.0,3.3],[0.0,3.4],[0.0,3.5],[0.0,3.6],[0.0,3.7],[0.0,3.8],[0.0,3.9],[0.0,4.0],[0.0,4.1],[0.0,4.2],[0.0,4.4],[0.0,4.5],[0.0,4.6],[0.0,4.7],[0.0,4.8],[0.0,4.9],[0.0,5.0],[0.0,5.1],[0.0,5.2],[0.0,5.3],[0.0,5.4],[0.0,5.6],[0.0,5.7],[0.0,5.8],[0.0,5.9],[0.0,6.0],[0.0,6.1],[0.0,6.2],[0.54,19.3],[0.93,29.7],[1.15,33.0],[1.31,37.0],[1.49,41.4],[1.64,45.7],[1.78,49.5],[1.96,50.4],[2.1,52.7],[2.23,54.2],[2.37,55.5],[2.48,57.3],[2.64,58.3],[2.76,59.6],[2.89,60.4],[3.0,62.2],[3.12,64.1],[3.24,65.3],[3.37,66.0],[3.5,66.8],[3.63,67.8],[3.75,68.4],[3.87,69.3],[3.97,70.1],[4.09,70.7],[4.2,71.7],[4.33,72.6],[4.42,73.5],[4.5,74.6],[4.6,75.5],[4.7,76.3],[4.81,76.8],[4.9,78.0],[5.02,78.9],[5.11,80.0],[5.2,80.6],[5.3,81.3],[5.39,82.2],[5.48,82.7],[5.57,83.3],[5.66,83.8],[5.76,84.7],[5.83,85.4],[5.93,85.9],[6.03,86.6],[6.13,86.9],[6.23,87.1],[6.31,87.8],[6.41,88.2],[6.51,88.5],[6.6,88.9],[6.7,89.2],[6.8,89.5],[6.89,89.9],[6.98,90.2],[7.08,90.6],[7.17,91.0],[7.27,91.2],[7.36,91.5],[7.46,91.8],[7.54,92.3],[7.63,92.5],[7.74,92.8],[7.83,93.0],[7.92,93.3],[8.02,93.5],[8.11,93.9],[8.21,94.0],[8.28,94.6],[8.36,95.0],[8.46,95.3],[8.55,95.5],[8.63,95.8],[8.74,96.0],[8.82,96.3],[8.92,96.4],[9.0,96.7],[9.1,97.0],[9.18,97.3],[9.27,97.5],[9.35,97.8],[9.45,97.9],[9.54,98.2],[9.63,98.3],[9.71,98.7],[9.8,98.9],[9.89,99.1],[9.97,99.3],[10.06,99.6],[10.15,99.7],[10.24,99.9],[10.35,100.0]]}},"weekly":[{"week":"2026-08-03","n":5,"bad":1,"rate":20.0,"auc_old":null,"auc_new":null},{"week":"2026-08-17","n":8,"bad":1,"rate":12.5,"auc_old":null,"auc_new":null},{"week":"2026-08-24","n":85,"bad":8,"rate":9.41,"auc_old":null,"auc_new":null},{"week":"2026-08-31","n":601,"bad":71,"rate":11.81,"auc_old":0.6469,"auc_new":0.8433},{"week":"2026-09-07","n":1010,"bad":106,"rate":10.5,"auc_old":0.6114,"auc_new":0.8216},{"week":"2026-09-14","n":1220,"bad":124,"rate":10.16,"auc_old":0.6123,"auc_new":0.8158},{"week":"2026-09-21","n":1683,"bad":188,"rate":11.17,"auc_old":0.6312,"auc_new":0.8342},{"week":"2026-09-28","n":2039,"bad":180,"rate":8.83,"auc_old":0.6368,"auc_new":0.832},{"week":"2026-10-05","n":908,"bad":104,"rate":11.45,"auc_old":0.6643,"auc_new":0.7984},{"week":"2026-10-12","n":46,"bad":4,"rate":8.7,"auc_old":null,"auc_new":null},{"week":"2026-10-19","n":0,"bad":0,"rate":null,"auc_old":null,"auc_new":null}],"weeklyAxis":{"min":0.55,"max":0.95,"ticks":[0.6,0.7,0.8,0.9]}},"7":{"label":"FPD7","n_obs":11316,"n_bad":1587,"maturity":84.3,"models":{"old":{"n":11311,"bad":1586,"rate":14.02,"amt":1660050.0,"loss_amt":228550.0,"amt_rate":13.77,"auc":0.6296,"se":0.0074,"auc_lo":0.6152,"auc_hi":0.6441,"gini":0.2592,"ks":0.1905,"top_rate":25.97173144876325,"top_lift":1.85,"deciles":[{"q":1,"n":1131,"bad":61,"rate":5.393457117595048,"amt":265550.0,"loss_amt":16700.0,"amt_rate":6.29,"lift":0.38},{"q":2,"n":1131,"bad":91,"rate":8.045977011494253,"amt":242650.0,"loss_amt":22500.0,"amt_rate":9.27,"lift":0.57},{"q":3,"n":1131,"bad":111,"rate":9.814323607427056,"amt":216850.0,"loss_amt":22100.0,"amt_rate":10.19,"lift":0.7},{"q":4,"n":1131,"bad":125,"rate":11.052166224580018,"amt":151700.0,"loss_amt":19150.0,"amt_rate":12.62,"lift":0.79},{"q":5,"n":1131,"bad":157,"rate":13.8815207780725,"amt":150950.0,"loss_amt":23800.0,"amt_rate":15.77,"lift":0.99},{"q":6,"n":1131,"bad":171,"rate":15.119363395225463,"amt":144700.0,"loss_amt":23550.0,"amt_rate":16.28,"lift":1.08},{"q":7,"n":1131,"bad":173,"rate":15.296198054818744,"amt":125400.0,"loss_amt":21250.0,"amt_rate":16.95,"lift":1.09},{"q":8,"n":1131,"bad":197,"rate":17.418213969938108,"amt":125100.0,"loss_amt":23600.0,"amt_rate":18.86,"lift":1.24},{"q":9,"n":1131,"bad":206,"rate":18.21396993810787,"amt":124250.0,"loss_amt":24250.0,"amt_rate":19.52,"lift":1.3},{"q":10,"n":1132,"bad":294,"rate":25.97173144876325,"amt":112900.0,"loss_amt":31650.0,"amt_rate":28.03,"lift":1.85}],"roc":[[0.0,0.0],[0.41,1.01],[0.76,2.46],[1.14,3.72],[1.55,4.79],[1.95,5.93],[2.3,7.44],[2.77,8.2],[3.2,9.14],[3.64,10.03],[4.05,11.1],[4.45,12.17],[4.92,12.93],[5.41,13.49],[5.87,14.25],[6.33,15.01],[6.8,15.76],[7.25,16.52],[7.75,17.02],[8.23,17.72],[8.67,18.6],[9.13,19.36],[9.59,20.05],[10.12,20.43],[10.59,21.12],[11.06,21.82],[11.53,22.57],[11.98,23.33],[12.48,23.83],[12.96,24.53],[13.45,25.09],[13.91,25.85],[14.35,26.73],[14.8,27.55],[15.29,28.18],[15.78,28.75],[16.28,29.38],[16.76,30.01],[17.22,30.71],[17.74,31.15],[18.26,31.53],[18.79,31.9],[19.29,32.41],[19.76,33.1],[20.26,33.61],[20.71,34.43],[21.19,35.06],[21.65,35.88],[22.12,36.57],[22.59,37.2],[23.12,37.58],[23.59,38.27],[24.08,38.84],[24.58,39.41],[25.03,40.16],[25.56,40.48],[26.04,41.17],[26.48,42.06],[26.96,42.69],[27.41,43.51],[27.9,44.07],[28.37,44.77],[28.9,45.08],[29.41,45.59],[29.9,46.15],[30.4,46.66],[30.89,47.23],[31.43,47.48],[31.93,48.05],[32.43,48.55],[32.92,49.12],[33.42,49.62],[33.84,50.63],[34.3,51.39],[34.77,52.14],[35.29,52.52],[35.79,52.96],[36.32,53.34],[36.81,53.91],[37.3,54.54],[37.8,55.04],[38.26,55.74],[38.75,56.37],[39.28,56.68],[39.76,57.31],[40.27,57.82],[40.74,58.51],[41.28,58.76],[41.73,59.58],[42.27,59.84],[42.79,60.28],[43.25,61.03],[43.73,61.6],[44.19,62.42],[44.71,62.8],[45.19,63.43],[45.7,63.93],[46.15,64.69],[46.66,65.13],[47.19,65.51],[47.72,65.83],[48.19,66.58],[48.7,67.02],[49.17,67.65],[49.7,68.03],[50.21,68.47],[50.7,69.04],[51.16,69.86],[51.64,70.43],[52.11,71.12],[52.68,71.31],[53.15,72.01],[53.69,72.32],[54.18,72.82],[54.67,73.39],[55.21,73.71],[55.71,74.21],[56.24,74.59],[56.76,74.97],[57.26,75.41],[57.76,75.98],[58.27,76.42],[58.79,76.86],[59.26,77.55],[59.81,77.68],[60.34,78.06],[60.87,78.37],[61.38,78.88],[61.9,79.26],[62.4,79.82],[62.9,80.26],[63.42,80.64],[63.96,80.96],[64.46,81.46],[65.01,81.72],[65.52,82.09],[66.08,82.28],[66.63,82.47],[67.16,82.85],[67.66,83.35],[68.17,83.73],[68.69,84.17],[69.22,84.49],[69.75,84.87],[70.29,85.12],[70.84,85.37],[71.38,85.56],[71.93,85.81],[72.47,86.07],[72.99,86.51],[73.48,87.07],[73.96,87.64],[74.53,87.77],[75.05,88.15],[75.56,88.65],[76.1,88.9],[76.61,89.34],[77.15,89.6],[77.7,89.85],[78.21,90.29],[78.74,90.67],[79.26,91.05],[79.75,91.55],[80.31,91.74],[80.88,91.8],[81.44,91.99],[81.96,92.37],[82.52,92.5],[83.05,92.81],[83.61,93.06],[84.12,93.51],[84.65,93.88],[85.17,94.26],[85.7,94.58],[86.24,94.83],[86.79,95.08],[87.33,95.33],[87.88,95.59],[88.42,95.78],[88.97,96.03],[89.51,96.28],[90.07,96.47],[90.61,96.72],[91.18,96.78],[91.74,96.91],[92.3,97.1],[92.84,97.35],[93.39,97.6],[93.95,97.73],[94.49,97.98],[95.05,98.11],[95.59,98.42],[96.13,98.68],[96.7,98.8],[97.23,99.05],[97.79,99.24],[98.34,99.43],[98.9,99.62],[99.46,99.81],[100.0,100.0]],"capture":[[0,0.0],[1,2.46],[2,4.73],[3,7.31],[4,9.08],[5,11.1],[6,12.93],[7,14.19],[8,15.76],[9,16.96],[10,18.54],[11,19.92],[12,21.06],[13,22.45],[14,23.83],[15,24.97],[16,26.54],[17,27.99],[18,29.26],[19,30.52],[20,31.53],[21,32.28],[22,33.54],[23,34.8],[24,36.44],[25,37.45],[26,38.59],[27,39.91],[28,40.86],[29,42.56],[30,43.95],[31,45.08],[32,45.84],[33,47.04],[34,47.79],[35,48.87],[36,50.38],[37,51.83],[38,52.71],[39,53.59],[40,54.85],[41,56.18],[42,57.06],[43,58.26],[44,59.33],[45,60.09],[46,61.29],[47,62.74],[48,63.62],[49,64.82],[50,65.64],[51,66.9],[52,67.78],[53,68.66],[54,70.11],[55,71.19],[56,72.19],[57,73.14],[58,73.77],[59,74.72],[60,75.54]],"cutoffs":[{"reject_pct":10,"reject_n":1131,"kept_n":10180,"kept_bad":1292,"kept_rate":12.692,"capture":18.54,"rejected_bad":294,"kept_amt":1547250.0,"kept_loss":196900.0,"capture_amt":13.85},{"reject_pct":20,"reject_n":2262,"kept_n":9049,"kept_bad":1086,"kept_rate":12.001,"capture":31.53,"rejected_bad":500,"kept_amt":1423050.0,"kept_loss":172650.0,"capture_amt":24.46},{"reject_pct":30,"reject_n":3393,"kept_n":7918,"kept_bad":889,"kept_rate":11.228,"capture":43.95,"rejected_bad":697,"kept_amt":1297900.0,"kept_loss":149050.0,"capture_amt":34.78},{"reject_pct":40,"reject_n":4524,"kept_n":6787,"kept_bad":716,"kept_rate":10.55,"capture":54.85,"rejected_bad":870,"kept_amt":1172500.0,"kept_loss":127800.0,"capture_amt":44.08},{"reject_pct":50,"reject_n":5656,"kept_n":5655,"kept_bad":545,"kept_rate":9.637,"capture":65.64,"rejected_bad":1041,"kept_amt":1027700.0,"kept_loss":104250.0,"capture_amt":54.39}]},"new":{"n":11316,"bad":1587,"rate":14.02,"amt":1660700.0,"loss_amt":228750.0,"amt_rate":13.77,"auc":0.7633,"se":0.0063,"auc_lo":0.7509,"auc_hi":0.7758,"gini":0.5267,"ks":0.3971,"top_rate":43.37455830388692,"top_lift":3.09,"deciles":[{"q":1,"n":1131,"bad":24,"rate":2.122015915119363,"amt":219600.0,"loss_amt":4900.0,"amt_rate":2.23,"lift":0.15},{"q":2,"n":1132,"bad":42,"rate":3.7102473498233217,"amt":196950.0,"loss_amt":8600.0,"amt_rate":4.37,"lift":0.26},{"q":3,"n":1131,"bad":48,"rate":4.244031830238726,"amt":180400.0,"loss_amt":9250.0,"amt_rate":5.13,"lift":0.3},{"q":4,"n":1132,"bad":75,"rate":6.625441696113074,"amt":168200.0,"loss_amt":12250.0,"amt_rate":7.28,"lift":0.47},{"q":5,"n":1132,"bad":89,"rate":7.862190812720849,"amt":166750.0,"loss_amt":14500.0,"amt_rate":8.7,"lift":0.56},{"q":6,"n":1131,"bad":133,"rate":11.75950486295314,"amt":158300.0,"loss_amt":20650.0,"amt_rate":13.04,"lift":0.84},{"q":7,"n":1132,"bad":189,"rate":16.696113074204945,"amt":146850.0,"loss_amt":29850.0,"amt_rate":20.33,"lift":1.19},{"q":8,"n":1131,"bad":200,"rate":17.68346595932803,"amt":150400.0,"loss_amt":29100.0,"amt_rate":19.35,"lift":1.26},{"q":9,"n":1132,"bad":296,"rate":26.148409893992934,"amt":139800.0,"loss_amt":38950.0,"amt_rate":27.86,"lift":1.86},{"q":10,"n":1132,"bad":491,"rate":43.37455830388692,"amt":133450.0,"loss_amt":60700.0,"amt_rate":45.49,"lift":3.09}],"roc":[[0.0,0.0],[0.19,2.39],[0.45,4.28],[0.74,6.05],[0.98,8.13],[1.34,9.45],[1.63,11.15],[1.97,12.6],[2.28,14.24],[2.62,15.69],[2.97,17.08],[3.38,18.08],[3.69,19.79],[3.99,21.49],[4.31,23.06],[4.7,24.2],[5.04,25.65],[5.39,27.03],[5.79,28.1],[6.21,29.05],[6.52,30.69],[6.89,31.95],[7.28,33.08],[7.69,34.09],[8.14,34.85],[8.52,36.04],[9.0,36.61],[9.37,37.87],[9.82,38.69],[10.26,39.51],[10.68,40.45],[11.14,41.15],[11.54,42.22],[11.94,43.29],[12.33,44.42],[12.81,45.05],[13.27,45.75],[13.67,46.82],[14.09,47.76],[14.5,48.77],[14.99,49.34],[15.43,50.16],[17.26,52.61],[17.76,53.06],[18.18,54.0],[18.66,54.63],[19.17,55.01],[19.61,55.83],[20.08,56.46],[20.59,56.9],[21.06,57.53],[21.55,58.03],[22.03,58.66],[22.52,59.29],[23.01,59.8],[23.48,60.49],[23.93,61.25],[24.41,61.81],[24.88,62.44],[25.39,62.89],[25.86,63.52],[26.32,64.21],[26.77,65.03],[27.25,65.6],[27.72,66.23],[28.16,67.04],[28.64,67.67],[29.11,68.3],[29.61,68.75],[30.14,69.06],[30.63,69.57],[31.11,70.13],[31.6,70.7],[32.07,71.33],[32.58,71.71],[33.06,72.34],[33.54,72.9],[34.03,73.41],[34.49,74.1],[35.03,74.35],[35.54,74.73],[36.05,75.17],[36.56,75.8],[37.06,76.24],[37.61,76.43],[38.12,76.81],[38.6,77.44],[39.11,77.82],[39.6,78.32],[40.09,78.89],[40.61,79.21],[41.13,79.52],[41.64,79.96],[42.17,80.21],[42.67,80.72],[43.19,81.03],[43.66,81.66],[44.17,82.1],[44.68,82.48],[45.23,82.67],[45.77,82.99],[46.32,83.18],[46.87,83.3],[47.38,83.68],[47.89,84.12],[48.43,84.31],[48.96,84.63],[49.47,85.0],[50.03,85.13],[50.56,85.38],[51.06,85.82],[51.61,86.01],[52.13,86.33],[52.63,86.83],[53.14,87.21],[53.7,87.4],[54.22,87.71],[54.75,87.96],[55.32,88.03],[55.83,88.41],[56.38,88.59],[56.92,88.78],[57.45,89.1],[58.0,89.22],[58.55,89.41],[59.06,89.79],[59.61,89.98],[60.15,90.17],[60.71,90.3],[61.24,90.55],[61.8,90.61],[62.33,90.93],[62.84,91.3],[63.36,91.68],[63.89,91.93],[64.43,92.19],[64.98,92.31],[65.53,92.5],[66.05,92.82],[66.62,92.88],[67.17,93.01],[67.74,93.07],[68.29,93.19],[68.84,93.38],[69.4,93.45],[69.98,93.45],[70.51,93.7],[71.07,93.82],[71.6,94.08],[72.15,94.27],[72.69,94.45],[73.26,94.52],[73.82,94.58],[74.38,94.71],[74.92,94.9],[75.49,94.96],[76.03,95.15],[76.58,95.34],[77.12,95.53],[77.63,95.9],[78.2,95.97],[78.76,96.03],[79.32,96.16],[79.87,96.28],[80.44,96.35],[80.99,96.47],[81.56,96.53],[82.12,96.66],[82.66,96.85],[83.2,97.04],[83.77,97.1],[84.26,97.61],[84.82,97.73],[85.39,97.73],[85.94,97.92],[86.5,97.98],[87.06,98.11],[87.6,98.3],[88.15,98.49],[88.72,98.49],[89.28,98.61],[89.83,98.74],[90.4,98.8],[90.94,98.99],[91.51,99.05],[92.08,99.12],[92.63,99.24],[93.2,99.37],[93.77,99.37],[94.33,99.5],[94.88,99.62],[95.46,99.62],[96.03,99.62],[96.6,99.68],[97.16,99.75],[97.73,99.81],[98.29,99.87],[98.86,99.94],[99.43,99.94],[100.0,100.0]],"capture":[[0,0.0],[1,4.35],[2,8.19],[3,11.15],[4,14.37],[5,17.2],[6,19.97],[7,23.13],[8,25.83],[9,28.23],[10,30.94],[11,33.27],[12,34.97],[13,36.93],[14,38.94],[15,40.58],[16,42.53],[17,44.68],[18,46.12],[19,48.08],[20,49.59],[21,51.42],[22,52.49],[23,53.43],[24,54.88],[25,56.21],[26,57.4],[27,58.41],[28,59.67],[29,61.12],[30,62.19],[31,63.39],[32,64.97],[33,66.16],[34,67.42],[35,68.62],[36,69.38],[37,70.57],[38,71.64],[39,72.84],[40,74.1],[41,74.67],[42,75.68],[43,76.43],[44,77.44],[45,78.2],[46,79.14],[47,79.96],[48,80.72],[49,81.73],[50,82.48],[51,83.05],[52,83.3],[53,84.12],[54,84.63],[55,85.13],[56,85.82],[57,86.39],[58,87.21],[59,87.78],[60,88.09]],"cutoffs":[{"reject_pct":10,"reject_n":1132,"kept_n":10184,"kept_bad":1096,"kept_rate":10.762,"capture":30.94,"rejected_bad":491,"kept_amt":1527250.0,"kept_loss":168050.0,"capture_amt":26.54},{"reject_pct":20,"reject_n":2263,"kept_n":9053,"kept_bad":800,"kept_rate":8.837,"capture":49.59,"rejected_bad":787,"kept_amt":1387550.0,"kept_loss":129100.0,"capture_amt":43.56},{"reject_pct":30,"reject_n":3395,"kept_n":7921,"kept_bad":600,"kept_rate":7.575,"capture":62.19,"rejected_bad":987,"kept_amt":1237050.0,"kept_loss":100000.0,"capture_amt":56.28},{"reject_pct":40,"reject_n":4526,"kept_n":6790,"kept_bad":411,"kept_rate":6.053,"capture":74.1,"rejected_bad":1176,"kept_amt":1090300.0,"kept_loss":70150.0,"capture_amt":69.33},{"reject_pct":50,"reject_n":5658,"kept_n":5658,"kept_bad":278,"kept_rate":4.913,"capture":82.48,"rejected_bad":1309,"kept_amt":931900.0,"kept_loss":49500.0,"capture_amt":78.36}]}},"delta":{"n":11311,"diff":0.1338,"ci_low":0.1181,"ci_high":0.1495,"p":0.0,"z":16.73},"swap":{"reject_pct":30,"reject_n":3393,"n":11311,"cells":[{"key":"both_pass","new_reject":false,"old_reject":false,"n":6131,"share":54.2,"bad":416,"rate":6.79},{"key":"old_only","new_reject":false,"old_reject":true,"n":1787,"share":15.8,"bad":184,"rate":10.3},{"key":"new_only","new_reject":true,"old_reject":false,"n":1787,"share":15.8,"bad":473,"rate":26.47},{"key":"both_reject","new_reject":true,"old_reject":true,"n":1606,"share":14.2,"bad":513,"rate":31.94}],"overall_rate":14.02},"cross":{"rows":[{"q":1,"cells":[{"n":906,"bad":22,"rate":2.43,"level":2},{"n":596,"bad":17,"rate":2.85,"level":2},{"n":383,"bad":12,"rate":3.13,"level":3},{"n":244,"bad":8,"rate":3.28,"level":3},{"n":133,"bad":7,"rate":5.26,"level":3}]},{"q":2,"cells":[{"n":570,"bad":24,"rate":4.21,"level":3},{"n":526,"bad":28,"rate":5.32,"level":3},{"n":498,"bad":30,"rate":6.02,"level":3},{"n":414,"bad":24,"rate":5.8,"level":3},{"n":254,"bad":17,"rate":6.69,"level":3}]},{"q":3,"cells":[{"n":405,"bad":39,"rate":9.63,"level":4},{"n":479,"bad":45,"rate":9.39,"level":4},{"n":459,"bad":44,"rate":9.59,"level":4},{"n":486,"bad":42,"rate":8.64,"level":4},{"n":433,"bad":52,"rate":12.01,"level":4}]},{"q":4,"cells":[{"n":243,"bad":28,"rate":11.52,"level":4},{"n":411,"bad":67,"rate":16.3,"level":5},{"n":464,"bad":99,"rate":21.34,"level":5},{"n":558,"bad":86,"rate":15.41,"level":5},{"n":586,"bad":108,"rate":18.43,"level":5}]},{"q":5,"cells":[{"n":138,"bad":39,"rate":28.26,"level":5},{"n":250,"bad":79,"rate":31.6,"level":5},{"n":458,"bad":143,"rate":31.22,"level":5},{"n":560,"bad":210,"rate":37.5,"level":5},{"n":857,"bad":316,"rate":36.87,"level":5}]}],"n":11311,"min_cell":133,"diag_share":29.2,"row_spread_max":9.82,"col_spread_min":25.83},"through":{"targets":[4,5,6,7,8,9],"rows":[{"target":4,"old":{"kept":20,"approval":0.2,"bad":0,"good":20,"rate":0.0,"amt":5450.0,"good_amt":5450.0,"bad_amt":0.0,"hit_rate":0.0},"new":{"kept":4341,"approval":38.4,"bad":173,"good":4168,"rate":3.99,"amt":737450.0,"good_amt":709600.0,"bad_amt":27850.0,"hit_rate":3.99},"extra":4321,"extra_good":4148,"extra_good_amt":704150.0},{"target":5,"old":{"kept":271,"approval":2.4,"bad":13,"good":258,"rate":4.8,"amt":70100.0,"good_amt":67400.0,"bad_amt":2700.0,"hit_rate":4.8},"new":{"kept":5750,"approval":50.8,"bad":287,"good":5463,"rate":4.99,"amt":945050.0,"good_amt":900100.0,"bad_amt":44950.0,"hit_rate":4.99},"extra":5479,"extra_good":5205,"extra_good_amt":832700.0},{"target":6,"old":{"kept":1558,"approval":13.8,"bad":93,"good":1465,"rate":5.97,"amt":357500.0,"good_amt":335700.0,"bad_amt":21800.0,"hit_rate":5.97},"new":{"kept":6663,"approval":58.9,"bad":399,"good":6264,"rate":5.99,"amt":1073100.0,"good_amt":1012800.0,"bad_amt":60300.0,"hit_rate":5.99},"extra":5105,"extra_good":4799,"extra_good_amt":677100.0},{"target":7,"old":{"kept":2587,"approval":22.9,"bad":181,"good":2406,"rate":7.0,"amt":576800.0,"good_amt":536750.0,"bad_amt":40050.0,"hit_rate":7.0},"new":{"kept":7532,"approval":66.6,"bad":527,"good":7005,"rate":7.0,"amt":1187450.0,"good_amt":1109000.0,"bad_amt":78450.0,"hit_rate":7.0},"extra":4945,"extra_good":4599,"extra_good_amt":572250.0},{"target":8,"old":{"kept":3971,"approval":35.1,"bad":317,"good":3654,"rate":7.98,"amt":801850.0,"good_amt":740100.0,"bad_amt":61750.0,"hit_rate":7.98},"new":{"kept":8267,"approval":73.1,"bad":661,"good":7606,"rate":8.0,"amt":1282000.0,"good_amt":1185350.0,"bad_amt":96650.0,"hit_rate":8.0},"extra":4296,"extra_good":3952,"extra_good_amt":445250.0},{"target":9,"old":{"kept":5125,"approval":45.3,"bad":461,"good":4664,"rate":9.0,"amt":957000.0,"good_amt":875350.0,"bad_amt":81650.0,"hit_rate":9.0},"new":{"kept":9181,"approval":81.1,"bad":826,"good":8355,"rate":9.0,"amt":1403550.0,"good_amt":1285200.0,"bad_amt":118350.0,"hit_rate":9.0},"extra":4056,"extra_good":3691,"extra_good_amt":409850.0}],"curve":{"old":[[0.0,0.0],[0.0,0.1],[0.0,0.1],[0.0,0.2],[5.16,3.6],[5.6,11.0],[5.76,12.7],[5.9,13.6],[6.16,14.5],[6.41,18.9],[6.62,19.1],[6.79,20.3],[6.89,21.4],[7.04,23.0],[7.17,23.3],[7.31,24.4],[7.46,25.0],[7.56,29.1],[7.68,29.7],[7.74,30.3],[7.82,33.0],[7.91,33.3],[7.97,34.9],[8.05,35.3],[8.14,35.7],[8.2,36.5],[8.27,38.3],[8.36,38.6],[8.42,39.2],[8.49,39.8],[8.56,40.4],[8.64,41.3],[8.7,41.9],[8.75,43.0],[8.84,43.4],[8.89,44.5],[9.0,45.3],[9.05,45.8],[9.12,46.2],[9.19,46.4],[9.28,46.6],[9.34,47.2],[9.4,48.4],[9.47,49.1],[9.53,49.3],[9.59,50.4],[9.64,51.0],[9.71,51.6],[9.79,52.1],[9.82,52.5],[9.89,53.1],[9.92,53.5],[10.0,53.6],[10.06,54.1],[10.1,54.5],[10.18,56.0],[10.23,56.5],[10.29,57.1],[10.32,57.7],[10.38,58.1],[10.43,59.1],[10.5,59.5],[10.54,60.1],[10.59,60.5],[10.65,61.0],[10.71,62.9],[10.76,63.2],[10.82,63.4],[10.87,64.0],[10.94,64.1],[10.98,64.4],[11.04,65.7],[11.07,66.8],[11.1,67.5],[11.14,67.9],[11.18,69.6],[11.23,70.1],[11.28,70.4],[11.33,70.8],[11.39,71.4],[11.44,71.7],[11.49,71.9],[11.53,73.0],[11.57,73.3],[11.61,73.9],[11.65,74.4],[11.69,75.4],[11.74,76.2],[11.78,76.4],[11.83,76.8],[11.87,77.1],[11.91,77.5],[11.94,78.0],[11.99,80.6],[12.02,81.0],[12.07,81.8],[12.12,82.7],[12.16,83.0],[12.21,83.6],[12.24,83.9],[12.27,84.2],[12.32,84.4],[12.36,84.7],[12.38,85.3],[12.4,85.9],[12.44,86.5],[12.47,86.9],[12.51,87.2],[12.54,87.6],[12.58,88.1],[12.61,89.0],[12.65,89.5],[12.69,89.9],[12.72,90.2],[12.76,90.5],[12.79,91.0],[12.81,91.8],[12.84,92.1],[12.87,92.4],[12.91,92.9],[12.94,93.3],[12.97,93.9],[13.0,94.1],[13.03,94.4],[13.07,94.8],[13.11,94.9],[13.15,95.2],[13.18,95.3],[13.22,95.7],[13.25,95.9],[13.29,96.2],[13.33,96.4],[13.36,96.6],[13.4,97.0],[13.44,97.2],[13.48,97.3],[13.52,97.5],[13.56,97.8],[13.6,97.9],[13.64,98.2],[13.68,98.3],[13.71,98.7],[13.75,98.8],[13.78,99.0],[13.83,99.1],[13.86,99.3],[13.91,99.4],[13.94,99.5],[13.99,99.8],[14.02,100.0]],"new":[[0.0,0.0],[1.64,6.5],[2.06,10.7],[2.47,14.0],[2.83,15.6],[3.14,20.5],[3.32,30.3],[3.49,32.1],[3.68,33.2],[3.82,34.5],[3.89,36.4],[4.02,38.5],[4.15,40.9],[4.26,42.1],[4.41,42.9],[4.5,43.8],[4.64,45.7],[4.72,47.0],[4.83,47.7],[4.94,50.3],[5.03,51.0],[5.14,51.4],[5.22,52.3],[5.33,53.1],[5.4,54.1],[5.49,54.7],[5.58,55.4],[5.67,56.1],[5.77,56.5],[5.84,57.7],[5.93,58.2],[6.02,59.0],[6.11,60.2],[6.2,60.7],[6.28,61.3],[6.37,61.7],[6.45,62.6],[6.54,63.0],[6.62,63.5],[6.71,64.0],[6.79,65.1],[6.87,65.8],[6.94,66.3],[7.04,66.6],[7.12,67.2],[7.2,67.7],[7.27,68.2],[7.35,68.5],[7.43,68.9],[7.5,69.5],[7.57,69.9],[7.64,70.5],[7.7,71.0],[7.78,71.5],[7.87,72.2],[7.94,72.6],[8.01,73.1],[8.07,74.0],[8.13,74.5],[8.21,75.1],[8.28,75.5],[8.33,76.5],[8.42,76.8],[8.5,77.0],[8.56,78.3],[8.62,79.1],[8.68,79.5],[8.77,79.7],[8.84,80.3],[8.9,80.7],[8.98,81.0],[9.04,81.3],[9.12,81.6],[9.19,81.9],[9.25,82.1],[9.31,82.6],[9.36,83.1],[9.43,83.4],[9.5,83.7],[9.58,83.9],[9.64,84.3],[9.71,84.5],[9.77,84.8],[9.82,85.3],[9.89,85.5],[9.94,85.9],[10.01,86.3],[10.06,86.7],[10.14,86.9],[10.2,87.4],[10.26,87.7],[10.34,88.0],[10.4,88.5],[10.45,88.8],[10.52,89.0],[10.59,89.3],[10.65,89.6],[10.72,89.8],[10.78,90.0],[10.85,90.2],[10.91,90.5],[10.98,90.6],[11.05,90.9],[11.1,91.2],[11.17,91.6],[11.24,91.8],[11.3,92.0],[11.36,92.2],[11.43,92.4],[11.49,92.6],[11.55,92.9],[11.62,93.1],[11.69,93.3],[11.75,93.5],[11.81,93.7],[11.88,93.8],[11.95,94.0],[12.01,94.2],[12.07,94.4],[12.14,94.5],[12.2,94.9],[12.26,95.1],[12.31,95.4],[12.38,95.6],[12.44,95.8],[12.5,95.9],[12.56,96.2],[12.62,96.4],[12.7,96.5],[12.75,96.8],[12.81,96.9],[12.87,97.2],[12.93,97.3],[13.0,97.4],[13.06,97.6],[13.12,97.8],[13.19,98.1],[13.25,98.2],[13.31,98.4],[13.38,98.5],[13.44,98.7],[13.5,98.9],[13.56,99.0],[13.63,99.2],[13.69,99.4],[13.76,99.5],[13.81,99.7],[13.89,99.8],[13.95,99.9],[14.02,100.0]]}},"weekly":[{"week":"2026-08-03","n":5,"bad":1,"rate":20.0,"auc_old":null,"auc_new":null},{"week":"2026-08-17","n":8,"bad":1,"rate":12.5,"auc_old":null,"auc_new":null},{"week":"2026-08-24","n":85,"bad":10,"rate":11.76,"auc_old":0.6387,"auc_new":0.7973},{"week":"2026-08-31","n":601,"bad":86,"rate":14.31,"auc_old":0.6481,"auc_new":0.8315},{"week":"2026-09-07","n":1010,"bad":144,"rate":14.26,"auc_old":0.6127,"auc_new":0.7716},{"week":"2026-09-14","n":1271,"bad":180,"rate":14.16,"auc_old":0.6132,"auc_new":0.7736},{"week":"2026-09-21","n":1794,"bad":277,"rate":15.44,"auc_old":0.6317,"auc_new":0.787},{"week":"2026-09-28","n":2472,"bad":320,"rate":12.94,"auc_old":0.6316,"auc_new":0.7771},{"week":"2026-10-05","n":2314,"bad":311,"rate":13.44,"auc_old":0.627,"auc_new":0.7328},{"week":"2026-10-12","n":1555,"bad":224,"rate":14.41,"auc_old":0.6462,"auc_new":0.7165},{"week":"2026-10-19","n":201,"bad":33,"rate":16.42,"auc_old":0.6218,"auc_new":0.7276}],"weeklyAxis":{"min":0.55,"max":0.95,"ticks":[0.6,0.7,0.8,0.9]}}},"throughRef":8,"weeks":["2026-08-03","2026-08-17","2026-08-24","2026-08-31","2026-09-07","2026-09-14","2026-09-21","2026-09-28","2026-10-05","2026-10-12","2026-10-19"],"week_counts":{"2026-09-28":2494,"2026-10-12":2463,"2026-10-05":2439,"2026-09-21":1798,"2026-09-14":1271,"2026-10-19":1257,"2026-09-07":1010,"2026-08-31":601,"2026-08-24":85,"2026-08-17":8,"2026-08-03":5}};
+const DATA = {"meta":{"n_sample":13431,"obs_dt":"2026-10-29","weeks":["2026-08-03","2026-08-17","2026-08-24","2026-08-31","2026-09-07","2026-09-14","2026-09-21","2026-09-28","2026-10-05","2026-10-12","2026-10-19"],"new_missing":0,"old_missing":5,"median_days":0.006574074074074074,"p75_days":0.2417476851851852,"reject_pct":30,"n_unscored":769,"unscored_immature":true,"start":"2026-08-01","end_display":"2026-10-23"},"windows":{"15":{"label":"FPD15","n_obs":7605,"n_bad":787,"maturity":56.6,"models":{"old":{"n":7600,"bad":786,"rate":10.34,"amt":1087150.0,"loss_amt":107050.0,"amt_rate":9.85,"auc":0.6331,"se":0.0103,"auc_lo":0.6129,"auc_hi":0.6534,"gini":0.2663,"ks":0.1855,"top_rate":20.92105263157895,"top_lift":2.02,"deciles":[{"q":1,"n":760,"bad":31,"rate":4.078947368421053,"amt":171000.0,"loss_amt":6900.0,"amt_rate":4.04,"lift":0.39},{"q":2,"n":760,"bad":42,"rate":5.526315789473684,"amt":160800.0,"loss_amt":10100.0,"amt_rate":6.28,"lift":0.53},{"q":3,"n":760,"bad":55,"rate":7.236842105263158,"amt":133500.0,"loss_amt":10400.0,"amt_rate":7.79,"lift":0.7},{"q":4,"n":760,"bad":60,"rate":7.894736842105263,"amt":102700.0,"loss_amt":9050.0,"amt_rate":8.81,"lift":0.76},{"q":5,"n":760,"bad":82,"rate":10.789473684210527,"amt":99250.0,"loss_amt":10900.0,"amt_rate":10.98,"lift":1.04},{"q":6,"n":760,"bad":74,"rate":9.736842105263158,"amt":94150.0,"loss_amt":10000.0,"amt_rate":10.62,"lift":0.94},{"q":7,"n":760,"bad":87,"rate":11.447368421052632,"amt":83650.0,"loss_amt":10200.0,"amt_rate":12.19,"lift":1.11},{"q":8,"n":760,"bad":92,"rate":12.105263157894736,"amt":83450.0,"loss_amt":10650.0,"amt_rate":12.76,"lift":1.17},{"q":9,"n":760,"bad":104,"rate":13.684210526315791,"amt":82950.0,"loss_amt":12250.0,"amt_rate":14.77,"lift":1.32},{"q":10,"n":760,"bad":159,"rate":20.92105263157895,"amt":75700.0,"loss_amt":16600.0,"amt_rate":21.93,"lift":2.02}],"roc":[[0.0,0.0],[0.4,1.4],[0.76,3.05],[1.14,4.58],[1.58,5.6],[1.98,7.0],[2.42,8.27],[2.83,9.54],[3.26,10.69],[3.67,11.96],[4.08,13.23],[4.53,14.12],[5.03,14.76],[5.56,15.01],[6.02,15.9],[6.53,16.28],[7.0,17.05],[7.47,17.94],[7.95,18.58],[8.41,19.47],[8.88,20.23],[9.36,20.87],[9.79,22.01],[10.29,22.65],[10.83,22.77],[11.33,23.28],[11.86,23.54],[12.31,24.43],[12.8,25.19],[13.25,26.08],[13.77,26.46],[14.26,26.97],[14.75,27.61],[15.25,28.12],[15.69,29.26],[16.19,29.77],[16.66,30.53],[17.17,31.04],[17.6,32.19],[18.12,32.57],[18.56,33.59],[19.09,33.84],[19.64,33.97],[20.15,34.35],[20.66,34.73],[21.15,35.5],[21.62,36.26],[22.09,37.02],[22.59,37.53],[23.04,38.42],[23.54,39.06],[23.99,39.95],[24.51,40.33],[25.02,40.71],[25.48,41.6],[25.99,41.98],[26.45,43.0],[26.96,43.38],[27.49,43.64],[27.94,44.53],[28.41,45.29],[28.87,46.31],[29.31,47.33],[29.76,48.22],[30.28,48.6],[30.79,48.98],[31.3,49.36],[31.82,49.87],[32.29,50.64],[32.8,51.02],[33.34,51.15],[33.81,51.91],[34.36,52.16],[34.87,52.54],[35.31,53.56],[35.85,53.69],[36.31,54.58],[36.81,55.09],[37.31,55.73],[37.83,55.98],[38.35,56.36],[38.83,57.0],[39.32,57.63],[39.84,58.02],[40.31,58.78],[40.83,59.16],[41.36,59.41],[41.86,59.92],[42.35,60.43],[42.9,60.69],[43.43,60.94],[43.89,61.7],[44.41,62.09],[44.94,62.34],[45.41,63.23],[45.93,63.49],[46.42,64.12],[46.93,64.5],[47.45,64.89],[47.96,65.27],[48.44,66.03],[48.94,66.54],[49.47,66.79],[49.97,67.3],[50.41,68.32],[50.94,68.58],[51.48,68.83],[51.98,69.34],[52.49,69.72],[53.01,70.1],[53.46,70.99],[53.93,71.88],[54.46,72.14],[54.96,72.77],[55.44,73.41],[55.96,73.79],[56.44,74.43],[56.94,75.06],[57.46,75.45],[57.95,75.95],[58.45,76.46],[58.95,76.97],[59.48,77.35],[59.96,77.99],[60.49,78.24],[61.01,78.63],[61.51,79.13],[62.02,79.52],[62.55,79.9],[63.05,80.41],[63.57,80.66],[64.09,81.04],[64.6,81.42],[65.12,81.93],[65.66,82.06],[66.19,82.32],[66.67,82.95],[67.21,83.08],[67.7,83.72],[68.27,83.72],[68.81,83.84],[69.27,84.73],[69.78,85.11],[70.27,85.75],[70.8,86.13],[71.31,86.51],[71.87,86.51],[72.4,86.77],[72.95,86.77],[73.5,86.9],[74.04,87.15],[74.58,87.28],[75.02,88.3],[75.54,88.68],[76.08,88.8],[76.62,89.06],[77.14,89.44],[77.65,89.82],[78.13,90.46],[78.68,90.59],[79.2,90.84],[79.7,91.48],[80.22,91.86],[80.75,92.11],[81.23,92.75],[81.79,92.75],[82.35,92.88],[82.9,92.88],[83.46,92.88],[83.96,93.38],[84.52,93.38],[85.03,93.77],[85.56,94.15],[86.04,94.78],[86.56,95.17],[87.1,95.29],[87.64,95.42],[88.2,95.55],[88.71,95.93],[89.26,96.06],[89.8,96.18],[90.31,96.56],[90.86,96.69],[91.4,96.95],[91.93,97.2],[92.47,97.33],[93.03,97.33],[93.53,97.84],[94.09,97.96],[94.63,98.09],[95.16,98.35],[95.69,98.6],[96.23,98.73],[96.74,99.11],[97.29,99.36],[97.83,99.49],[98.39,99.49],[98.93,99.62],[99.46,99.87],[100.0,100.0]],"capture":[[0,0.0],[1,3.05],[2,5.6],[3,8.27],[4,10.56],[5,13.1],[6,14.76],[7,15.78],[8,17.05],[9,18.45],[10,20.23],[11,21.88],[12,22.65],[13,23.54],[14,25.06],[15,26.46],[16,27.61],[17,29.13],[18,30.53],[19,32.06],[20,33.46],[21,33.97],[22,34.73],[23,36.13],[24,37.4],[25,38.8],[26,40.08],[27,41.22],[28,42.37],[29,43.64],[30,45.17],[31,46.82],[32,48.6],[33,49.24],[34,50.51],[35,51.15],[36,52.04],[37,52.93],[38,54.2],[39,55.47],[40,56.23],[41,57.38],[42,58.52],[43,59.29],[44,60.31],[45,60.81],[46,61.96],[47,62.98],[48,63.74],[49,64.63],[50,65.65],[51,66.67],[52,67.68],[53,68.83],[54,69.47],[55,70.61],[56,72.01],[57,73.28],[58,73.92],[59,75.19],[60,76.08]],"cutoffs":[{"reject_pct":10,"reject_n":760,"kept_n":6840,"kept_bad":627,"kept_rate":9.167,"capture":20.23,"rejected_bad":159,"kept_amt":1011450.0,"kept_loss":90450.0,"capture_amt":15.51},{"reject_pct":20,"reject_n":1520,"kept_n":6080,"kept_bad":523,"kept_rate":8.602,"capture":33.46,"rejected_bad":263,"kept_amt":928500.0,"kept_loss":78200.0,"capture_amt":26.95},{"reject_pct":30,"reject_n":2280,"kept_n":5320,"kept_bad":431,"kept_rate":8.102,"capture":45.17,"rejected_bad":355,"kept_amt":845050.0,"kept_loss":67550.0,"capture_amt":36.9},{"reject_pct":40,"reject_n":3040,"kept_n":4560,"kept_bad":344,"kept_rate":7.544,"capture":56.23,"rejected_bad":442,"kept_amt":761400.0,"kept_loss":57350.0,"capture_amt":46.43},{"reject_pct":50,"reject_n":3800,"kept_n":3800,"kept_bad":270,"kept_rate":7.105,"capture":65.65,"rejected_bad":516,"kept_amt":667250.0,"kept_loss":47350.0,"capture_amt":55.77}]},"new":{"n":7605,"bad":787,"rate":10.35,"amt":1087800.0,"loss_amt":107250.0,"amt_rate":9.86,"auc":0.803,"se":0.0077,"auc_lo":0.7879,"auc_hi":0.818,"gini":0.6059,"ks":0.4739,"top_rate":36.793692509855454,"top_lift":3.56,"deciles":[{"q":1,"n":760,"bad":3,"rate":0.39473684210526316,"amt":137250.0,"loss_amt":750.0,"amt_rate":0.55,"lift":0.04},{"q":2,"n":761,"bad":14,"rate":1.8396846254927726,"amt":131100.0,"loss_amt":3150.0,"amt_rate":2.4,"lift":0.18},{"q":3,"n":760,"bad":15,"rate":1.9736842105263157,"amt":119450.0,"loss_amt":2600.0,"amt_rate":2.18,"lift":0.19},{"q":4,"n":761,"bad":23,"rate":3.0223390275952693,"amt":112850.0,"loss_amt":3250.0,"amt_rate":2.88,"lift":0.29},{"q":5,"n":760,"bad":37,"rate":4.868421052631579,"amt":106250.0,"loss_amt":6150.0,"amt_rate":5.79,"lift":0.47},{"q":6,"n":761,"bad":56,"rate":7.35873850197109,"amt":102750.0,"loss_amt":9850.0,"amt_rate":9.59,"lift":0.71},{"q":7,"n":760,"bad":84,"rate":11.052631578947368,"amt":100150.0,"loss_amt":12000.0,"amt_rate":11.98,"lift":1.07},{"q":8,"n":761,"bad":114,"rate":14.98028909329829,"amt":95100.0,"loss_amt":15050.0,"amt_rate":15.83,"lift":1.45},{"q":9,"n":760,"bad":161,"rate":21.184210526315788,"amt":93500.0,"loss_amt":20600.0,"amt_rate":22.03,"lift":2.05},{"q":10,"n":761,"bad":280,"rate":36.793692509855454,"amt":89400.0,"loss_amt":33850.0,"amt_rate":37.86,"lift":3.56}],"roc":[[0.0,0.0],[0.26,2.41],[0.59,4.45],[0.87,6.86],[1.14,9.28],[1.47,11.31],[1.73,13.85],[2.13,15.25],[2.46,17.03],[2.8,19.06],[3.14,20.97],[3.61,21.73],[3.99,23.25],[4.4,24.52],[4.72,26.56],[5.09,28.21],[5.49,29.48],[5.91,30.75],[6.28,32.53],[6.67,33.93],[7.04,35.58],[7.42,37.1],[7.83,38.37],[8.32,38.88],[8.83,39.26],[9.3,40.03],[9.72,41.17],[10.13,42.44],[10.63,42.95],[11.0,44.6],[11.43,45.74],[11.85,46.76],[12.29,47.78],[12.7,49.05],[13.17,49.81],[13.52,51.59],[13.99,52.35],[14.48,52.99],[14.84,54.64],[15.31,55.27],[15.78,56.04],[16.25,56.8],[16.75,57.31],[17.19,58.32],[17.66,59.09],[18.14,59.72],[18.57,60.74],[18.95,62.26],[19.45,62.77],[19.96,63.15],[20.46,63.66],[20.93,64.42],[21.43,64.93],[21.94,65.31],[22.41,65.95],[22.87,66.84],[23.31,67.85],[23.79,68.49],[24.24,69.38],[24.73,70.01],[25.23,70.52],[25.71,71.16],[26.14,72.17],[26.62,72.81],[27.15,73.06],[27.65,73.57],[28.1,74.46],[28.56,75.35],[29.06,75.86],[29.48,76.87],[30.83,77.89],[31.37,78.02],[31.86,78.65],[32.37,79.03],[32.9,79.29],[33.46,79.29],[33.95,79.8],[34.47,80.05],[34.97,80.56],[35.42,81.45],[35.95,81.7],[36.45,82.21],[36.98,82.47],[37.47,82.97],[37.99,83.35],[38.44,84.12],[39.0,84.12],[39.54,84.24],[40.06,84.63],[40.57,85.01],[41.07,85.51],[41.63,85.51],[42.09,86.15],[42.62,86.4],[43.12,86.91],[43.62,87.42],[44.13,87.8],[44.66,88.06],[45.2,88.18],[45.72,88.56],[46.22,88.95],[46.74,89.2],[47.27,89.45],[47.79,89.83],[48.33,89.96],[48.84,90.34],[49.38,90.47],[49.91,90.72],[50.41,91.11],[50.92,91.49],[51.48,91.49],[52.01,91.74],[52.57,91.87],[53.09,92.12],[53.62,92.38],[54.12,92.76],[54.66,92.88],[55.22,92.88],[55.78,92.88],[56.32,93.01],[56.85,93.27],[57.36,93.65],[57.92,93.65],[58.46,93.65],[59.01,93.77],[59.53,94.03],[60.09,94.03],[60.62,94.28],[61.18,94.28],[61.73,94.28],[62.23,94.79],[62.75,95.04],[63.27,95.3],[63.82,95.43],[64.37,95.43],[64.92,95.55],[65.47,95.55],[66.02,95.68],[66.54,95.81],[67.09,95.93],[67.64,95.93],[68.19,96.06],[68.73,96.19],[69.29,96.19],[69.82,96.44],[70.36,96.57],[70.9,96.57],[71.44,96.7],[72.0,96.7],[72.54,96.82],[73.1,96.82],[73.63,97.08],[74.16,97.33],[74.71,97.33],[75.23,97.59],[75.77,97.71],[76.33,97.71],[76.88,97.71],[77.43,97.84],[77.98,97.84],[78.54,97.84],[79.1,97.97],[79.66,97.97],[80.2,98.09],[80.76,98.09],[81.3,98.22],[81.86,98.22],[82.41,98.22],[82.97,98.22],[83.48,98.48],[84.04,98.48],[84.58,98.6],[85.13,98.73],[85.68,98.73],[86.23,98.86],[86.77,98.98],[87.27,99.49],[87.81,99.49],[88.35,99.62],[88.91,99.62],[89.48,99.62],[90.06,99.62],[90.6,99.75],[91.14,99.87],[91.68,99.87],[92.24,99.87],[92.78,100.0],[93.34,100.0],[93.9,100.0],[94.46,100.0],[95.01,100.0],[95.57,100.0],[96.11,100.0],[96.67,100.0],[97.23,100.0],[97.79,100.0],[98.34,100.0],[98.9,100.0],[99.46,100.0],[100.0,100.0]],"capture":[[0,0.0],[1,4.45],[2,9.28],[3,13.98],[4,17.15],[5,20.97],[6,23.38],[7,26.68],[8,29.61],[9,32.53],[10,35.58],[11,38.5],[12,39.26],[13,41.3],[14,43.07],[15,45.74],[16,48.03],[17,49.94],[18,52.35],[19,54.64],[20,56.04],[21,57.31],[22,59.09],[23,60.86],[24,62.9],[25,63.91],[26,64.93],[27,65.95],[28,67.98],[29,69.63],[30,70.52],[31,72.43],[32,73.06],[33,74.46],[34,76.37],[35,77.26],[36,78.02],[37,78.91],[38,79.29],[39,79.92],[40,81.19],[41,82.08],[42,82.85],[43,83.86],[44,84.24],[45,84.88],[46,85.51],[47,86.28],[48,87.29],[49,87.93],[50,88.31],[51,89.2],[52,89.71],[53,90.34],[54,90.6],[55,91.36],[56,91.74],[57,92.12],[58,92.63],[59,92.88],[60,93.01]],"cutoffs":[{"reject_pct":10,"reject_n":760,"kept_n":6845,"kept_bad":507,"kept_rate":7.407,"capture":35.58,"rejected_bad":280,"kept_amt":998500.0,"kept_loss":73400.0,"capture_amt":31.56},{"reject_pct":20,"reject_n":1521,"kept_n":6084,"kept_bad":346,"kept_rate":5.687,"capture":56.04,"rejected_bad":441,"kept_amt":904900.0,"kept_loss":52800.0,"capture_amt":50.77},{"reject_pct":30,"reject_n":2282,"kept_n":5323,"kept_bad":232,"kept_rate":4.358,"capture":70.52,"rejected_bad":555,"kept_amt":809800.0,"kept_loss":37750.0,"capture_amt":64.8},{"reject_pct":40,"reject_n":3042,"kept_n":4563,"kept_bad":148,"kept_rate":3.243,"capture":81.19,"rejected_bad":639,"kept_amt":709650.0,"kept_loss":25750.0,"capture_amt":75.99},{"reject_pct":50,"reject_n":3802,"kept_n":3803,"kept_bad":92,"kept_rate":2.419,"capture":88.31,"rejected_bad":695,"kept_amt":607000.0,"kept_loss":15900.0,"capture_amt":85.17}]}},"delta":{"n":7600,"diff":0.17,"ci_low":0.1489,"ci_high":0.1912,"p":0.0,"z":15.75},"swap":{"reject_pct":30,"reject_n":2280,"n":7600,"cells":[{"key":"both_pass","new_reject":false,"old_reject":false,"n":4134,"share":54.4,"bad":164,"rate":3.97},{"key":"old_only","new_reject":false,"old_reject":true,"n":1186,"share":15.6,"bad":67,"rate":5.65},{"key":"new_only","new_reject":true,"old_reject":false,"n":1186,"share":15.6,"bad":267,"rate":22.51},{"key":"both_reject","new_reject":true,"old_reject":true,"n":1094,"share":14.4,"bad":288,"rate":26.33}],"overall_rate":10.34},"cross":{"rows":[{"q":1,"cells":[{"n":608,"bad":10,"rate":1.64,"level":2},{"n":406,"bad":2,"rate":0.49,"level":1},{"n":264,"bad":2,"rate":0.76,"level":1},{"n":159,"bad":2,"rate":1.26,"level":2},{"n":83,"bad":1,"rate":1.2,"level":2}]},{"q":2,"cells":[{"n":387,"bad":9,"rate":2.33,"level":2},{"n":373,"bad":9,"rate":2.41,"level":2},{"n":292,"bad":7,"rate":2.4,"level":2},{"n":279,"bad":7,"rate":2.51,"level":2},{"n":189,"bad":6,"rate":3.17,"level":3}]},{"q":3,"cells":[{"n":259,"bad":14,"rate":5.41,"level":3},{"n":312,"bad":21,"rate":6.73,"level":3},{"n":354,"bad":24,"rate":6.78,"level":3},{"n":331,"bad":18,"rate":5.44,"level":3},{"n":264,"bad":15,"rate":5.68,"level":3}]},{"q":4,"cells":[{"n":178,"bad":15,"rate":8.43,"level":4},{"n":243,"bad":36,"rate":14.81,"level":4},{"n":300,"bad":37,"rate":12.33,"level":4},{"n":402,"bad":54,"rate":13.43,"level":4},{"n":397,"bad":56,"rate":14.11,"level":4}]},{"q":5,"cells":[{"n":88,"bad":25,"rate":28.41,"level":5},{"n":186,"bad":47,"rate":25.27,"level":5},{"n":310,"bad":86,"rate":27.74,"level":5},{"n":349,"bad":98,"rate":28.08,"level":5},{"n":587,"bad":185,"rate":31.52,"level":5}]}],"n":7600,"min_cell":83,"diag_share":30.6,"row_spread_max":6.38,"col_spread_min":24.78},"through":{"targets":[4,5,6,7,8,9],"rows":[{"target":4,"old":{"kept":959,"approval":12.6,"bad":38,"good":921,"rate":3.96,"amt":214400.0,"good_amt":206600.0,"bad_amt":7800.0,"hit_rate":3.96},"new":{"kept":5126,"approval":67.4,"bad":205,"good":4921,"rate":4.0,"amt":783350.0,"good_amt":753650.0,"bad_amt":29700.0,"hit_rate":4.0},"extra":4167,"extra_good":4000,"extra_good_amt":547050.0},{"target":5,"old":{"kept":1633,"approval":21.5,"bad":81,"good":1552,"rate":4.96,"amt":355550.0,"good_amt":338700.0,"bad_amt":16850.0,"hit_rate":4.96},"new":{"kept":5708,"approval":75.1,"bad":285,"good":5423,"rate":4.99,"amt":858350.0,"good_amt":818550.0,"bad_amt":39800.0,"hit_rate":4.99},"extra":4075,"extra_good":3871,"extra_good_amt":479850.0},{"target":6,"old":{"kept":2922,"approval":38.4,"bad":175,"good":2747,"rate":5.99,"amt":551600.0,"good_amt":520150.0,"bad_amt":31450.0,"hit_rate":5.99},"new":{"kept":6212,"approval":81.7,"bad":372,"good":5840,"rate":5.99,"amt":922500.0,"good_amt":871600.0,"bad_amt":50900.0,"hit_rate":5.99},"extra":3290,"extra_good":3093,"extra_good_amt":351450.0},{"target":7,"old":{"kept":3664,"approval":48.2,"bad":256,"good":3408,"rate":6.99,"amt":649750.0,"good_amt":607700.0,"bad_amt":42050.0,"hit_rate":6.99},"new":{"kept":6623,"approval":87.1,"bad":463,"good":6160,"rate":6.99,"amt":972300.0,"good_amt":910400.0,"bad_amt":61900.0,"hit_rate":6.99},"extra":2959,"extra_good":2752,"extra_good_amt":302700.0},{"target":8,"old":{"kept":5259,"approval":69.2,"bad":420,"good":4839,"rate":7.99,"amt":838350.0,"good_amt":776550.0,"bad_amt":61800.0,"hit_rate":7.99},"new":{"kept":7027,"approval":92.4,"bad":562,"good":6465,"rate":8.0,"amt":1019650.0,"good_amt":946350.0,"bad_amt":73300.0,"hit_rate":8.0},"extra":1768,"extra_good":1626,"extra_good_amt":169800.0},{"target":9,"old":{"kept":6529,"approval":85.9,"bad":587,"good":5942,"rate":8.99,"amt":977600.0,"good_amt":897450.0,"bad_amt":80150.0,"hit_rate":8.99},"new":{"kept":7318,"approval":96.2,"bad":658,"good":6660,"rate":8.99,"amt":1053600.0,"good_amt":968650.0,"bad_amt":84950.0,"hit_rate":8.99},"extra":789,"extra_good":718,"extra_good_amt":71200.0}],"curve":{"old":[[0.0,0.0],[0.0,0.1],[0.0,0.1],[0.0,0.1],[0.0,0.2],[3.0,2.6],[3.55,3.7],[3.83,7.6],[3.92,12.4],[4.09,13.2],[4.26,17.6],[4.39,18.0],[4.57,19.0],[4.7,19.3],[4.79,20.6],[4.91,21.4],[5.05,21.9],[5.12,23.6],[5.23,27.7],[5.27,28.2],[5.34,28.6],[5.42,29.1],[5.48,30.7],[5.57,31.6],[5.63,33.2],[5.71,33.7],[5.73,34.4],[5.79,35.4],[5.85,36.0],[5.86,36.8],[5.92,37.1],[5.96,38.4],[6.07,39.2],[6.13,39.7],[6.18,40.2],[6.24,40.7],[6.29,41.6],[6.36,41.8],[6.42,43.0],[6.5,43.1],[6.55,44.2],[6.62,44.6],[6.69,44.7],[6.75,45.0],[6.82,45.2],[6.86,47.7],[6.91,48.0],[6.99,48.2],[7.02,49.1],[7.08,49.8],[7.13,50.7],[7.16,51.9],[7.21,52.9],[7.25,53.1],[7.29,54.5],[7.33,56.0],[7.36,57.4],[7.39,58.1],[7.45,58.8],[7.49,59.6],[7.51,60.6],[7.54,61.1],[7.57,61.7],[7.62,62.0],[7.65,62.8],[7.71,63.0],[7.74,65.9],[7.78,66.3],[7.81,67.2],[7.84,68.3],[7.87,68.5],[7.9,68.8],[7.95,69.1],[8.0,69.2],[8.05,69.6],[8.09,69.8],[8.12,70.3],[8.16,70.6],[8.2,71.5],[8.23,71.9],[8.26,72.8],[8.31,73.0],[8.35,74.5],[8.41,74.7],[8.42,75.0],[8.47,75.5],[8.51,75.9],[8.53,76.4],[8.56,76.6],[8.57,77.1],[8.6,79.9],[8.62,80.2],[8.65,80.8],[8.67,81.0],[8.72,81.2],[8.74,81.6],[8.78,82.3],[8.81,82.4],[8.86,83.0],[8.88,83.7],[8.91,83.9],[8.93,84.8],[8.94,85.5],[8.98,85.7],[9.01,86.2],[9.04,88.5],[9.06,88.7],[9.09,89.2],[9.12,89.9],[9.16,90.0],[9.2,90.4],[9.23,90.5],[9.26,91.0],[9.27,91.4],[9.3,91.8],[9.32,92.2],[9.35,93.0],[9.37,93.3],[9.39,94.6],[9.41,94.8],[9.44,94.9],[9.47,95.1],[9.5,95.2],[9.54,95.5],[9.56,95.7],[9.59,95.9],[9.62,96.0],[9.66,96.2],[9.68,96.4],[9.71,96.6],[9.74,96.8],[9.76,96.9],[9.8,97.1],[9.82,97.2],[9.86,97.5],[9.89,97.7],[9.93,97.8],[9.95,98.1],[9.99,98.4],[10.02,98.7],[10.05,98.7],[10.08,98.9],[10.12,99.0],[10.15,99.2],[10.18,99.3],[10.22,99.4],[10.25,99.5],[10.29,99.6],[10.31,99.8],[10.34,100.0]],"new":[[0.0,0.0],[0.0,0.1],[0.0,0.2],[0.0,0.3],[0.0,0.4],[0.0,0.6],[0.0,0.7],[0.0,0.8],[0.0,0.9],[0.0,1.0],[0.0,1.1],[0.0,1.2],[0.0,1.3],[0.0,1.4],[0.0,1.6],[0.0,1.7],[0.0,1.8],[0.0,1.9],[0.0,2.0],[0.0,2.1],[0.0,2.2],[0.0,2.3],[0.0,2.4],[0.0,2.6],[0.0,2.7],[0.0,2.8],[0.0,2.9],[0.0,3.0],[0.0,3.1],[0.0,3.2],[0.0,3.3],[0.0,3.4],[0.0,3.6],[0.0,3.7],[0.0,3.8],[0.0,3.9],[0.0,4.0],[0.0,4.1],[0.0,4.2],[0.0,4.3],[0.0,4.4],[0.0,4.5],[0.0,4.7],[0.0,4.8],[0.0,4.9],[0.0,5.0],[0.0,5.1],[0.0,5.2],[0.0,5.3],[0.0,5.4],[0.0,5.5],[0.0,5.7],[0.0,5.8],[0.0,5.9],[0.0,6.0],[0.0,6.1],[0.0,6.2],[0.0,6.3],[0.0,6.4],[0.0,6.5],[0.0,6.7],[0.67,11.8],[1.15,22.9],[1.37,27.9],[1.5,34.2],[1.72,38.9],[1.88,42.6],[2.03,45.4],[2.17,47.3],[2.34,49.4],[2.46,51.4],[2.61,52.4],[2.76,54.4],[2.89,56.9],[3.05,57.9],[3.16,59.1],[3.31,60.3],[3.42,61.5],[3.53,63.7],[3.63,65.5],[3.76,66.1],[3.89,66.9],[4.02,67.4],[4.14,69.0],[4.26,69.5],[4.39,70.7],[4.5,71.3],[4.6,72.0],[4.72,72.7],[4.83,73.5],[4.93,74.4],[5.02,75.2],[5.12,76.6],[5.23,76.9],[5.35,77.5],[5.43,78.3],[5.53,78.7],[5.63,79.7],[5.71,80.4],[5.82,81.1],[5.93,81.4],[6.04,82.1],[6.12,82.7],[6.23,83.0],[6.34,83.6],[6.43,84.0],[6.52,84.6],[6.62,85.0],[6.72,85.5],[6.82,85.8],[6.88,86.5],[6.98,87.0],[7.06,87.5],[7.13,88.7],[7.21,89.2],[7.31,89.6],[7.4,89.9],[7.49,90.4],[7.59,90.6],[7.67,91.0],[7.78,91.3],[7.85,91.7],[7.94,92.2],[8.03,92.5],[8.13,92.8],[8.22,93.1],[8.31,93.4],[8.4,93.7],[8.48,94.1],[8.57,94.5],[8.66,95.1],[8.75,95.4],[8.83,95.7],[8.93,96.0],[9.01,96.3],[9.09,96.6],[9.18,97.0],[9.26,97.2],[9.36,97.4],[9.45,97.6],[9.55,97.9],[9.63,98.2],[9.72,98.3],[9.82,98.6],[9.9,98.8],[10.0,99.0],[10.09,99.2],[10.17,99.6],[10.25,99.8],[10.35,100.0]]}},"weekly":[{"week":"2026-08-03","n":5,"bad":1,"rate":20.0,"auc_old":null,"auc_new":null},{"week":"2026-08-17","n":8,"bad":1,"rate":12.5,"auc_old":null,"auc_new":null},{"week":"2026-08-24","n":85,"bad":8,"rate":9.41,"auc_old":null,"auc_new":null},{"week":"2026-08-31","n":601,"bad":71,"rate":11.81,"auc_old":0.6469,"auc_new":0.8123},{"week":"2026-09-07","n":1010,"bad":106,"rate":10.5,"auc_old":0.6114,"auc_new":0.7915},{"week":"2026-09-14","n":1220,"bad":124,"rate":10.16,"auc_old":0.6123,"auc_new":0.7923},{"week":"2026-09-21","n":1683,"bad":188,"rate":11.17,"auc_old":0.6312,"auc_new":0.791},{"week":"2026-09-28","n":2039,"bad":180,"rate":8.83,"auc_old":0.6368,"auc_new":0.8119},{"week":"2026-10-05","n":908,"bad":104,"rate":11.45,"auc_old":0.6643,"auc_new":0.8118},{"week":"2026-10-12","n":46,"bad":4,"rate":8.7,"auc_old":null,"auc_new":null},{"week":"2026-10-19","n":0,"bad":0,"rate":null,"auc_old":null,"auc_new":null}],"weeklyAxis":{"min":0.55,"max":0.95,"ticks":[0.6,0.7,0.8,0.9]}},"7":{"label":"FPD7","n_obs":11316,"n_bad":1587,"maturity":84.3,"models":{"old":{"n":11311,"bad":1586,"rate":14.02,"amt":1660050.0,"loss_amt":228550.0,"amt_rate":13.77,"auc":0.6296,"se":0.0074,"auc_lo":0.6152,"auc_hi":0.6441,"gini":0.2592,"ks":0.1905,"top_rate":25.97173144876325,"top_lift":1.85,"deciles":[{"q":1,"n":1131,"bad":61,"rate":5.393457117595048,"amt":265550.0,"loss_amt":16700.0,"amt_rate":6.29,"lift":0.38},{"q":2,"n":1131,"bad":91,"rate":8.045977011494253,"amt":242650.0,"loss_amt":22500.0,"amt_rate":9.27,"lift":0.57},{"q":3,"n":1131,"bad":111,"rate":9.814323607427056,"amt":216850.0,"loss_amt":22100.0,"amt_rate":10.19,"lift":0.7},{"q":4,"n":1131,"bad":125,"rate":11.052166224580018,"amt":151700.0,"loss_amt":19150.0,"amt_rate":12.62,"lift":0.79},{"q":5,"n":1131,"bad":157,"rate":13.8815207780725,"amt":150950.0,"loss_amt":23800.0,"amt_rate":15.77,"lift":0.99},{"q":6,"n":1131,"bad":171,"rate":15.119363395225463,"amt":144700.0,"loss_amt":23550.0,"amt_rate":16.28,"lift":1.08},{"q":7,"n":1131,"bad":173,"rate":15.296198054818744,"amt":125400.0,"loss_amt":21250.0,"amt_rate":16.95,"lift":1.09},{"q":8,"n":1131,"bad":197,"rate":17.418213969938108,"amt":125100.0,"loss_amt":23600.0,"amt_rate":18.86,"lift":1.24},{"q":9,"n":1131,"bad":206,"rate":18.21396993810787,"amt":124250.0,"loss_amt":24250.0,"amt_rate":19.52,"lift":1.3},{"q":10,"n":1132,"bad":294,"rate":25.97173144876325,"amt":112900.0,"loss_amt":31650.0,"amt_rate":28.03,"lift":1.85}],"roc":[[0.0,0.0],[0.41,1.01],[0.76,2.46],[1.14,3.72],[1.55,4.79],[1.95,5.93],[2.3,7.44],[2.77,8.2],[3.2,9.14],[3.64,10.03],[4.05,11.1],[4.45,12.17],[4.92,12.93],[5.41,13.49],[5.87,14.25],[6.33,15.01],[6.8,15.76],[7.25,16.52],[7.75,17.02],[8.23,17.72],[8.67,18.6],[9.13,19.36],[9.59,20.05],[10.12,20.43],[10.59,21.12],[11.06,21.82],[11.53,22.57],[11.98,23.33],[12.48,23.83],[12.96,24.53],[13.45,25.09],[13.91,25.85],[14.35,26.73],[14.8,27.55],[15.29,28.18],[15.78,28.75],[16.28,29.38],[16.76,30.01],[17.22,30.71],[17.74,31.15],[18.26,31.53],[18.79,31.9],[19.29,32.41],[19.76,33.1],[20.26,33.61],[20.71,34.43],[21.19,35.06],[21.65,35.88],[22.12,36.57],[22.59,37.2],[23.12,37.58],[23.59,38.27],[24.08,38.84],[24.58,39.41],[25.03,40.16],[25.56,40.48],[26.04,41.17],[26.48,42.06],[26.96,42.69],[27.41,43.51],[27.9,44.07],[28.37,44.77],[28.9,45.08],[29.41,45.59],[29.9,46.15],[30.4,46.66],[30.89,47.23],[31.43,47.48],[31.93,48.05],[32.43,48.55],[32.92,49.12],[33.42,49.62],[33.84,50.63],[34.3,51.39],[34.77,52.14],[35.29,52.52],[35.79,52.96],[36.32,53.34],[36.81,53.91],[37.3,54.54],[37.8,55.04],[38.26,55.74],[38.75,56.37],[39.28,56.68],[39.76,57.31],[40.27,57.82],[40.74,58.51],[41.28,58.76],[41.73,59.58],[42.27,59.84],[42.79,60.28],[43.25,61.03],[43.73,61.6],[44.19,62.42],[44.71,62.8],[45.19,63.43],[45.7,63.93],[46.15,64.69],[46.66,65.13],[47.19,65.51],[47.72,65.83],[48.19,66.58],[48.7,67.02],[49.17,67.65],[49.7,68.03],[50.21,68.47],[50.7,69.04],[51.16,69.86],[51.64,70.43],[52.11,71.12],[52.68,71.31],[53.15,72.01],[53.69,72.32],[54.18,72.82],[54.67,73.39],[55.21,73.71],[55.71,74.21],[56.24,74.59],[56.76,74.97],[57.26,75.41],[57.76,75.98],[58.27,76.42],[58.79,76.86],[59.26,77.55],[59.81,77.68],[60.34,78.06],[60.87,78.37],[61.38,78.88],[61.9,79.26],[62.4,79.82],[62.9,80.26],[63.42,80.64],[63.96,80.96],[64.46,81.46],[65.01,81.72],[65.52,82.09],[66.08,82.28],[66.63,82.47],[67.16,82.85],[67.66,83.35],[68.17,83.73],[68.69,84.17],[69.22,84.49],[69.75,84.87],[70.29,85.12],[70.84,85.37],[71.38,85.56],[71.93,85.81],[72.47,86.07],[72.99,86.51],[73.48,87.07],[73.96,87.64],[74.53,87.77],[75.05,88.15],[75.56,88.65],[76.1,88.9],[76.61,89.34],[77.15,89.6],[77.7,89.85],[78.21,90.29],[78.74,90.67],[79.26,91.05],[79.75,91.55],[80.31,91.74],[80.88,91.8],[81.44,91.99],[81.96,92.37],[82.52,92.5],[83.05,92.81],[83.61,93.06],[84.12,93.51],[84.65,93.88],[85.17,94.26],[85.7,94.58],[86.24,94.83],[86.79,95.08],[87.33,95.33],[87.88,95.59],[88.42,95.78],[88.97,96.03],[89.51,96.28],[90.07,96.47],[90.61,96.72],[91.18,96.78],[91.74,96.91],[92.3,97.1],[92.84,97.35],[93.39,97.6],[93.95,97.73],[94.49,97.98],[95.05,98.11],[95.59,98.42],[96.13,98.68],[96.7,98.8],[97.23,99.05],[97.79,99.24],[98.34,99.43],[98.9,99.62],[99.46,99.81],[100.0,100.0]],"capture":[[0,0.0],[1,2.46],[2,4.73],[3,7.31],[4,9.08],[5,11.1],[6,12.93],[7,14.19],[8,15.76],[9,16.96],[10,18.54],[11,19.92],[12,21.06],[13,22.45],[14,23.83],[15,24.97],[16,26.54],[17,27.99],[18,29.26],[19,30.52],[20,31.53],[21,32.28],[22,33.54],[23,34.8],[24,36.44],[25,37.45],[26,38.59],[27,39.91],[28,40.86],[29,42.56],[30,43.95],[31,45.08],[32,45.84],[33,47.04],[34,47.79],[35,48.87],[36,50.38],[37,51.83],[38,52.71],[39,53.59],[40,54.85],[41,56.18],[42,57.06],[43,58.26],[44,59.33],[45,60.09],[46,61.29],[47,62.74],[48,63.62],[49,64.82],[50,65.64],[51,66.9],[52,67.78],[53,68.66],[54,70.11],[55,71.19],[56,72.19],[57,73.14],[58,73.77],[59,74.72],[60,75.54]],"cutoffs":[{"reject_pct":10,"reject_n":1131,"kept_n":10180,"kept_bad":1292,"kept_rate":12.692,"capture":18.54,"rejected_bad":294,"kept_amt":1547250.0,"kept_loss":196900.0,"capture_amt":13.85},{"reject_pct":20,"reject_n":2262,"kept_n":9049,"kept_bad":1086,"kept_rate":12.001,"capture":31.53,"rejected_bad":500,"kept_amt":1423050.0,"kept_loss":172650.0,"capture_amt":24.46},{"reject_pct":30,"reject_n":3393,"kept_n":7918,"kept_bad":889,"kept_rate":11.228,"capture":43.95,"rejected_bad":697,"kept_amt":1297900.0,"kept_loss":149050.0,"capture_amt":34.78},{"reject_pct":40,"reject_n":4524,"kept_n":6787,"kept_bad":716,"kept_rate":10.55,"capture":54.85,"rejected_bad":870,"kept_amt":1172500.0,"kept_loss":127800.0,"capture_amt":44.08},{"reject_pct":50,"reject_n":5656,"kept_n":5655,"kept_bad":545,"kept_rate":9.637,"capture":65.64,"rejected_bad":1041,"kept_amt":1027700.0,"kept_loss":104250.0,"capture_amt":54.39}]},"new":{"n":11316,"bad":1587,"rate":14.02,"amt":1660700.0,"loss_amt":228750.0,"amt_rate":13.77,"auc":0.7511,"se":0.0064,"auc_lo":0.7386,"auc_hi":0.7637,"gini":0.5023,"ks":0.3805,"top_rate":40.10600706713781,"top_lift":2.86,"deciles":[{"q":1,"n":1131,"bad":22,"rate":1.9451812555260832,"amt":213950.0,"loss_amt":4800.0,"amt_rate":2.24,"lift":0.14},{"q":2,"n":1132,"bad":48,"rate":4.240282685512367,"amt":202250.0,"loss_amt":9000.0,"amt_rate":4.45,"lift":0.3},{"q":3,"n":1131,"bad":57,"rate":5.039787798408488,"amt":183250.0,"loss_amt":11050.0,"amt_rate":6.03,"lift":0.36},{"q":4,"n":1132,"bad":83,"rate":7.332155477031802,"amt":171250.0,"loss_amt":13600.0,"amt_rate":7.94,"lift":0.52},{"q":5,"n":1132,"bad":100,"rate":8.8339222614841,"amt":163650.0,"loss_amt":16250.0,"amt_rate":9.93,"lift":0.63},{"q":6,"n":1131,"bad":128,"rate":11.317418213969937,"amt":155850.0,"loss_amt":21650.0,"amt_rate":13.89,"lift":0.81},{"q":7,"n":1132,"bad":174,"rate":15.371024734982333,"amt":151800.0,"loss_amt":26250.0,"amt_rate":17.29,"lift":1.1},{"q":8,"n":1131,"bad":230,"rate":20.335985853227232,"amt":143600.0,"loss_amt":30950.0,"amt_rate":21.55,"lift":1.45},{"q":9,"n":1132,"bad":291,"rate":25.706713780918726,"amt":140450.0,"loss_amt":38300.0,"amt_rate":27.27,"lift":1.83},{"q":10,"n":1132,"bad":454,"rate":40.10600706713781,"amt":134650.0,"loss_amt":56900.0,"amt_rate":42.26,"lift":2.86}],"roc":[[0.0,0.0],[0.29,1.76],[0.6,3.4],[0.89,5.1],[1.15,7.06],[1.44,8.82],[1.8,10.14],[2.12,11.72],[2.46,13.17],[2.73,15.06],[3.13,16.13],[3.56,17.08],[3.97,18.02],[4.36,19.16],[4.72,20.48],[5.07,21.87],[5.41,23.31],[5.85,24.2],[6.18,25.83],[6.53,27.22],[6.89,28.54],[7.26,29.8],[7.68,30.75],[8.16,31.25],[8.61,32.01],[9.08,32.7],[9.47,33.84],[9.86,34.97],[10.3,35.79],[10.69,36.93],[11.12,37.81],[11.56,38.63],[11.94,39.89],[12.41,40.58],[12.79,41.71],[13.22,42.6],[13.66,43.42],[14.06,44.49],[14.5,45.31],[14.98,45.94],[15.44,46.63],[15.91,47.26],[16.33,48.2],[16.8,48.9],[17.24,49.72],[17.68,50.47],[18.11,51.35],[18.57,52.05],[19.06,52.61],[19.5,53.43],[19.94,54.25],[20.45,54.63],[20.94,55.2],[21.39,55.95],[21.85,56.65],[22.28,57.53],[22.75,58.16],[23.22,58.79],[23.67,59.55],[24.2,59.86],[24.62,60.81],[25.08,61.5],[25.57,62.0],[26.07,62.51],[26.53,63.2],[26.96,64.08],[27.45,64.59],[27.91,65.28],[29.88,67.36],[30.37,67.86],[30.88,68.3],[31.36,68.87],[31.81,69.63],[32.34,69.94],[32.82,70.51],[33.32,70.95],[33.85,71.27],[34.3,72.02],[34.8,72.4],[35.34,72.65],[35.8,73.35],[36.31,73.72],[36.78,74.42],[37.22,75.24],[37.72,75.68],[38.27,75.87],[38.76,76.37],[39.28,76.69],[39.78,77.19],[40.29,77.5],[40.8,77.95],[41.32,78.26],[41.82,78.7],[42.35,79.02],[42.86,79.4],[43.4,79.65],[43.92,79.96],[44.45,80.21],[44.99,80.47],[45.48,80.97],[46.01,81.22],[46.55,81.41],[47.07,81.79],[47.57,82.23],[48.11,82.42],[48.61,82.92],[49.13,83.24],[49.64,83.68],[50.12,84.25],[50.64,84.63],[51.19,84.88],[51.7,85.19],[52.24,85.44],[52.76,85.76],[53.3,85.95],[53.87,86.01],[54.41,86.2],[54.95,86.45],[55.47,86.77],[56.0,87.08],[56.55,87.21],[57.09,87.46],[57.6,87.84],[58.11,88.22],[58.66,88.41],[59.17,88.78],[59.72,88.97],[60.22,89.41],[60.71,89.98],[61.21,90.42],[61.75,90.61],[62.29,90.86],[62.85,90.93],[63.38,91.18],[63.93,91.3],[64.47,91.56],[65.02,91.68],[65.58,91.81],[66.14,91.87],[66.69,92.06],[67.23,92.25],[67.78,92.44],[68.29,92.82],[68.8,93.19],[69.33,93.45],[69.88,93.57],[70.44,93.7],[70.99,93.82],[71.55,93.95],[72.1,94.08],[72.63,94.39],[73.17,94.58],[73.7,94.9],[74.25,95.02],[74.82,95.09],[75.36,95.21],[75.92,95.34],[76.46,95.53],[77.04,95.53],[77.61,95.78],[78.18,95.84],[78.73,95.97],[79.3,96.03],[79.84,96.22],[80.39,96.41],[80.95,96.47],[81.5,96.6],[82.02,96.98],[82.58,97.1],[83.12,97.29],[83.67,97.48],[84.24,97.54],[84.81,97.61],[85.36,97.73],[85.93,97.79],[86.45,98.11],[87.0,98.3],[87.54,98.42],[88.1,98.61],[88.67,98.68],[89.24,98.8],[89.82,98.87],[90.38,98.99],[90.95,99.05],[91.53,99.05],[92.1,99.12],[92.65,99.24],[93.23,99.24],[93.78,99.31],[94.35,99.37],[94.9,99.5],[95.47,99.56],[96.02,99.68],[96.6,99.68],[97.15,99.81],[97.72,99.87],[98.29,99.87],[98.86,100.0],[99.43,100.0],[100.0,100.0]],"capture":[[0,0.0],[1,3.4],[2,7.12],[3,10.14],[4,13.42],[5,16.13],[6,18.21],[7,20.67],[8,23.31],[9,25.9],[10,28.61],[11,30.81],[12,32.14],[13,33.96],[14,36.04],[15,38.12],[16,40.2],[17,41.97],[18,43.86],[19,45.56],[20,46.94],[21,48.52],[22,50.22],[23,51.67],[24,52.93],[25,54.57],[26,55.58],[27,57.21],[28,58.6],[29,59.8],[30,61.44],[31,62.19],[32,63.77],[33,65.03],[34,66.35],[35,67.23],[36,68.24],[37,69.38],[38,70.38],[39,71.14],[40,72.4],[41,73.35],[42,74.42],[43,75.68],[44,76.31],[45,77.13],[46,77.95],[47,78.76],[48,79.4],[49,79.96],[50,80.47],[51,81.29],[52,81.85],[53,82.61],[54,83.36],[55,84.44],[56,84.88],[57,85.51],[58,85.95],[59,86.26],[60,86.77]],"cutoffs":[{"reject_pct":10,"reject_n":1132,"kept_n":10184,"kept_bad":1133,"kept_rate":11.125,"capture":28.61,"rejected_bad":454,"kept_amt":1526050.0,"kept_loss":171850.0,"capture_amt":24.87},{"reject_pct":20,"reject_n":2263,"kept_n":9053,"kept_bad":842,"kept_rate":9.301,"capture":46.94,"rejected_bad":745,"kept_amt":1385700.0,"kept_loss":133550.0,"capture_amt":41.62},{"reject_pct":30,"reject_n":3395,"kept_n":7921,"kept_bad":612,"kept_rate":7.726,"capture":61.44,"rejected_bad":975,"kept_amt":1242000.0,"kept_loss":102600.0,"capture_amt":55.15},{"reject_pct":40,"reject_n":4526,"kept_n":6790,"kept_bad":438,"kept_rate":6.451,"capture":72.4,"rejected_bad":1149,"kept_amt":1090300.0,"kept_loss":76350.0,"capture_amt":66.62},{"reject_pct":50,"reject_n":5658,"kept_n":5658,"kept_bad":310,"kept_rate":5.479,"capture":80.47,"rejected_bad":1277,"kept_amt":934350.0,"kept_loss":54700.0,"capture_amt":76.09}]}},"delta":{"n":11311,"diff":0.1216,"ci_low":0.1063,"ci_high":0.137,"p":0.0,"z":15.52},"swap":{"reject_pct":30,"reject_n":3393,"n":11311,"cells":[{"key":"both_pass","new_reject":false,"old_reject":false,"n":6194,"share":54.8,"bad":436,"rate":7.04},{"key":"old_only","new_reject":false,"old_reject":true,"n":1724,"share":15.2,"bad":175,"rate":10.15},{"key":"new_only","new_reject":true,"old_reject":false,"n":1724,"share":15.2,"bad":453,"rate":26.28},{"key":"both_reject","new_reject":true,"old_reject":true,"n":1669,"share":14.8,"bad":522,"rate":31.28}],"overall_rate":14.02},"cross":{"rows":[{"q":1,"cells":[{"n":911,"bad":28,"rate":3.07,"level":3},{"n":596,"bad":17,"rate":2.85,"level":2},{"n":385,"bad":12,"rate":3.12,"level":3},{"n":251,"bad":7,"rate":2.79,"level":2},{"n":119,"bad":5,"rate":4.2,"level":3}]},{"q":2,"cells":[{"n":580,"bad":29,"rate":5.0,"level":3},{"n":552,"bad":35,"rate":6.34,"level":3},{"n":451,"bad":24,"rate":5.32,"level":3},{"n":415,"bad":32,"rate":7.71,"level":4},{"n":264,"bad":21,"rate":7.95,"level":4}]},{"q":3,"cells":[{"n":388,"bad":36,"rate":9.28,"level":4},{"n":462,"bad":42,"rate":9.09,"level":4},{"n":541,"bad":60,"rate":11.09,"level":4},{"n":467,"bad":39,"rate":8.35,"level":4},{"n":404,"bad":51,"rate":12.62,"level":4}]},{"q":4,"cells":[{"n":261,"bad":26,"rate":9.96,"level":4},{"n":378,"bad":67,"rate":17.72,"level":5},{"n":443,"bad":89,"rate":20.09,"level":5},{"n":588,"bad":106,"rate":18.03,"level":5},{"n":592,"bad":115,"rate":19.43,"level":5}]},{"q":5,"cells":[{"n":122,"bad":33,"rate":27.05,"level":5},{"n":274,"bad":75,"rate":27.37,"level":5},{"n":442,"bad":143,"rate":32.35,"level":5},{"n":541,"bad":186,"rate":34.38,"level":5},{"n":884,"bad":308,"rate":34.84,"level":5}]}],"n":11311,"min_cell":119,"diag_share":30.7,"row_spread_max":10.13,"col_spread_min":23.98},"through":{"targets":[4,5,6,7,8,9],"rows":[{"target":4,"old":{"kept":20,"approval":0.2,"bad":0,"good":20,"rate":0.0,"amt":5450.0,"good_amt":5450.0,"bad_amt":0.0,"hit_rate":0.0},"new":{"kept":3993,"approval":35.3,"bad":159,"good":3834,"rate":3.98,"amt":692250.0,"good_amt":665450.0,"bad_amt":26800.0,"hit_rate":3.98},"extra":3973,"extra_good":3814,"extra_good_amt":660000.0},{"target":5,"old":{"kept":271,"approval":2.4,"bad":13,"good":258,"rate":4.8,"amt":70100.0,"good_amt":67400.0,"bad_amt":2700.0,"hit_rate":4.8},"new":{"kept":5155,"approval":45.6,"bad":257,"good":4898,"rate":4.99,"amt":863450.0,"good_amt":822950.0,"bad_amt":40500.0,"hit_rate":4.99},"extra":4884,"extra_good":4640,"extra_good_amt":755550.0},{"target":6,"old":{"kept":1558,"approval":13.8,"bad":93,"good":1465,"rate":5.97,"amt":357500.0,"good_amt":335700.0,"bad_amt":21800.0,"hit_rate":5.97},"new":{"kept":6454,"approval":57.0,"bad":387,"good":6067,"rate":6.0,"amt":1044700.0,"good_amt":985300.0,"bad_amt":59400.0,"hit_rate":6.0},"extra":4896,"extra_good":4602,"extra_good_amt":649600.0},{"target":7,"old":{"kept":2587,"approval":22.9,"bad":181,"good":2406,"rate":7.0,"amt":576800.0,"good_amt":536750.0,"bad_amt":40050.0,"hit_rate":7.0},"new":{"kept":7275,"approval":64.3,"bad":509,"good":6766,"rate":7.0,"amt":1153100.0,"good_amt":1076600.0,"bad_amt":76500.0,"hit_rate":7.0},"extra":4688,"extra_good":4360,"extra_good_amt":539850.0},{"target":8,"old":{"kept":3971,"approval":35.1,"bad":317,"good":3654,"rate":7.98,"amt":801850.0,"good_amt":740100.0,"bad_amt":61750.0,"hit_rate":7.98},"new":{"kept":8095,"approval":71.5,"bad":647,"good":7448,"rate":7.99,"amt":1265400.0,"good_amt":1170000.0,"bad_amt":95400.0,"hit_rate":7.99},"extra":4124,"extra_good":3794,"extra_good_amt":429900.0},{"target":9,"old":{"kept":5125,"approval":45.3,"bad":461,"good":4664,"rate":9.0,"amt":957000.0,"good_amt":875350.0,"bad_amt":81650.0,"hit_rate":9.0},"new":{"kept":8836,"approval":78.1,"bad":795,"good":8041,"rate":9.0,"amt":1358350.0,"good_amt":1244800.0,"bad_amt":113550.0,"hit_rate":9.0},"extra":3711,"extra_good":3377,"extra_good_amt":369450.0}],"curve":{"old":[[0.0,0.0],[0.0,0.1],[0.0,0.1],[0.0,0.2],[5.16,3.6],[5.6,11.0],[5.76,12.7],[5.9,13.6],[6.16,14.5],[6.41,18.9],[6.62,19.1],[6.79,20.3],[6.89,21.4],[7.04,23.0],[7.17,23.3],[7.31,24.4],[7.46,25.0],[7.56,29.1],[7.68,29.7],[7.74,30.3],[7.82,33.0],[7.91,33.3],[7.97,34.9],[8.05,35.3],[8.14,35.7],[8.2,36.5],[8.27,38.3],[8.36,38.6],[8.42,39.2],[8.49,39.8],[8.56,40.4],[8.64,41.3],[8.7,41.9],[8.75,43.0],[8.84,43.4],[8.89,44.5],[9.0,45.3],[9.05,45.8],[9.12,46.2],[9.19,46.4],[9.28,46.6],[9.34,47.2],[9.4,48.4],[9.47,49.1],[9.53,49.3],[9.59,50.4],[9.64,51.0],[9.71,51.6],[9.79,52.1],[9.82,52.5],[9.89,53.1],[9.92,53.5],[10.0,53.6],[10.06,54.1],[10.1,54.5],[10.18,56.0],[10.23,56.5],[10.29,57.1],[10.32,57.7],[10.38,58.1],[10.43,59.1],[10.5,59.5],[10.54,60.1],[10.59,60.5],[10.65,61.0],[10.71,62.9],[10.76,63.2],[10.82,63.4],[10.87,64.0],[10.94,64.1],[10.98,64.4],[11.04,65.7],[11.07,66.8],[11.1,67.5],[11.14,67.9],[11.18,69.6],[11.23,70.1],[11.28,70.4],[11.33,70.8],[11.39,71.4],[11.44,71.7],[11.49,71.9],[11.53,73.0],[11.57,73.3],[11.61,73.9],[11.65,74.4],[11.69,75.4],[11.74,76.2],[11.78,76.4],[11.83,76.8],[11.87,77.1],[11.91,77.5],[11.94,78.0],[11.99,80.6],[12.02,81.0],[12.07,81.8],[12.12,82.7],[12.16,83.0],[12.21,83.6],[12.24,83.9],[12.27,84.2],[12.32,84.4],[12.36,84.7],[12.38,85.3],[12.4,85.9],[12.44,86.5],[12.47,86.9],[12.51,87.2],[12.54,87.6],[12.58,88.1],[12.61,89.0],[12.65,89.5],[12.69,89.9],[12.72,90.2],[12.76,90.5],[12.79,91.0],[12.81,91.8],[12.84,92.1],[12.87,92.4],[12.91,92.9],[12.94,93.3],[12.97,93.9],[13.0,94.1],[13.03,94.4],[13.07,94.8],[13.11,94.9],[13.15,95.2],[13.18,95.3],[13.22,95.7],[13.25,95.9],[13.29,96.2],[13.33,96.4],[13.36,96.6],[13.4,97.0],[13.44,97.2],[13.48,97.3],[13.52,97.5],[13.56,97.8],[13.6,97.9],[13.64,98.2],[13.68,98.3],[13.71,98.7],[13.75,98.8],[13.78,99.0],[13.83,99.1],[13.86,99.3],[13.91,99.4],[13.94,99.5],[13.99,99.8],[14.02,100.0]],"new":[[0.0,0.0],[0.0,0.1],[0.0,0.2],[0.0,0.3],[0.0,0.4],[0.0,0.5],[0.0,0.5],[0.0,0.6],[0.0,0.7],[0.0,0.8],[0.0,0.9],[0.0,1.0],[0.0,1.1],[1.72,8.8],[2.2,11.7],[2.54,15.3],[2.92,17.6],[3.13,23.7],[3.33,26.0],[3.5,28.0],[3.69,29.2],[3.85,34.2],[4.02,35.4],[4.23,35.8],[4.38,37.7],[4.52,38.5],[4.65,42.4],[4.77,43.7],[4.88,45.1],[5.02,45.6],[5.13,46.4],[5.23,47.5],[5.34,48.3],[5.44,49.9],[5.52,51.4],[5.6,52.9],[5.7,53.8],[5.78,54.6],[5.88,55.3],[5.96,56.2],[6.04,57.4],[6.15,57.8],[6.26,58.2],[6.38,59.0],[6.49,60.3],[6.59,60.8],[6.66,61.7],[6.75,62.3],[6.82,63.1],[6.91,63.5],[6.99,64.1],[7.07,65.5],[7.16,66.3],[7.26,66.7],[7.37,67.2],[7.45,67.9],[7.54,68.2],[7.63,68.8],[7.72,69.8],[7.8,70.2],[7.88,70.6],[7.96,71.5],[8.05,71.9],[8.14,72.3],[8.21,73.0],[8.3,73.5],[8.38,73.8],[8.47,74.3],[8.53,75.3],[8.6,75.6],[8.69,76.0],[8.76,76.6],[8.82,77.3],[8.92,77.6],[8.98,78.0],[9.06,78.5],[9.13,79.0],[9.2,79.3],[9.27,79.7],[9.34,80.3],[9.39,80.8],[9.46,81.2],[9.53,81.7],[9.6,82.0],[9.68,82.2],[9.74,82.7],[9.82,83.1],[9.89,83.3],[9.96,83.8],[10.03,84.2],[10.11,84.4],[10.17,84.9],[10.25,85.2],[10.31,85.5],[10.37,85.9],[10.45,86.1],[10.51,86.5],[10.58,86.9],[10.65,87.2],[10.72,87.5],[10.78,87.8],[10.85,88.1],[10.9,89.1],[10.96,89.4],[11.03,89.7],[11.1,89.9],[11.16,90.3],[11.24,90.5],[11.31,90.7],[11.39,90.9],[11.45,91.1],[11.52,91.4],[11.59,91.5],[11.66,91.8],[11.73,92.2],[11.79,92.4],[11.86,92.6],[11.93,92.9],[12.0,93.1],[12.06,93.4],[12.12,93.7],[12.19,93.9],[12.25,94.3],[12.31,94.6],[12.36,94.9],[12.42,95.3],[12.48,95.6],[12.55,95.7],[12.63,96.0],[12.7,96.2],[12.77,96.4],[12.83,96.6],[12.9,96.7],[12.96,97.0],[13.03,97.3],[13.09,97.5],[13.16,97.6],[13.23,97.8],[13.29,98.0],[13.36,98.2],[13.43,98.3],[13.5,98.5],[13.56,98.7],[13.63,98.9],[13.7,99.0],[13.77,99.2],[13.82,99.4],[13.88,99.7],[13.95,99.9],[14.02,100.0]]}},"weekly":[{"week":"2026-08-03","n":5,"bad":1,"rate":20.0,"auc_old":null,"auc_new":null},{"week":"2026-08-17","n":8,"bad":1,"rate":12.5,"auc_old":null,"auc_new":null},{"week":"2026-08-24","n":85,"bad":10,"rate":11.76,"auc_old":0.6387,"auc_new":0.8187},{"week":"2026-08-31","n":601,"bad":86,"rate":14.31,"auc_old":0.6481,"auc_new":0.8057},{"week":"2026-09-07","n":1010,"bad":144,"rate":14.26,"auc_old":0.6127,"auc_new":0.7497},{"week":"2026-09-14","n":1271,"bad":180,"rate":14.16,"auc_old":0.6132,"auc_new":0.7569},{"week":"2026-09-21","n":1794,"bad":277,"rate":15.44,"auc_old":0.6317,"auc_new":0.761},{"week":"2026-09-28","n":2472,"bad":320,"rate":12.94,"auc_old":0.6316,"auc_new":0.7685},{"week":"2026-10-05","n":2314,"bad":311,"rate":13.44,"auc_old":0.627,"auc_new":0.7381},{"week":"2026-10-12","n":1555,"bad":224,"rate":14.41,"auc_old":0.6462,"auc_new":0.7046},{"week":"2026-10-19","n":201,"bad":33,"rate":16.42,"auc_old":0.6218,"auc_new":0.7444}],"weeklyAxis":{"min":0.55,"max":0.95,"ticks":[0.6,0.7,0.8,0.9]}}},"throughRef":8,"weeks":["2026-08-03","2026-08-17","2026-08-24","2026-08-31","2026-09-07","2026-09-14","2026-09-21","2026-09-28","2026-10-05","2026-10-12","2026-10-19"],"week_counts":{"2026-09-28":2494,"2026-10-12":2463,"2026-10-05":2439,"2026-09-21":1798,"2026-09-14":1271,"2026-10-19":1257,"2026-09-07":1010,"2026-08-31":601,"2026-08-24":85,"2026-08-17":8,"2026-08-03":5}};
 const NS = 'http://www.w3.org/2000/svg';
 const fmtPct = (v, d) => (v == null ? '—' : v.toFixed(d == null ? 2 : d) + '%');
 const fmtInt = n => (n == null ? '—' : n.toLocaleString('en-US'));
