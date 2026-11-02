@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
-"""同步脚本共用层：路径、Hive 查询执行、CSV 落盘、manifest 与打包。
+"""同步脚本共用层：路径、SQL 文件解析、Hive 查询执行、CSV 落盘与打包。
 
-两个同步入口各自负责一条链路的查询/表清单，共用这里的落盘与记录逻辑：
-    sync_vintage.py        监控看板的 8 个 vintage 聚合查询
-    sync_model_compare.py  模型比对的主表与两张分数表
+两个同步入口各自负责一条链路的 SQL 文件与输出清单，共用这里的执行与落盘逻辑：
+    sync_vintage.py         监控看板的 8 个 vintage 聚合查询
+    sync_model_analysis.py  模型分分析的主表与两张分数表
+查询语句只写在对应的 .sql 文件里，本模块和入口脚本都不拼接业务 SQL。
 数据库连接由外部 hive_config.query_to_df(sql) 提供，本模块不负责建连。
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 import sys
 import zipfile
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -27,28 +25,12 @@ if hasattr(sys.stderr, "reconfigure"):
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
-RAW_DIR = PROJECT_DIR / "原始数据"
-LOG_DIR = PROJECT_DIR / "同步日志"
-RAW_DIR_NAME = "原始数据"
-BUSINESS_TZ = timezone(timedelta(hours=8))
+RAW_DIR = PROJECT_DIR / "同步数据"
+RAW_DIR_NAME = "同步数据"
 
-TABLE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$")
-
-
-def now():
-    return datetime.now(BUSINESS_TZ)
-
-
-def query_digest(sql):
-    return hashlib.sha256(sql.encode("utf-8")).hexdigest()
-
-
-def file_digest(path, chunk_size=1024 * 1024):
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(chunk_size), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", flags=re.S)
+_LINE_COMMENT_RE = re.compile(r"--[^\n]*")
+_FROM_RE = re.compile(r"\bFROM\s+([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)", re.IGNORECASE)
 
 
 def load_query_fn():
@@ -84,102 +66,52 @@ def run_query_to_csv(sql, path, query_fn):
     return int(len(df)), list(df.columns)
 
 
-def new_manifest(job, sql_file=None):
-    manifest = {
-        "job": job,
-        "run_at": now().isoformat(timespec="seconds"),
-        "queries": {},
-        "tables": {},
-    }
-    if sql_file is not None:
-        manifest["sql_file"] = Path(sql_file).name
-        manifest["sql_sha256"] = query_digest(Path(sql_file).read_text(encoding="utf-8"))
-    return manifest
+def split_statements(sql_text):
+    """去掉注释后按分号拆分；返回 SQL 语句列表。"""
+    body = _BLOCK_COMMENT_RE.sub(" ", sql_text)
+    body = _LINE_COMMENT_RE.sub(" ", body)
+    return [part.strip() for part in body.split(";") if part.strip()]
 
 
-def save_manifest(path, manifest):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.replace(path)
-
-
-def parse_tables(raw, default_tables):
-    """解析 --tables；raw 为 None 时用默认表清单。"""
-    names = default_tables if raw is None else tuple(
-        name.strip() for name in raw.split(",") if name.strip()
-    )
-    invalid = [name for name in names if not TABLE_NAME_RE.match(name)]
-    if invalid:
-        raise ValueError(f"表名不合法：{', '.join(invalid)}（只允许字母、数字、下划线、点）")
-    return names
-
-
-def table_file(table, exports=None):
-    """model.tmp_xxx → table_tmp_xxx.csv；exports 可覆盖指定表的文件名。"""
-    if exports and table in exports:
-        return exports[table]
-    return f"table_{table.split('.')[-1]}.csv"
+def table_name_from_sql(sql):
+    """从查询语句的 FROM 子句取表名，用于 --tables 过滤。"""
+    match = _FROM_RE.search(sql)
+    if not match:
+        raise ValueError("无法从 SQL 中解析表名；请确认语句包含 FROM <库.表>")
+    return match.group(1)
 
 
 def write_failures(failed, path):
+    """有失败时在项目根目录写失败清单；没有失败则清掉上一次的清单。"""
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(failed, columns=["block", "file", "error", "run_time"]).to_csv(
+    if not failed:
+        if path.exists():
+            path.unlink()
+        return
+    pd.DataFrame(failed, columns=["block", "file", "error"]).to_csv(
         path, index=False, encoding="utf-8-sig"
     )
+    print(f"\n失败清单：{path.resolve()}")
 
 
-def export_tables(tables, query_fn, *, table_limit, manifest, manifest_path,
-                  failed_path, zip_path, exports=None):
-    """整表拉取并逐表记录 manifest；返回 (成功列表, 失败列表)。"""
+def export_sql_blocks(blocks, query_fn, *, zip_path, failed_path):
+    """执行 SQL 块并逐块落盘；blocks 需含 id/title/table/file/sql。返回 (成功, 失败)。"""
     succeeded = []
     failed = []
     RAW_DIR.mkdir(parents=True, exist_ok=True)
 
-    for table in tables:
-        filename = table_file(table, exports)
-        path = RAW_DIR / filename
-        sql = f"SELECT * FROM {table}"
-        if table_limit > 0:
-            sql += f" LIMIT {table_limit}"
-        print(f"\n[表] {table} → {RAW_DIR_NAME}/{filename}")
-
-        entry = {
-            "table": table,
-            "file": f"{RAW_DIR_NAME}/{filename}",
-            "sql": sql,
-            "started_at": now().isoformat(timespec="seconds"),
-            "status": "running",
-        }
-        manifest["tables"][table] = entry
-        save_manifest(manifest_path, manifest)
-
+    for block in blocks:
+        path = RAW_DIR / block["file"]
+        print(f"\n[{block['id']}] {block['title']} | {block['table']} → {RAW_DIR_NAME}/{block['file']}")
         try:
-            rows, columns = run_query_to_csv(sql, path, query_fn)
-            entry.update(
-                status="success",
-                rows=rows,
-                columns=columns,
-                file_sha256=file_digest(path),
-            )
-            succeeded.append((path, f"{RAW_DIR_NAME}/{filename}"))
+            rows, columns = run_query_to_csv(block["sql"], path, query_fn)
+            succeeded.append((path, f"{RAW_DIR_NAME}/{block['file']}"))
             print(f"成功 | {rows} 行 × {len(columns)} 列 | {path}")
         except Exception as exc:
-            entry.update(status="failed", error=str(exc))
             failed.append(
-                {
-                    "block": f"table:{table}",
-                    "file": filename,
-                    "error": str(exc),
-                    "run_time": entry["started_at"],
-                }
+                {"block": block["table"], "file": block["file"], "error": str(exc)}
             )
             print(f"失败 | {exc}")
-        finally:
-            entry["finished_at"] = now().isoformat(timespec="seconds")
-            save_manifest(manifest_path, manifest)
 
     write_failures(failed, failed_path)
     zip_outputs(succeeded, zip_path)

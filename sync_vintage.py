@@ -1,28 +1,22 @@
 #!/usr/bin/env python3
 """同步 Vintage 监控看板数据：执行 wagego_04_vintage分析.sql 的 8 个查询块。
 
-产出：原始数据/vintage_01~07.csv、vintage_data.zip、同步日志/vintage_manifest.json。
-只服务监控看板；模型比对的表同步见 sync_model_compare.py。
+产出：同步数据/vintage_01~07.csv、vintage_data.zip。
+只服务监控看板；模型分分析的表同步见 sync_model_analysis.py。
 """
 
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
 from sync_common import (
-    LOG_DIR,
     RAW_DIR,
     RAW_DIR_NAME,
-    file_digest,
     load_query_fn,
-    new_manifest,
-    now,
-    query_digest,
     run_query_to_csv,
-    save_manifest,
+    split_statements,
     write_failures,
     zip_outputs,
 )
@@ -36,9 +30,8 @@ if hasattr(sys.stderr, "reconfigure"):
 
 PROJECT_DIR = Path(__file__).resolve().parent
 SQL_FILE = PROJECT_DIR / "wagego_04_vintage分析.sql"
-MANIFEST_FILE = LOG_DIR / "vintage_manifest.json"
-FAILED_FILE = LOG_DIR / "vintage_failed_queries.csv"
 ZIP_FILE = PROJECT_DIR / "vintage_data.zip"
+FAILED_FILE = PROJECT_DIR / "vintage_sync_failed.csv"
 
 # 块号 → 输出文件。顺序必须与 SQL 中 SET 之后的 SELECT 一一对应。
 QUERY_SPECS = (
@@ -51,16 +44,6 @@ QUERY_SPECS = (
     {"id": "6", "file": "vintage_06_score_quintile_week", "title": "模型分五分位 × 放款周"},
     {"id": "7", "file": "vintage_07_application_rank", "title": "老客复借期数（FPD15）"},
 )
-
-_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", flags=re.S)
-_LINE_COMMENT_RE = re.compile(r"--[^\n]*")
-
-
-def split_statements(sql_text):
-    """去掉注释后按分号拆分；返回 SQL 语句列表。"""
-    body = _BLOCK_COMMENT_RE.sub(" ", sql_text)
-    body = _LINE_COMMENT_RE.sub(" ", body)
-    return [part.strip() for part in body.split(";") if part.strip()]
 
 
 def build_queries():
@@ -103,10 +86,6 @@ def relative_path(query):
 
 def run(setup_statements, queries, query_fn):
     RAW_DIR.mkdir(parents=True, exist_ok=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-    manifest = new_manifest("vintage", SQL_FILE)
-    save_manifest(MANIFEST_FILE, manifest)
 
     for setup_sql in setup_statements:
         print(f"全局 SET | {setup_sql}")
@@ -119,52 +98,23 @@ def run(setup_statements, queries, query_fn):
     failed = []
     succeeded = []
     for index, query in enumerate(queries, start=1):
-        block = query["id"]
         path = target_path(query)
-        print(f"\n[{index}/{len(queries)}] {block}. {query['title']} → {RAW_DIR_NAME}/{path.name}")
-
-        entry = {
-            "title": query["title"],
-            "file": relative_path(query),
-            "sql_sha256": query_digest(query["sql"]),
-            "started_at": now().isoformat(timespec="seconds"),
-            "status": "running",
-        }
-        manifest["queries"][block] = entry
-        save_manifest(MANIFEST_FILE, manifest)
-
+        print(f"\n[{index}/{len(queries)}] {query['id']}. {query['title']} → {RAW_DIR_NAME}/{path.name}")
         try:
             rows, columns = run_query_to_csv(query["sql"], path, query_fn)
-            entry.update(
-                status="success",
-                rows=rows,
-                columns=columns,
-                file_sha256=file_digest(path),
-            )
             succeeded.append((path, relative_path(query)))
             print(f"成功 | {rows} 行 × {len(columns)} 列 | {path}")
         except Exception as exc:
-            entry.update(status="failed", error=str(exc))
             failed.append(
-                {
-                    "block": block,
-                    "file": query["file"],
-                    "error": str(exc),
-                    "run_time": entry["started_at"],
-                }
+                {"block": query["id"], "file": relative_path(query), "error": str(exc)}
             )
             print(f"失败 | {exc}")
-        finally:
-            entry["finished_at"] = now().isoformat(timespec="seconds")
-            save_manifest(MANIFEST_FILE, manifest)
 
     write_failures(failed, FAILED_FILE)
     zip_outputs(succeeded, ZIP_FILE)
 
     print(f"\n成功：{len(succeeded)} / 本次失败：{len(failed)}")
     print(f"输出目录：{RAW_DIR.resolve()}")
-    print(f"失败清单：{FAILED_FILE.resolve()}")
-    print(f"运行清单：{MANIFEST_FILE.resolve()}")
     return 1 if failed else 0
 
 

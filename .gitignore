@@ -3,10 +3,9 @@
 vintage_user_case_*.xlsx
 results/
 results.zip
-同步日志/
 vintage_data.zip
 vintage_data.zip.tmp
-model_compare_data.zip
-model_compare_data.zip.tmp
+model_analysis_data.zip
+model_analysis_data.zip.tmp
 __pycache__/
-原始数据/
+同步数据/
