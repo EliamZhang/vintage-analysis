@@ -247,6 +247,7 @@
       </div>
       <div class="chips">
         <span class="chip">样本 13,431 人</span>
+        <span class="chip">戳额样本 50,291 人</span>
         <span class="chip">FPD15 成熟 7,605 笔</span>
         <span class="chip">FPD7 成熟 11,316 笔</span>
         <span class="chip">OOT 2026-09-30 起</span>
@@ -691,6 +692,150 @@
       <p class="note">两个模型均按各自的固定十分位切点分档：新戳额模型各档上界 0.0410 / 0.0509 / 0.0620 / 0.0740 / 0.0874 / 0.1046 / 0.1245 / 0.1569 / 0.2101 / 0.4313；
       线上模型各档上界 0.0486 / 0.0621 / 0.0756 / 0.0913 / 0.1092 / 0.1284 / 0.1546 / 0.1890 / 0.2400 / 0.6154。首档以下并入第 1 档，末档以上并入第 10 档，
       落在相邻档间隔内的分数并入下一档。分数区间为样本内实际最小–最大值。</p>
+    </section>
+    
+
+    <section class="card">
+      <h2>新客戳额样本：分布与表现<span class="tag" title="新客戳额环节的生产打分全量，不按成交筛选">生产全量</span></h2>
+      <p class="desc">这份样本是新客戳额环节的生产打分全量，覆盖 2026-08-03 至 2026-10-23 共
+      50,291 人；已打分 48,026 人（95.50%），
+      缺分 2,265 人（4.50%）。按新模型固定十分位切点分档，第 1 档分数最低。</p>
+      <div class="table-wrap">
+        <table class="decile">
+          <thead>
+            <tr>
+              <th>档位</th><th>规则分数区间</th><th>实际分数范围</th><th>人数</th>
+              <th>占已打分</th><th>累计占比</th><th>与参考 10% 偏差</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td class="soft">0.0211–0.0410</td>
+              <td class="soft">0.0186–0.0410</td>
+              <td>2,460</td>
+              <td>5.12%</td>
+              <td>5.12%</td>
+              <td class="strong">-4.88pp</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td class="soft">0.0410–0.0509</td>
+              <td class="soft">0.0410–0.0509</td>
+              <td>2,612</td>
+              <td>5.44%</td>
+              <td>10.56%</td>
+              <td class="strong">-4.56pp</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td class="soft">0.0509–0.0620</td>
+              <td class="soft">0.0509–0.0620</td>
+              <td>3,129</td>
+              <td>6.52%</td>
+              <td>17.08%</td>
+              <td class="strong">-3.48pp</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td class="soft">0.0621–0.0740</td>
+              <td class="soft">0.0620–0.0740</td>
+              <td>3,363</td>
+              <td>7.00%</td>
+              <td>24.08%</td>
+              <td class="strong">-3.00pp</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td class="soft">0.0741–0.0874</td>
+              <td class="soft">0.0740–0.0874</td>
+              <td>3,558</td>
+              <td>7.41%</td>
+              <td>31.49%</td>
+              <td class="strong">-2.59pp</td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td class="soft">0.0874–0.1046</td>
+              <td class="soft">0.0874–0.1046</td>
+              <td>4,087</td>
+              <td>8.51%</td>
+              <td>40.00%</td>
+              <td class="soft">-1.49pp</td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td class="soft">0.1047–0.1245</td>
+              <td class="soft">0.1047–0.1244</td>
+              <td>5,278</td>
+              <td>10.99%</td>
+              <td>50.99%</td>
+              <td class="soft">+0.99pp</td>
+            </tr>
+            <tr>
+              <td>8</td>
+              <td class="soft">0.1245–0.1569</td>
+              <td class="soft">0.1245–0.1568</td>
+              <td>6,026</td>
+              <td>12.55%</td>
+              <td>63.53%</td>
+              <td class="strong">+2.55pp</td>
+            </tr>
+            <tr>
+              <td>9</td>
+              <td class="soft">0.1570–0.2101</td>
+              <td class="soft">0.1569–0.2101</td>
+              <td>9,195</td>
+              <td>19.15%</td>
+              <td>82.68%</td>
+              <td class="strong">+9.15pp</td>
+            </tr>
+            <tr>
+              <td>10</td>
+              <td class="soft">0.2111–0.4313</td>
+              <td class="soft">0.2101–0.4901</td>
+              <td>8,318</td>
+              <td>17.32%</td>
+              <td>100.00%</td>
+              <td class="strong">+7.32pp</td>
+            </tr></tbody>
+        </table>
+      </div>
+      <p class="note">该样本的分数整体偏高于固定切点：实际中位数 0.1221、P90 0.2366，
+      而切点的中位上界为 0.0874；第 9–10 档合计占 36.47%，并非十等分。
+      分数范围 0.0186–0.4901，低于首档下界 21 人、
+      高于末档上界 58 人，分别并入第 1 / 10 档。分月看：2026-08 487 人（缺分 3.49%）、2026-09 20,594 人（缺分 3.12%）、2026-10 29,210 人（缺分 5.49%）。</p>
+      <div class="subhead">可关联主表的首笔成熟样本表现</div>
+      <div class="table-wrap">
+        <table class="oot">
+          <thead>
+            <tr>
+              <th>窗口</th><th>成熟样本</th><th>坏样本</th><th>笔数坏率</th><th>新 AUC</th><th>新 KS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>FPD15</td>
+              <td>7,483</td>
+              <td>770</td>
+              <td>10.29%</td>
+              <td class="strong">0.802</td>
+              <td>0.470</td>
+            </tr>
+            <tr>
+              <td>FPD7</td>
+              <td>11,056</td>
+              <td>1,534</td>
+              <td>13.87%</td>
+              <td class="strong">0.752</td>
+              <td>0.385</td>
+            </tr></tbody>
+        </table>
+      </div>
+      <p class="note">戳额样本不含标签，不能直接计算 AUC / KS。其中 17,335 人可按
+      last_limit_flow_id 关联主表，13,928 人为首笔申请；仅首笔且已成熟的子集参与 AUC / KS。
+      分数取自戳额生产文件，与主报告的分数文件不完全相同，AUC / KS 会有小幅差异。
+      该子集是后续有成交的人群，存在选择偏差，不代表全量戳额人群。</p>
     </section>
     
 
@@ -1327,6 +1472,11 @@
             样本表中另有 769 笔未打分、不入样：均为窗口末尾放款、FPD7/FPD15 均未成熟，不影响评估。</li>
         <li><b>OOT 口径</b>：OOT 按戳额时间 last_limit_time ≥ 2026-09-30 划分，样本内为 2026-08-01 至 2026-09-29；
             OOT 分段的 AUC / KS / ΔAUC 见「OOT 表现」卡，未成熟样本不计入对应窗口。</li>
+        <li><b>戳额样本</b>：wagego_new_user_credit_20260801_20261023_score.csv 为新客戳额环节的生产打分全量，共 50,291 人，
+            覆盖 2026-08-03 至 2026-10-23；已打分 48,026 人、
+            缺分 2,265 人（4.50%）。
+            该样本不含标签，分布卡只展示分数分布；AUC / KS 仅在可按 last_limit_flow_id 关联主表的首笔成熟子集上计算，
+            该子集存在成交选择偏差。</li>
         <li><b>模型口径</b>：新戳额模型 aus_new_wagego_credit_20261028_v1_0_txn_lgb_score（戳额场景，交易流水 LGB 模型）；线上模型 aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626（发标场景，发标 3rd 模型）。
             两者决策时点接近——中位 9 分钟、75 分位 5.8 小时内即放款，比较视为同点。
             线上模型有 5 笔缺失（含 -1 哨兵值），按缺失处理，不参与排序。</li>
@@ -1340,7 +1490,7 @@
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_model_compare.py；生成时间 2026-11-02 10:53。</li>
+        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_model_compare.py；生成时间 2026-11-02 11:29。</li>
       </ul>
     </footer>
     

@@ -30,6 +30,7 @@ if hasattr(sys.stderr, "reconfigure"):
 PROJECT_DIR = Path(__file__).resolve().parent
 DEFAULT_LABEL = PROJECT_DIR / "原始数据" / "table_tmp_eliam_wagego_dwd_loan_apply_label.csv"
 DEFAULT_SCORE = PROJECT_DIR / "aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv"
+DEFAULT_LIMIT_SCORE = PROJECT_DIR / "wagego_new_user_credit_20260801_20261023_score.csv"
 DEFAULT_OUTPUT = PROJECT_DIR / "模型效果对比.html"
 
 OLD_SCORE = "aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626"
@@ -390,6 +391,103 @@ def segment_metrics(base, ovd_col, mask):
     else:
         out["delta"] = None
     return out
+
+
+def load_limit_data(label_csv: Path, limit_csv: Path) -> dict:
+    """新客戳额样本的分数分布；可关联主表的部分另算成熟子集表现。"""
+    limit = pd.read_csv(
+        limit_csv,
+        encoding="utf-8-sig",
+        usecols=["user_id", "application_id", "sample_datetime", NEW_SCORE],
+    )
+    limit["flow_id"] = limit["application_id"].astype(str).str.strip()
+    limit["sample_datetime"] = pd.to_datetime(limit["sample_datetime"], errors="coerce")
+    limit["score"] = pd.to_numeric(limit[NEW_SCORE], errors="coerce")
+    scored = limit.dropna(subset=["score"])
+
+    score_arr = scored["score"].to_numpy(float)
+    edges = np.asarray(NEW_DECILE_CUTS, dtype=float)
+    q = np.searchsorted(edges, score_arr, side="left").clip(0, len(edges) - 1) + 1
+    rows = []
+    cum = 0
+    for k in range(1, 11):
+        mask = q == k
+        n = int(mask.sum())
+        cum += n
+        rows.append(
+            {
+                "q": k,
+                "n": n,
+                "share": round(n / len(scored) * 100, 2),
+                "cum": round(cum / len(scored) * 100, 2),
+                "dev": round(n / len(scored) * 100 - 10, 2),
+                "score_min": float(score_arr[mask].min()) if n else None,
+                "score_max": float(score_arr[mask].max()) if n else None,
+                "rule_min": NEW_DECILE_MIN[k - 1],
+                "rule_max": NEW_DECILE_CUTS[k - 1],
+            }
+        )
+
+    monthly = []
+    month_key = limit["sample_datetime"].dt.strftime("%Y-%m")
+    for month, grp in limit.groupby(month_key, dropna=True):
+        monthly.append(
+            {
+                "month": str(month),
+                "n": int(len(grp)),
+                "missing_rate": round(float(grp["score"].isna().mean() * 100), 2),
+            }
+        )
+
+    label = pd.read_csv(
+        label_csv,
+        encoding="utf-8-sig",
+        usecols=[
+            "last_limit_flow_id",
+            "application_rank",
+            "y_fpd15_obs",
+            "y_fpd15_ovd",
+            "y_fpd7_obs",
+            "y_fpd7_ovd",
+        ],
+    )
+    label["flow_id"] = label["last_limit_flow_id"].astype(str).str.strip()
+    label["application_rank"] = pd.to_numeric(label["application_rank"], errors="coerce")
+    matched_all = limit.merge(label, on="flow_id", how="inner")
+    first = matched_all[matched_all["application_rank"] == 1]
+    perf = {}
+    for w in WINDOWS:
+        d = first[(first[f"y_fpd{w}_obs"] == 1) & first["score"].notna()]
+        y = d[f"y_fpd{w}_ovd"].astype(int).to_numpy()
+        s = d["score"].to_numpy(float)
+        auc, ks = auc_ks(s, y)
+        perf[str(w)] = {
+            "n": int(len(d)),
+            "bad": int(y.sum()),
+            "rate": round(float(y.mean() * 100), 2) if len(d) else None,
+            "auc": round(auc, 4) if auc is not None else None,
+            "ks": round(ks, 4) if ks is not None else None,
+        }
+
+    return {
+        "n": int(len(limit)),
+        "n_scored": int(len(scored)),
+        "n_missing": int(limit["score"].isna().sum()),
+        "missing_rate": round(float(limit["score"].isna().mean() * 100), 2),
+        "dt_min": limit["sample_datetime"].min().strftime("%Y-%m-%d"),
+        "dt_max": limit["sample_datetime"].max().strftime("%Y-%m-%d"),
+        "score_min": float(score_arr.min()),
+        "score_max": float(score_arr.max()),
+        "median": float(np.median(score_arr)),
+        "p90": float(np.percentile(score_arr, 90)),
+        "below_min": int((score_arr < NEW_DECILE_MIN[0]).sum()),
+        "above_max": int((score_arr > NEW_DECILE_CUTS[-1]).sum()),
+        "deciles": rows,
+        "monthly": monthly,
+        "matched": int(matched_all["flow_id"].nunique()),
+        "first_n": int(first["flow_id"].nunique()),
+        "perf": perf,
+    }
 
 
 def build_data(sample: pd.DataFrame, reject_pct: int, oot_start: str) -> dict:
@@ -865,6 +963,83 @@ def oot_card(data) -> str:
       </div>
       <p class="note">OOT 按戳额时间 last_limit_time ≥ {escape(oot_start)} 划分，样本内为 {escape(start)} 至 {escape(pre_end)}。
       各窗口只统计已成熟样本；ΔAUC 用配对 DeLong 检验，仅取两模型都有分的样本。OOT 样本若尚未成熟，不计入对应窗口。</p>
+    </section>
+    """
+
+
+def limit_card(limit) -> str:
+    if not limit:
+        return ""
+    rows = []
+    for d in limit["deciles"]:
+        cls = "strong" if abs(d["dev"]) >= 2 else "soft"
+        rows.append(
+            f"""
+            <tr>
+              <td>{d['q']}</td>
+              <td class="soft">{fmt_range(d['rule_min'], d['rule_max'])}</td>
+              <td class="soft">{fmt_range(d['score_min'], d['score_max'])}</td>
+              <td>{fmt_int(d['n'])}</td>
+              <td>{fmt_pct(d['share'])}</td>
+              <td>{fmt_pct(d['cum'])}</td>
+              <td class="{cls}">{d['dev']:+.2f}pp</td>
+            </tr>"""
+        )
+    perf_rows = []
+    for w in WINDOWS:
+        p = limit["perf"][str(w)]
+        perf_rows.append(
+            f"""
+            <tr>
+              <td>FPD{w}</td>
+              <td>{fmt_int(p['n'])}</td>
+              <td>{fmt_int(p['bad'])}</td>
+              <td>{fmt_pct(p['rate'])}</td>
+              <td class="strong">{fmt_num(p['auc'])}</td>
+              <td>{fmt_num(p['ks'])}</td>
+            </tr>"""
+        )
+    months = "、".join(
+        f"{m['month']} {fmt_int(m['n'])} 人（缺分 {fmt_pct(m['missing_rate'])}）"
+        for m in limit["monthly"]
+    )
+    top2 = limit["deciles"][8]["share"] + limit["deciles"][9]["share"]
+    return f"""
+    <section class="card">
+      <h2>新客戳额样本：分布与表现<span class="tag" title="新客戳额环节的生产打分全量，不按成交筛选">生产全量</span></h2>
+      <p class="desc">这份样本是新客戳额环节的生产打分全量，覆盖 {escape(limit['dt_min'])} 至 {escape(limit['dt_max'])} 共
+      {fmt_int(limit['n'])} 人；已打分 {fmt_int(limit['n_scored'])} 人（{fmt_pct(limit['n_scored'] / limit['n'] * 100)}），
+      缺分 {fmt_int(limit['n_missing'])} 人（{fmt_pct(limit['missing_rate'])}）。按新模型固定十分位切点分档，第 1 档分数最低。</p>
+      <div class="table-wrap">
+        <table class="decile">
+          <thead>
+            <tr>
+              <th>档位</th><th>规则分数区间</th><th>实际分数范围</th><th>人数</th>
+              <th>占已打分</th><th>累计占比</th><th>与参考 10% 偏差</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(rows)}</tbody>
+        </table>
+      </div>
+      <p class="note">该样本的分数整体偏高于固定切点：实际中位数 {fmt_num(limit['median'], 4)}、P90 {fmt_num(limit['p90'], 4)}，
+      而切点的中位上界为 {fmt_num(NEW_DECILE_CUTS[4], 4)}；第 9–10 档合计占 {fmt_pct(top2)}，并非十等分。
+      分数范围 {fmt_num(limit['score_min'], 4)}–{fmt_num(limit['score_max'], 4)}，低于首档下界 {fmt_int(limit['below_min'])} 人、
+      高于末档上界 {fmt_int(limit['above_max'])} 人，分别并入第 1 / 10 档。分月看：{months}。</p>
+      <div class="subhead">可关联主表的首笔成熟样本表现</div>
+      <div class="table-wrap">
+        <table class="oot">
+          <thead>
+            <tr>
+              <th>窗口</th><th>成熟样本</th><th>坏样本</th><th>笔数坏率</th><th>新 AUC</th><th>新 KS</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(perf_rows)}</tbody>
+        </table>
+      </div>
+      <p class="note">戳额样本不含标签，不能直接计算 AUC / KS。其中 {fmt_int(limit['matched'])} 人可按
+      last_limit_flow_id 关联主表，{fmt_int(limit['first_n'])} 人为首笔申请；仅首笔且已成熟的子集参与 AUC / KS。
+      分数取自戳额生产文件，与主报告的分数文件不完全相同，AUC / KS 会有小幅差异。
+      该子集是后续有成交的人群，存在选择偏差，不代表全量戳额人群。</p>
     </section>
     """
 
@@ -1537,7 +1712,7 @@ def weekly_panel(data, w) -> str:
     """
 
 
-def footer_html(data, generated_at, label_name, score_name) -> str:
+def footer_html(data, generated_at, label_name, score_name, limit=None, limit_name="") -> str:
     meta = data["meta"]
     unscored_note = (
         "均为窗口末尾放款、FPD7/FPD15 均未成熟，不影响评估。"
@@ -1546,6 +1721,14 @@ def footer_html(data, generated_at, label_name, score_name) -> str:
     )
     oot_start = meta["oot_start"]
     pre_end = (pd.Timestamp(oot_start) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    limit_note = ""
+    if limit:
+        limit_note = f"""
+        <li><b>戳额样本</b>：{escape(limit_name)} 为新客戳额环节的生产打分全量，共 {fmt_int(limit['n'])} 人，
+            覆盖 {escape(limit['dt_min'])} 至 {escape(limit['dt_max'])}；已打分 {fmt_int(limit['n_scored'])} 人、
+            缺分 {fmt_int(limit['n_missing'])} 人（{fmt_pct(limit['missing_rate'])}）。
+            该样本不含标签，分布卡只展示分数分布；AUC / KS 仅在可按 last_limit_flow_id 关联主表的首笔成熟子集上计算，
+            该子集存在成交选择偏差。</li>"""
     return f"""
     <footer class="foot">
       <ul class="notes">
@@ -1553,7 +1736,7 @@ def footer_html(data, generated_at, label_name, score_name) -> str:
             与新戳额模型打分文件按 last_limit_flow_id = flow_id 关联，共 {fmt_int(meta['n_sample'])} 人。
             样本表中另有 {fmt_int(meta['n_unscored'])} 笔未打分、不入样：{unscored_note}</li>
         <li><b>OOT 口径</b>：OOT 按戳额时间 last_limit_time ≥ {escape(oot_start)} 划分，样本内为 {escape(meta['start'])} 至 {escape(pre_end)}；
-            OOT 分段的 AUC / KS / ΔAUC 见「OOT 表现」卡，未成熟样本不计入对应窗口。</li>
+            OOT 分段的 AUC / KS / ΔAUC 见「OOT 表现」卡，未成熟样本不计入对应窗口。</li>{limit_note}
         <li><b>模型口径</b>：新戳额模型 {escape(NEW_SCORE)}（戳额场景，{NEW_DESC}）；线上模型 {escape(OLD_SCORE)}（发标场景，{OLD_DESC}）。
             两者决策时点接近——中位 {fmt_days(meta['median_days'])}、75 分位 {fmt_days(meta['p75_days'])}内即放款，比较视为同点。
             线上模型有 {fmt_int(meta['old_missing'])} 笔缺失（含 -1 哨兵值），按缺失处理，不参与排序。</li>
@@ -1820,6 +2003,7 @@ __METRICS_CARD__
 __OOT_CARD__
 __ROC_CARD__
 __DECILE_CARD__
+__LIMIT_CARD__
 __MONEY_CARD__
 __CROSS_CARD__
 __CAPTURE_CARD__
@@ -2494,7 +2678,8 @@ drawMoney('old');
 # --------------------------------------------------------------------------- 组装
 
 
-def build_html(data, generated_at: str, label_name: str, score_name: str) -> str:
+def build_html(data, generated_at: str, label_name: str, score_name: str,
+               limit=None, limit_name: str = "") -> str:
     meta = data["meta"]
     header = f"""
     <header>
@@ -2508,6 +2693,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str) -> str
       </div>
       <div class="chips">
         <span class="chip">样本 {fmt_int(meta['n_sample'])} 人</span>
+        {f'<span class="chip">戳额样本 {fmt_int(limit["n"])} 人</span>' if limit else ''}
         <span class="chip">FPD15 成熟 {fmt_int(data['windows']['15']['n_obs'])} 笔</span>
         <span class="chip">FPD7 成熟 {fmt_int(data['windows']['7']['n_obs'])} 笔</span>
         <span class="chip">OOT {escape(meta['oot_start'])} 起</span>
@@ -2530,6 +2716,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str) -> str
     html = html.replace("__SUMMARY__", summary_html(data))
     html = html.replace("__METRICS_CARD__", metrics_card)
     html = html.replace("__OOT_CARD__", oot_card(data))
+    html = html.replace("__LIMIT_CARD__", limit_card(limit))
     html = html.replace("__ROC_CARD__", roc_card(data))
     html = html.replace("__DECILE_CARD__", decile_card(data))
     html = html.replace("__MONEY_CARD__", money_card(data))
@@ -2538,7 +2725,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str) -> str
     html = html.replace("__THROUGH_CARD__", through_card(data))
     html = html.replace("__SWAP_CARD__", swap_card(data))
     html = html.replace("__WEEKLY_CARD__", weekly_card(data))
-    html = html.replace("__FOOTER__", footer_html(data, generated_at, label_name, score_name))
+    html = html.replace("__FOOTER__", footer_html(data, generated_at, label_name, score_name, limit, limit_name))
     payload = json.dumps(to_py(data), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     html = html.replace("__DATA_JSON__", payload.replace("</", "<\\/"))
     return html
@@ -2548,6 +2735,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="新客样本新戳额模型与线上模型效果对比")
     parser.add_argument("--label-csv", default=str(DEFAULT_LABEL), help="主表 CSV")
     parser.add_argument("--score-csv", default=str(DEFAULT_SCORE), help="新戳额模型分 CSV")
+    parser.add_argument("--limit-score-csv", default=str(DEFAULT_LIMIT_SCORE),
+                        help="新客戳额样本打分 CSV（只做分布与关联子集表现）")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="输出 HTML")
     parser.add_argument("--start", default="2026-08-01", help="戳额起始日")
     parser.add_argument("--end", default="2026-10-24", help="戳额结束日（不含）")
@@ -2557,6 +2746,7 @@ def main(argv=None):
 
     label_path = Path(args.label_csv)
     score_path = Path(args.score_csv)
+    limit_path = Path(args.limit_score_csv)
     for path in (label_path, score_path):
         if not path.exists():
             parser.error(f"文件不存在：{path}")
@@ -2567,8 +2757,16 @@ def main(argv=None):
     data["meta"]["end_display"] = (
         pd.Timestamp(args.end) - pd.Timedelta(days=1)
     ).strftime("%Y-%m-%d")
+    limit_data = None
+    if limit_path.exists():
+        limit_data = load_limit_data(label_path, limit_path)
+    else:
+        print(f"未找到戳额样本，跳过分布卡：{limit_path}")
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
-    html = build_html(data, generated_at, label_path.name, score_path.name)
+    html = build_html(
+        data, generated_at, label_path.name, score_path.name,
+        limit_data, limit_path.name,
+    )
 
     output = Path(args.output)
     output.write_text(html, encoding="utf-8")
