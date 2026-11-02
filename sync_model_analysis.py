@@ -33,7 +33,7 @@ ZIP_FILE = PROJECT_DIR / "model_analysis_data.zip"
 FAILED_FILE = PROJECT_DIR / "model_analysis_sync_failed.csv"
 
 # 块号 → 输出文件。顺序必须与 SQL 中的 SELECT 一一对应。
-# 文件名是 build_model_compare.py 的默认输入名，导出时保持同名。
+# 文件名是 build_model_analysis.py 的默认输入名，导出时保持同名。
 QUERY_SPECS = (
     {"id": "1", "file": "table_tmp_eliam_wagego_dwd_loan_apply_label.csv", "title": "Y 标签主表"},
     {"id": "2", "file": "aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv", "title": "戳额成交样本新模型分"},

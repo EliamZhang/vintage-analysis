@@ -5,8 +5,8 @@
 新戳额模型分数取自戳额成交样本，按 last_limit_flow_id = 打分文件的 flow_id 关联；线上模型分数取自主表。
 
 用法：
-    python build_model_compare.py
-    python build_model_compare.py --score-csv xxx.csv --output 模型分分析.html
+    python build_model_analysis.py
+    python build_model_analysis.py --score-csv xxx.csv --output 模型分分析.html
 """
 
 from __future__ import annotations
@@ -1701,7 +1701,7 @@ def footer_html(data, generated_at, label_name, score_name, limit=None, limit_na
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：{escape(label_name)}、{escape(score_name)}；生成脚本 build_model_compare.py；生成时间 {escape(generated_at)}。</li>
+        <li><b>数据源</b>：{escape(label_name)}、{escape(score_name)}；生成脚本 build_model_analysis.py；生成时间 {escape(generated_at)}。</li>
       </ul>
     </footer>
     """
@@ -1715,7 +1715,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WageGo · 模型分分析</title>
+<title>WageGo 新客戳额风险模型效果评估报告</title>
 <style>
   :root {
     color-scheme: light;
@@ -2634,8 +2634,8 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
     meta = data["meta"]
     header = f"""
     <header>
-      <p class="eyebrow">WAGEGO · 风险模型评估 · 新客首借成交样本</p>
-      <h1>模型分分析</h1>
+      <p class="eyebrow">WAGEGO · 新客首借成交样本</p>
+      <h1>新客戳额风险模型效果评估报告</h1>
       <p class="sub">从区分度、决策收益到周度稳定性，评估新戳额模型相对线上模型的增量价值。
       首笔成交新客，戳额时间 {escape(meta['start'])} 至 {escape(meta['end_display'])}，观察日 {meta['obs_dt']}。</p>
       <div class="models">
