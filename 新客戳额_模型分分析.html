@@ -79,6 +79,7 @@
   }
   .conv-kpis .kpi { padding: 10px 12px; }
   .conv-kpis .kpi b { font-size: 22px; }
+  .conv-charts { margin-top: 8px; }
   .kpi {
     background: var(--surface); border: 1px solid var(--ring);
     border-radius: 12px; padding: 13px 15px;
@@ -148,10 +149,18 @@
   }
   .dot.new { background: var(--c1); }
   .dot.old { background: var(--c2); }
+  .sq {
+    display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+    margin-right: 6px; vertical-align: -1px;
+  }
+  .sq.new { background: var(--c1); }
+  .sq.old { background: var(--c2); }
   .linekey {
     display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--axis);
     margin-right: 6px; vertical-align: 3px;
   }
+  .linekey.new { border-top-color: var(--c1); }
+  .linekey.old { border-top-color: var(--c2); }
   .tip {
     position: absolute; z-index: 2; pointer-events: none; display: none;
     transform: translate(-50%, -115%);
@@ -197,7 +206,9 @@
   table.cross td {
     text-align: center; padding: 11px 6px; border-radius: 6px;
     border-bottom: 0; color: var(--ink); background: var(--surface);
+    cursor: help;
   }
+  table.cross td:hover { outline: 2px solid var(--ink-2); outline-offset: -2px; }
   table.cross td b { display: block; font-size: 15px; font-weight: 600; line-height: 1.3; }
   table.cross td span { display: block; font-size: 10.5px; opacity: .72; }
   table.cross td.h1 { background: rgba(192,57,43,0.06); }
@@ -413,7 +424,24 @@
       成交中位用时 当天（P90 8 天），
       成交用户人均放款金额 412。</p>
       <div class="subhead">分档转化（分档表使用新旧分都有的 48,026 人）</div>
-      <p class="desc">第 1 档分数最低、第 10 档分数最高；坏率来自戳额成交样本的 FPD15 成熟样本，仅作同档对照。</p>
+      <p class="desc">第 1 档分数最低、第 10 档分数最高；曲线越低表示该档转化越弱。坏率来自戳额成交样本的 FPD15 成熟样本，仅作同档对照。</p>
+      <div class="grid2 conv-charts">
+        <div class="panel">
+          <h3>分档申请率<span class="muted">　戳额 → 借款申请</span></h3>
+          <div class="chart-wrap">
+            <svg id="convApplyChart" viewBox="0 0 500 280" role="img" aria-label="分档借款申请率对比"></svg>
+            <div class="tip" id="convApplyTip"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>分档成交率<span class="muted">　戳额 → 成交</span></h3>
+          <div class="chart-wrap">
+            <svg id="convDisburseChart" viewBox="0 0 500 280" role="img" aria-label="分档成交率对比"></svg>
+            <div class="tip" id="convDisburseTip"></div>
+          </div>
+        </div>
+      </div>
+      <div class="legend"><span><i class="linekey new"></i>新戳额模型</span><span><i class="linekey old"></i>线上模型</span><span class="muted">横轴：第 1 档 = 分数最低（最安全）</span></div>
       <div class="table-wrap">
         <table class="decile">
           <thead>
@@ -639,8 +667,8 @@
           <div class="tip" id="rocTip15"></div>
         </div>
         <div class="legend">
-          <span><i class="dot new"></i>新戳额模型 <b>AUC 0.785</b></span>
-          <span><i class="dot old"></i>线上模型 <b>AUC 0.634</b></span>
+          <span><i class="linekey new"></i>新戳额模型 <b>AUC 0.785</b></span>
+          <span><i class="linekey old"></i>线上模型 <b>AUC 0.634</b></span>
         </div>
       </div>
       <div class="panel">
@@ -650,8 +678,8 @@
           <div class="tip" id="rocTip7"></div>
         </div>
         <div class="legend">
-          <span><i class="dot new"></i>新戳额模型 <b>AUC 0.748</b></span>
-          <span><i class="dot old"></i>线上模型 <b>AUC 0.631</b></span>
+          <span><i class="linekey new"></i>新戳额模型 <b>AUC 0.748</b></span>
+          <span><i class="linekey old"></i>线上模型 <b>AUC 0.631</b></span>
         </div>
       </div></div>
       <p class="note">ROC 按分数降序逐点计算，等距抽样至 200 个点绘制；表值见上方「核心指标」。</p>
@@ -668,8 +696,8 @@
         <div class="tip" id="decileTip"></div>
       </div>
       <div class="legend">
-        <span><i class="dot new"></i>新戳额模型</span>
-        <span><i class="dot old"></i>线上模型</span>
+        <span><i class="sq new"></i>新戳额模型</span>
+        <span><i class="sq old"></i>线上模型</span>
         <span class="muted">横轴：第 1 档 = 分数最低（最安全）· lift = 该档坏率 / 全体坏率</span>
       </div>
       <div class="subhead">分档明细</div>
@@ -829,7 +857,7 @@
 
     <section class="card" id="cross">
       <h2>五分位交叉矩阵<span class="tag" title="行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位相邻两档合并；每格为该组合的笔数坏率">FPD15</span></h2>
-      <p class="desc">每格是落在该组合的样本的笔数坏率。横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差
+      <p class="desc">每格是落在该组合的样本的笔数坏率；行、列均由低到高，1 档 = 分数最低（最安全），5 档 = 分数最高。横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差
       11.9pp；纵向看（线上档固定、新戳额模型 1→5 档）至少差 22.3pp
       ——风险差异主要由新戳额模型的分档解释，线上模型分档带来的额外区分很小。</p>
       
@@ -861,7 +889,16 @@
     <section class="card" id="oot">
       <h2>OOT 表现<span class="tag" title="OOT = 戳额时间不早于 2026-09-30 的样本">按时间切分</span></h2>
       <p class="desc">把样本内和 OOT 分开看，避免样本内表现掩盖上线后的真实区分度。OOT 上两个模型都用原始分数重新计算 AUC / KS，
-      不与前面的整体指标混算。</p>
+      不与前面的整体指标混算。下图每行是一组对照，蓝点越靠右区分度越高，右侧数字为 ΔAUC。</p>
+      <div class="chart-wrap">
+        <svg id="ootChart" viewBox="0 0 1000 320" role="img" aria-label="全样本、样本内与 OOT 的 AUC 对比"></svg>
+        <div class="tip" id="ootTip"></div>
+      </div>
+      <div class="legend">
+        <span><i class="dot new"></i>新戳额模型</span>
+        <span><i class="dot old"></i>线上模型</span>
+        <span class="muted">右侧数字：ΔAUC（新 − 旧）· 灰底行 = OOT</span>
+      </div>
       <div class="table-wrap">
         <table class="oot">
           <thead>
@@ -969,8 +1006,8 @@
           <div class="tip" id="weekTip15"></div>
         </div>
         <div class="legend">
-          <span><i class="dot new"></i>新戳额模型</span>
-          <span><i class="dot old"></i>线上模型</span>
+          <span><i class="linekey new"></i>新戳额模型</span>
+          <span><i class="linekey old"></i>线上模型</span>
         </div>
       </div>
     
@@ -981,8 +1018,8 @@
           <div class="tip" id="weekTip7"></div>
         </div>
         <div class="legend">
-          <span><i class="dot new"></i>新戳额模型</span>
-          <span><i class="dot old"></i>线上模型</span>
+          <span><i class="linekey new"></i>新戳额模型</span>
+          <span><i class="linekey old"></i>线上模型</span>
         </div>
       </div>
     
@@ -1215,8 +1252,8 @@
         <div class="tip" id="captureTip"></div>
       </div>
       <div class="legend">
-        <span><i class="dot new"></i>新戳额模型</span>
-        <span><i class="dot old"></i>线上模型</span>
+        <span><i class="linekey new"></i>新戳额模型</span>
+        <span><i class="linekey old"></i>线上模型</span>
         <span><i class="linekey"></i>随机拦截</span>
       </div>
 
@@ -1367,8 +1404,8 @@
         <div class="tip" id="approvalTip"></div>
       </div>
       <div class="legend">
-        <span><i class="dot new"></i>新戳额模型</span>
-        <span><i class="dot old"></i>线上模型</span>
+        <span><i class="linekey new"></i>新戳额模型</span>
+        <span><i class="linekey old"></i>线上模型</span>
         <span class="muted">纵轴：该坏率下可达到的最高通过率</span>
       </div>
 
@@ -1781,7 +1818,7 @@
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_new_user_credit_analysis.py；生成时间 2026-11-02 16:21。</li>
+        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_new_user_credit_analysis.py；生成时间 2026-11-02 16:54。</li>
       </ul>
     </footer>
     
@@ -1868,8 +1905,8 @@ function axes(svg, cfg) {
   if (yLabel) {
     const cy = m.t + (H - m.t - m.b) / 2;
     svgEl(svg, 'text', {
-      x: 13, y: cy, 'text-anchor': 'middle',
-      transform: 'rotate(-90 13 ' + cy + ')',
+      x: 16, y: cy, 'text-anchor': 'middle',
+      transform: 'rotate(-90 16 ' + cy + ')',
       fill: 'var(--muted)', 'font-size': cfg.tickSize || 11.5
     }, yLabel);
   }
@@ -2067,6 +2104,145 @@ function drawDeciles() {
   hoverRect.addEventListener('blur', clear);
 }
 
+/* ---------- 分档转化率 ---------- */
+function drawConversionMetric(svgId, tipId, field) {
+  const conv = DATA.conversion;
+  if (!conv) return;
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  const tip = tipCtl(svg, document.getElementById(tipId));
+  const W = 500, H = 280, m = { l: 48, r: 76, t: 18, b: 48 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const series = [
+    { name: '线上模型', color: 'var(--c2)', rows: conv.old_deciles || [] },
+    { name: '新戳额模型', color: 'var(--c1)', rows: conv.new_deciles || [] }
+  ].filter(s => s.rows.length);
+  const vals = [];
+  series.forEach(s => s.rows.forEach(r => {
+    if (r[field] != null) vals.push(r[field]);
+  }));
+  if (!vals.length) return;
+  const yMax = Math.max(10, Math.ceil(Math.max.apply(null, vals) / 20) * 20);
+  const x = q => m.l + (q - 1) / 9 * iw;
+  const y = v => m.t + (1 - v / yMax) * ih;
+  clearSvg(svg);
+
+  axes(svg, {
+    W, H, m, x, y, xTicks: [],
+    yTicks: [0, 0.25, 0.5, 0.75, 1].map(t => t * yMax),
+    xFmt: t => '', yFmt: t => t.toFixed(0) + '%',
+    xLabel: '分档（1 = 分数最低）', tickSize: 11
+  });
+  for (let q = 1; q <= 10; q++) {
+    svgEl(svg, 'text', {
+      x: x(q), y: H - m.b + 20, 'text-anchor': 'middle',
+      fill: 'var(--muted)', 'font-size': 11
+    }, q);
+  }
+
+  const cross = svgEl(svg, 'line', {
+    y1: m.t, y2: H - m.b, stroke: 'var(--axis)', 'stroke-width': 1,
+    opacity: 0, 'pointer-events': 'none'
+  });
+
+  series.forEach(s => {
+    let d = '', pen = false;
+    s.rows.forEach((r, i) => {
+      const v = r[field];
+      if (v == null) { pen = false; return; }
+      d += (pen ? 'L' : 'M') + x(i + 1) + ',' + y(v);
+      pen = true;
+    });
+    if (d) {
+      svgEl(svg, 'path', {
+        d, fill: 'none', stroke: s.color, 'stroke-width': 2,
+        'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+      });
+    }
+    s.rows.forEach((r, i) => {
+      if (r[field] == null) return;
+      svgEl(svg, 'circle', {
+        cx: x(i + 1), cy: y(r[field]), r: 4,
+        fill: s.color, stroke: 'var(--surface)', 'stroke-width': 2
+      });
+    });
+  });
+
+  // 末端直接标注；两条线靠得太近时用引线错开
+  const ends = [];
+  series.forEach(s => {
+    for (let i = s.rows.length - 1; i >= 0; i--) {
+      if (s.rows[i][field] != null) {
+        ends.push({ v: s.rows[i][field], color: s.color, q: i + 1 });
+        break;
+      }
+    }
+  });
+  ends.sort((a, b) => b.v - a.v);
+  let labelY = ends.map(e => y(e.v));
+  if (labelY.length === 2 && Math.abs(labelY[0] - labelY[1]) < 16) {
+    const mid = (labelY[0] + labelY[1]) / 2;
+    labelY = [mid - 9, mid + 9];
+  }
+  ends.forEach((e, i) => {
+    const ex = x(e.q);
+    if (Math.abs(labelY[i] - y(e.v)) > 1) {
+      svgEl(svg, 'line', {
+        x1: ex + 5, y1: y(e.v), x2: ex + 11, y2: labelY[i],
+        stroke: 'var(--axis)', 'stroke-width': 1
+      });
+    }
+    svgEl(svg, 'circle', { cx: ex + 15, cy: labelY[i], r: 3, fill: e.color });
+    svgEl(svg, 'text', {
+      x: ex + 22, y: labelY[i] + 4, fill: 'var(--ink)',
+      'font-size': 11.5, 'font-weight': 600
+    }, fmtPct(e.v));
+  });
+
+  const hit = svgEl(svg, 'rect', {
+    x: m.l - 10, y: m.t, width: iw + 20, height: ih,
+    fill: 'transparent', tabindex: 0
+  });
+  let lastQ = 1;
+  function show(q) {
+    lastQ = q;
+    cross.setAttribute('x1', x(q));
+    cross.setAttribute('x2', x(q));
+    cross.setAttribute('opacity', 1);
+    const rows = [];
+    let top = yMax;
+    series.forEach(s => {
+      const r = s.rows[q - 1];
+      if (!r || r[field] == null) return;
+      top = Math.min(top, r[field]);
+      rows.push({
+        value: fmtPct(r[field]),
+        name: s.name + ' n=' + fmtInt(r.n),
+        color: s.color
+      });
+    });
+    tip.show({
+      title: '第 ' + q + ' 档' + (q === 1 ? '（分数最低）' : q === 10 ? '（分数最高）' : ''),
+      rows
+    }, x(q), y(top) - 8);
+  }
+  function qAt(clientX) {
+    const box = svg.getBoundingClientRect();
+    const ux = (clientX - box.left) / box.width * W;
+    return Math.min(10, Math.max(1, Math.round((ux - m.l) / iw * 9) + 1));
+  }
+  hit.addEventListener('pointermove', e => show(qAt(e.clientX)));
+  hit.addEventListener('pointerleave', () => {
+    tip.hide();
+    cross.setAttribute('opacity', 0);
+  });
+  hit.addEventListener('focus', () => show(lastQ));
+  hit.addEventListener('blur', () => {
+    tip.hide();
+    cross.setAttribute('opacity', 0);
+  });
+}
+
 /* ---------- 捕获曲线 ---------- */
 function drawCapture() {
   const entry = DATA.windows['15'];
@@ -2249,6 +2425,144 @@ function drawApproval() {
   hit.addEventListener('blur', () => {
     tip.hide(); cross.setAttribute('opacity', 0);
     dots.forEach(d => d.setAttribute('opacity', 0));
+  });
+}
+
+/* ---------- OOT AUC 对比 ---------- */
+function drawOot() {
+  const svg = document.getElementById('ootChart');
+  if (!svg) return;
+  const tip = tipCtl(svg, document.getElementById('ootTip'));
+  const rows = [];
+  ['15', '7'].forEach(w => {
+    const segs = DATA.windows[w].segments;
+    [['all', '全样本'], ['pre_oot', '样本内'], ['oot', 'OOT']].forEach(pair => {
+      const seg = segs[pair[0]];
+      rows.push({
+        label: 'FPD' + w + ' · ' + pair[1],
+        old: seg.models.old.auc,
+        new: seg.models.new.auc,
+        delta: seg.delta,
+        n: seg.n,
+        bad: seg.bad,
+        oot: pair[0] === 'oot'
+      });
+    });
+  });
+  const vals = [];
+  rows.forEach(r => {
+    if (r.old != null) vals.push(r.old);
+    if (r.new != null) vals.push(r.new);
+  });
+  if (!vals.length) return;
+  const lo = Math.floor((Math.min.apply(null, vals) - 0.015) * 20) / 20;
+  const hi = Math.ceil((Math.max.apply(null, vals) + 0.015) * 20) / 20;
+  const span = hi - lo || 0.1;
+  const W = 1000, H = 320, m = { l: 116, r: 122, t: 18, b: 48 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const x = v => m.l + (v - lo) / span * iw;
+  const groupGap = 8;
+  const rowH = (ih - groupGap) / rows.length;
+  const cy = i => m.t + i * rowH + (i >= 3 ? groupGap : 0) + rowH / 2;
+  clearSvg(svg);
+
+  const ticks = [];
+  for (let t = lo; t <= hi + 1e-9; t += 0.05) ticks.push(Math.round(t * 100) / 100);
+
+  rows.forEach((r, i) => {
+    if (!r.oot) return;
+    svgEl(svg, 'rect', {
+      x: m.l, y: cy(i) - rowH / 2 + 2, width: iw, height: rowH - 4,
+      rx: 4, fill: 'var(--grid)', opacity: 0.55
+    });
+  });
+
+  axes(svg, {
+    W, H, m, x, y: v => v, xTicks: ticks, yTicks: [],
+    xFmt: t => t.toFixed(2), yFmt: t => '',
+    xLabel: 'AUC（越高越好）', tickSize: 11.5
+  });
+
+  rows.forEach((r, i) => {
+    const yy = cy(i);
+    svgEl(svg, 'text', {
+      x: m.l - 14, y: yy + 4, 'text-anchor': 'end',
+      fill: r.oot ? 'var(--ink)' : 'var(--ink-2)',
+      'font-size': 12, 'font-weight': r.oot ? 600 : 400
+    }, r.label);
+    if (r.old == null || r.new == null) return;
+    const xo = x(r.old), xn = x(r.new);
+    svgEl(svg, 'line', {
+      x1: xo, y1: yy, x2: xn, y2: yy,
+      stroke: 'var(--axis)', 'stroke-width': 2, 'stroke-linecap': 'round'
+    });
+    svgEl(svg, 'circle', {
+      cx: xo, cy: yy, r: 4.5, fill: 'var(--c2)',
+      stroke: 'var(--surface)', 'stroke-width': 2
+    });
+    svgEl(svg, 'circle', {
+      cx: xn, cy: yy, r: 4.5, fill: 'var(--c1)',
+      stroke: 'var(--surface)', 'stroke-width': 2
+    });
+    const right = r.new >= r.old;
+    svgEl(svg, 'text', {
+      x: xn + (right ? 10 : -10), y: yy + 4,
+      'text-anchor': right ? 'start' : 'end',
+      fill: 'var(--ink)', 'font-size': 11.5, 'font-weight': 600
+    }, r.new.toFixed(3));
+    svgEl(svg, 'text', {
+      x: W - 14, y: yy + 4, 'text-anchor': 'end',
+      fill: r.oot ? 'var(--ink)' : 'var(--muted)',
+      'font-size': 11.5, 'font-weight': r.oot ? 600 : 400
+    }, (r.delta.diff >= 0 ? '+' : '') + r.delta.diff.toFixed(3));
+  });
+
+  const frame = svgEl(svg, 'rect', {
+    x: m.l, y: 0, width: iw, height: rowH - 4,
+    rx: 4, fill: 'none', stroke: 'var(--ink-2)', 'stroke-width': 1,
+    opacity: 0, 'pointer-events': 'none'
+  });
+  const hit = svgEl(svg, 'rect', {
+    x: m.l - 104, y: m.t, width: iw + 104, height: ih,
+    fill: 'transparent', tabindex: 0
+  });
+  let last = 2;
+  function show(i) {
+    last = i;
+    const r = rows[i];
+    frame.setAttribute('y', cy(i) - rowH / 2 + 2);
+    frame.setAttribute('opacity', 1);
+    tip.show({
+      title: r.label + ' · 成熟 ' + fmtInt(r.n) + ' 笔 · 坏 ' + fmtInt(r.bad) + ' 笔',
+      rows: [
+        { value: r.new == null ? '—' : r.new.toFixed(3), name: '新戳额模型 AUC', color: 'var(--c1)' },
+        { value: r.old == null ? '—' : r.old.toFixed(3), name: '线上模型 AUC', color: 'var(--c2)' },
+        {
+          value: r.delta == null ? '—' : (r.delta.diff >= 0 ? '+' : '') + r.delta.diff.toFixed(3),
+          name: r.delta == null ? 'ΔAUC（新 − 旧）' : 'ΔAUC 95% CI ' + r.delta.ci_low.toFixed(3) + ' ~ ' + r.delta.ci_high.toFixed(3)
+        }
+      ]
+    }, Math.max(x(r.old || lo), x(r.new || lo)), cy(i) - 8);
+  }
+  function rowAt(clientY) {
+    const box = svg.getBoundingClientRect();
+    const uy = (clientY - box.top) / box.height * H;
+    let best = 0, dist = Infinity;
+    rows.forEach((r, i) => {
+      const d = Math.abs(uy - cy(i));
+      if (d < dist) { dist = d; best = i; }
+    });
+    return best;
+  }
+  hit.addEventListener('pointermove', e => show(rowAt(e.clientY)));
+  hit.addEventListener('pointerleave', () => {
+    tip.hide();
+    frame.setAttribute('opacity', 0);
+  });
+  hit.addEventListener('focus', () => show(last));
+  hit.addEventListener('blur', () => {
+    tip.hide();
+    frame.setAttribute('opacity', 0);
   });
 }
 
@@ -2443,6 +2757,9 @@ drawWeekly('15');
 drawWeekly('7');
 drawMoney('new');
 drawMoney('old');
+drawConversionMetric('convApplyChart', 'convApplyTip', 'apply_rate');
+drawConversionMetric('convDisburseChart', 'convDisburseTip', 'disburse_rate');
+drawOot();
 </script>
 </body>
 </html>
