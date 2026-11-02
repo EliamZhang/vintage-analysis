@@ -41,6 +41,17 @@ OLD_DESC = "发标 3rd 模型"
 NEW_DESC = "交易流水 LGB 模型"
 
 WINDOWS = (15, 7)  # 主口径在前
+# 新客戳额模型固定十等分分箱：thresholds = 10%~100% 百分位，max 为各档分数上界。
+# 新模型按固定切点分档，线上模型仍按当前成熟样本等笔数切十档。
+NEW_DECILE_THRESHOLDS = tuple(range(10, 101, 10))
+NEW_DECILE_MIN = (
+    0.021107, 0.041028, 0.050928, 0.062087, 0.074097,
+    0.087432, 0.104708, 0.124508, 0.156964, 0.211074,
+)
+NEW_DECILE_CUTS = (
+    0.040977, 0.050916, 0.062045, 0.074019, 0.087427,
+    0.104648, 0.124452, 0.156853, 0.210134, 0.431317,
+)
 CUTOFF_REJECTS = (10, 20, 30, 40, 50)
 THROUGH_TARGETS = (4, 5, 6, 7, 8, 9)  # 通过坏率预算（%）
 THROUGH_REF = 8  # 结论引用的坏率预算
@@ -127,15 +138,23 @@ def delong_paired(score_a, score_b, label):
     return out
 
 
-def deciles(score, label, amount=None, loss=None):
-    """按分数升序切 10 档（第 1 档最低风险）；可选带放款规模与坏账损失本金。"""
+def deciles(score, label, amount=None, loss=None, cuts=None):
+    """按分数切 10 档（第 1 档最低风险）；可选带放款规模与坏账损失本金。
+
+    cuts 为 None 时按当前样本等笔数切档；传入升序上界时按固定切点分箱，
+    首档以下、末档以上的分数分别并入首档、末档。
+    """
     score = np.asarray(score, dtype=float)
     label = np.asarray(label, dtype=int)
     n = len(score)
-    order = np.argsort(score, kind="mergesort")
-    rank = np.empty(n, dtype=int)
-    rank[order] = np.arange(1, n + 1)
-    q = np.ceil(rank * 10 / n).astype(int)
+    if cuts is not None:
+        edges = np.asarray(cuts, dtype=float)
+        q = np.searchsorted(edges, score, side="left").clip(0, len(edges) - 1) + 1
+    else:
+        order = np.argsort(score, kind="mergesort")
+        rank = np.empty(n, dtype=int)
+        rank[order] = np.arange(1, n + 1)
+        q = np.ceil(rank * 10 / n).astype(int)
     rows = []
     for k in range(1, 11):
         mask = q == k
@@ -144,6 +163,8 @@ def deciles(score, label, amount=None, loss=None):
             "n": int(mask.sum()),
             "bad": int(label[mask].sum()),
             "rate": float(label[mask].mean() * 100) if mask.sum() else None,
+            "score_min": float(score[mask].min()) if mask.any() else None,
+            "score_max": float(score[mask].max()) if mask.any() else None,
         }
         if amount is not None:
             amt = float(amount[mask].sum())
@@ -337,6 +358,11 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
             "reject_pct": reject_pct,
             "n_unscored": int(sample.attrs.get("unscored", 0)),
             "unscored_immature": bool(sample.attrs.get("unscored_immature", False)),
+            "new_decile_rule": {
+                "thresholds": list(NEW_DECILE_THRESHOLDS),
+                "min_score": list(NEW_DECILE_MIN),
+                "max_score": list(NEW_DECILE_CUTS),
+            },
         },
         "windows": {},
         "throughRef": THROUGH_REF,
@@ -366,7 +392,9 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
             loss = pd.to_numeric(d[loss_col], errors="coerce").fillna(0).to_numpy(float)
             auc, ks = auc_ks(s, y)
             _, se, _, _ = delong(s, y)
-            dec = deciles(s, y, amt, loss)
+            dec = deciles(
+                s, y, amt, loss, cuts=NEW_DECILE_CUTS if key == "new" else None
+            )
             overall_rate = float(y.mean() * 100)
             for item in dec:
                 item["lift"] = round(item["rate"] / overall_rate, 2) if overall_rate else None
@@ -450,7 +478,7 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
             "overall_rate": round(float(label_arr.mean() * 100), 2),
         }
 
-        # 五分位交叉矩阵：行 = 新戳额模型档，列 = 线上模型档
+        # 五分位交叉矩阵：行 = 新戳额模型档（固定十分位相邻两档合并），列 = 线上模型档（样本等笔数）
         pair_all = base.dropna(subset=["old_score", "new_score"])
         label_all = pair_all[ovd_col].astype(int).to_numpy()
         n_pair_all = len(pair_all)
@@ -459,7 +487,13 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
             rank = pd.Series(np.asarray(values, dtype=float)).rank(method="first")
             return np.ceil(rank * 5 / n_pair_all).astype(int).to_numpy()
 
-        q_new = quintile(pair_all["new_score"].to_numpy(float))
+        q_new = (
+            np.searchsorted(
+                NEW_DECILE_CUTS, pair_all["new_score"].to_numpy(float), side="left"
+            ).clip(0, 9)
+            // 2
+            + 1
+        )
         q_old = quintile(pair_all["old_score"].to_numpy(float))
         cross_rows = []
         for i in range(1, 6):
@@ -634,6 +668,12 @@ def fmt_days(days):
     return f"{days:.1f} 天"
 
 
+def fmt_range(lo, hi):
+    if lo is None or hi is None:
+        return "—"
+    return f"{lo:.4f}–{hi:.4f}"
+
+
 def cut_for(entry, key, reject_pct):
     for cutoff in entry["models"][key]["cutoffs"]:
         if cutoff["reject_pct"] == reject_pct:
@@ -710,7 +750,8 @@ def metrics_table(data) -> str:
         </table>
       </div>
       <p class="note">坏样本 = y_fpdN_ovd 之和；成熟样本 = y_fpdN_obs = 1（due + N &lt; 观察日）。
-      最高档 = 十分位第 10 档（分数最高）；lift = 该档坏率 / 全体坏率。ΔAUC 用 DeLong 配对检验，仅取两模型都有分的样本。</p>    """
+      最高档 = 十分位第 10 档（分数最高）；新戳额模型按固定切点分档，线上模型按样本等笔数分档。
+      lift = 该档坏率 / 全体坏率。ΔAUC 用 DeLong 配对检验，仅取两模型都有分的样本。</p>    """
 
 
 def scenario_table(data, window_key) -> str:
@@ -774,10 +815,12 @@ def decile_table(data, window_key) -> str:
             <tr>
               <td>{n['q']}</td>
               <td>{fmt_int(n['n'])}</td>
+              <td class="soft">{fmt_range(n['score_min'], n['score_max'])}</td>
               <td class="strong">{fmt_pct(n['rate'])}</td>
               <td class="lift">{fmt_num(n['lift'], 2)}×</td>
               <td class="soft">{fmt_int(n['bad'])}</td>
               <td>{fmt_int(o['n'])}</td>
+              <td class="soft">{fmt_range(o['score_min'], o['score_max'])}</td>
               <td>{fmt_pct(o['rate'])}</td>
               <td class="lift">{fmt_num(o['lift'], 2)}×</td>
               <td class="soft">{fmt_int(o['bad'])}</td>
@@ -789,12 +832,12 @@ def decile_table(data, window_key) -> str:
           <thead>
             <tr>
               <th rowspan="2">档位</th>
-              <th colspan="4" class="group new">新戳额模型</th>
-              <th colspan="4" class="group old">线上模型</th>
+              <th colspan="5" class="group new">新戳额模型</th>
+              <th colspan="5" class="group old">线上模型</th>
             </tr>
             <tr>
-              <th>样本</th><th>笔数坏率</th><th>lift</th><th>坏样本</th>
-              <th>样本</th><th>笔数坏率</th><th>lift</th><th>坏样本</th>
+              <th>样本</th><th>分数区间</th><th>笔数坏率</th><th>lift</th><th>坏样本</th>
+              <th>样本</th><th>分数区间</th><th>笔数坏率</th><th>lift</th><th>坏样本</th>
             </tr>
           </thead>
           <tbody>{''.join(rows)}</tbody>
@@ -993,9 +1036,10 @@ def decile_card(data) -> str:
     old_vals = [d["rate"] for d in old_dec[:9] if d["rate"] is not None]
     old_low = min(old_vals) if old_vals else None
     old_high = max(old_vals) if old_vals else None
+    rule_txt = " / ".join(f"{v:.4f}" for v in NEW_DECILE_CUTS)
     return f"""
     <section class="card">
-      <h2>十分位坏率<span class="tag" title="按各模型分数升序切 10 等份，第 10 档风险最高">FPD15</span></h2>
+      <h2>十分位坏率<span class="tag" title="新戳额模型按固定十分位切点分档，线上模型按当前样本分数升序等分 10 档，第 10 档风险最高">FPD15</span></h2>
       <p class="desc">新戳额模型{'从第 1 档到第 10 档单调上升' if mono else '各档基本拉开'}，最高档 {fmt_pct(new_dec[-1]['rate'])}、
       lift {fmt_num(new_dec[-1]['lift'], 2)}×；线上模型前 9 档挤在 {fmt_pct(old_low)}–{fmt_pct(old_high)} 之间，
       最高档 {fmt_pct(old_dec[-1]['rate'])}、lift {fmt_num(old_dec[-1]['lift'], 2)}×。</p>
@@ -1010,6 +1054,9 @@ def decile_card(data) -> str:
       </div>
       <div class="subhead">分档明细</div>
       {decile_table(data, '15')}
+      <p class="note">新戳额模型按固定十分位切点分档（各档上界 {rule_txt}），首档以下并入第 1 档、
+      末档以上并入第 10 档，落在相邻档间隔内的分数并入下一档；线上模型按当前成熟样本内分数升序等笔数分档。
+      分数区间为样本内实际最小–最大值。</p>
     </section>
     """
 
@@ -1048,7 +1095,7 @@ def cross_card(data) -> str:
     cross = data["windows"]["15"]["cross"]
     return f"""
     <section class="card">
-      <h2>五分位交叉矩阵<span class="tag" title="行 = 新戳额模型五分位，列 = 线上模型五分位，每格为该组合的笔数坏率">FPD15</span></h2>
+      <h2>五分位交叉矩阵<span class="tag" title="行 = 新戳额模型五分位（固定十分位相邻两档合并），列 = 线上模型五分位（样本等笔数），每格为该组合的笔数坏率">FPD15</span></h2>
       <p class="desc">每格是落在该组合的样本的笔数坏率。横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差
       {cross['row_spread_max']:.1f}pp；纵向看（线上档固定、新戳额模型 1→5 档）至少差 {cross['col_spread_min']:.1f}pp
       ——风险差异主要由新戳额模型的分档解释，线上模型分档带来的额外区分很小。</p>
@@ -1061,7 +1108,8 @@ def cross_card(data) -> str:
         <span><i class="sw h4"></i>7–15%</span>
         <span><i class="sw h5"></i>≥15%</span>
       </div>
-      <p class="note">行 = 新戳额模型五分位，列 = 线上模型五分位，1 档风险最低。样本为 FPD15 成熟且两个模型都有分的
+      <p class="note">行 = 新戳额模型五分位（由固定十分位第 1–2、3–4、…、9–10 档合并），列 = 线上模型五分位
+      （当前成熟样本内等笔数），1 档风险最低。样本为 FPD15 成熟且两个模型都有分的
       {fmt_int(cross['n'])} 笔，每格最少 {fmt_int(cross['min_cell'])} 笔；两模型落在同一档（对角线）的占
       {cross['diag_share']}%，其余是重排。悬停方格可看该格坏样本数。</p>
     </section>
@@ -1384,7 +1432,8 @@ def footer_html(data, generated_at, label_name, score_name) -> str:
             未成熟不判坏。本报告坏率均为笔数口径；金额仅出现在「通过收益」卡，为放款本金 real_amount，
             好客户本金 = 未坏样本的放款本金之和，不含利息与费用。</li>
         <li><b>指标口径</b>：AUC / Gini / KS 在成熟样本内计算；AUC 置信区间与两模型差异用 DeLong 法（差异检验为配对 DeLong）。
-            十分位在成熟样本内按分数升序等分，第 1 档最低风险。</li>
+            新戳额模型的十分位按固定分箱规则切档（切点见「十分位坏率」分档明细），
+            线上模型与其余按样本等笔数划分的分档均在成熟样本内按分数升序等分，第 1 档最低风险。</li>
         <li><b>lift 口径</b>：lift = 该组笔数坏率 / 全体笔数坏率。分档 lift 按档计算（第 10 档即最高档坏率 / 全体坏率）；
             互换矩阵按格计算，基数取该口径下的全体坏率；拦截 lift = 被拒人群坏率 / 全体坏率，也等于拦截坏账占比 / 拒绝比例。</li>
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
