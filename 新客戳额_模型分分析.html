@@ -326,18 +326,20 @@
       <p class="eyebrow">WAGEGO · 新客首借成交样本</p>
       <h1>新客戳额风险模型效果评估报告</h1>
       <p class="sub">从区分度、决策收益到周度稳定性，评估新戳额模型相对线上模型的增量价值。
-      首笔成交新客，戳额时间 2026-08-01 至 2026-10-23，观察日 2026-11-02。</p>
+      首笔成交新客，戳额时间 2026-08-01 至 2026-10-23，观察日 2026-11-02。
+      除特别标注外，正文 AUC / KS / 坏率均为<b>全样本成熟成交样本</b>口径（含 OOT 时段）；OOT 与周度稳定性单独切分。</p>
       <div class="models">
         <span><i class="dot new"></i><b>新戳额模型</b><code>aus_new_wagego_credit_20261028_v1_0_txn_lgb_score</code><span class="muted">戳额场景</span></span>
         <span><i class="dot old"></i><b>线上模型</b><code>aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626</code><span class="muted">发标场景</span></span>
       </div>
       <div class="chips">
-        <span class="chip">样本 13,431 人</span>
+        <span class="chip">样本 13,431 人（每人一笔）</span>
         <span class="chip">戳额全量 50,291 人</span>
         <span class="chip">戳额→成交 29.12%</span>
+        <span class="chip">主指标：全样本成熟（含 OOT）</span>
         <span class="chip">FPD15 成熟 9,618 笔</span>
         <span class="chip">FPD7 成熟 12,006 笔</span>
-        <span class="chip">OOT 2026-09-30 起</span>
+        <span class="chip">OOT 切点 2026-09-30</span>
         <span class="chip">笔数坏率</span>
       </div>
     </header>
@@ -347,22 +349,22 @@
       <div class="kpi">
         <span class="label"><i class="dot new"></i>新戳额模型 FPD15 AUC</span>
         <b>0.785</b>
-        <span class="sub">Gini 0.571 · KS 0.446</span>
+        <span class="sub">全样本成熟 9,618 笔 · Gini 0.571 · KS 0.446</span>
       </div>
       <div class="kpi">
         <span class="label"><i class="dot old"></i>线上模型 FPD15 AUC</span>
         <b>0.634</b>
-        <span class="sub">Gini 0.269 · KS 0.193</span>
+        <span class="sub">全样本成熟 9,613 笔 · Gini 0.269 · KS 0.193</span>
       </div>
       <div class="kpi">
         <span class="label">AUC 提升</span>
         <b>+0.151</b>
-        <span class="sub">95% CI +0.132 ~ +0.170 · p &lt; 0.001</span>
+        <span class="sub">全样本配对 9,613 笔 · 95% CI +0.132 ~ +0.170 · p &lt; 0.001</span>
       </div>
       <div class="kpi">
         <span class="label">拒绝 30% 后的通过坏率</span>
         <b>4.49% <span class="vs">vs</span> 7.67%</b>
-        <span class="sub">口径：笔数坏率</span>
+        <span class="sub">全样本成熟 · 笔数坏率</span>
       </div>
     </div>
     
@@ -564,15 +566,16 @@
     </section>
 
     <section class="card" id="metrics">
-      <h2>核心指标<span class="tag" title="AUC / Gini / KS 均在成熟样本内计算">排序能力</span></h2>
-      <p class="desc">两个标签口径、两个模型放在同一批成熟样本上比。新戳额模型 AUC 0.79、KS 0.45，
+      <h2>核心指标<span class="tag" title="AUC / Gini / KS 均在全样本成熟成交样本上计算（含 OOT 时段）">全样本成熟 · 排序能力</span></h2>
+      <p class="desc">两个标签口径、两个模型都在全样本成熟成交样本上计算；ΔAUC 另取两个模型都有分的配对样本。
+      新戳额模型 AUC 0.79、KS 0.45，
       线上模型 AUC 0.63、KS 0.19。</p>
       
       <div class="table-wrap">
         <table class="metrics">
           <thead>
             <tr>
-              <th>窗口</th><th>模型</th><th>成熟样本</th><th>坏样本</th><th>笔数坏率</th>
+              <th>窗口</th><th>模型</th><th>成熟笔数</th><th>坏样本</th><th>笔数坏率</th>
               <th>AUC</th><th>AUC 95% CI</th><th>Gini</th><th>KS</th>
               <th>最高档坏率</th><th>最高档 lift</th>
             </tr>
@@ -650,18 +653,20 @@
         </tr></tbody>
         </table>
       </div>
-      <p class="note">坏样本 = y_fpdN_ovd 之和；成熟样本 = y_fpdN_obs = 1（due + N &lt; 观察日）。
+      <p class="note">样本为全样本成熟成交样本（含 OOT 时段），每人一笔；坏样本 = y_fpdN_ovd 之和；
+      成熟样本 = y_fpdN_obs = 1（due + N &lt; 观察日）。
       最高档 = 十分位第 10 档（分数最高）；两个模型均按各自的固定切点分档。
-      lift = 该档坏率 / 全体坏率。ΔAUC 用 DeLong 配对检验，仅取两模型都有分的样本。</p>    
+      lift = 该档坏率 / 全体坏率。各模型 AUC 用各自有分样本计算；ΔAUC 用 DeLong 配对检验，仅取两模型都有分的样本。</p>    
     </section>
     
 
     <section class="card" id="roc">
-      <h2>ROC 曲线<span class="tag" title="横轴假阳率、纵轴真阳率；对角线为随机模型">AUC 比较</span></h2>
-      <p class="desc">曲线越靠左上越好；新戳额模型在两个标签口径下都明显更靠左上。</p>
+      <h2>ROC 曲线<span class="tag" title="横轴假阳率、纵轴真阳率；对角线为随机模型；全样本成熟成交样本（含 OOT）">全样本成熟 · AUC 比较</span></h2>
+      <p class="desc">曲线越靠左上越好；这里展示全样本成熟成交样本（含 OOT），OOT 切点前后的分段表现见「OOT 表现」卡。
+      新戳额模型在两个标签口径下都明显更靠左上。</p>
       <div class="grid2">
       <div class="panel">
-        <h3>FPD15 · ROC<span class="muted">　成熟 9,618 笔 · 坏 964 笔</span></h3>
+        <h3>FPD15 · ROC<span class="muted">　全样本成熟 9,618 笔 · 坏 964 笔</span></h3>
         <div class="chart-wrap">
           <svg id="roc15" viewBox="0 0 500 500" role="img" aria-label="FPD15 ROC 曲线"></svg>
           <div class="tip" id="rocTip15"></div>
@@ -672,7 +677,7 @@
         </div>
       </div>
       <div class="panel">
-        <h3>FPD7 · ROC<span class="muted">　成熟 12,006 笔 · 坏 1,662 笔</span></h3>
+        <h3>FPD7 · ROC<span class="muted">　全样本成熟 12,006 笔 · 坏 1,662 笔</span></h3>
         <div class="chart-wrap">
           <svg id="roc7" viewBox="0 0 500 500" role="img" aria-label="FPD7 ROC 曲线"></svg>
           <div class="tip" id="rocTip7"></div>
@@ -687,8 +692,8 @@
     
 
     <section class="card" id="decile">
-      <h2>十分位坏率<span class="tag" title="两个模型均按各自的固定十分位切点分档，第 10 档风险最高">FPD15</span></h2>
-      <p class="desc">新戳额模型从第 1 档到第 10 档单调上升，最高档 34.30%、
+      <h2>十分位坏率<span class="tag" title="全样本成熟成交样本（含 OOT）；两个模型均按各自的固定十分位切点分档，第 10 档风险最高">全样本成熟 · FPD15</span></h2>
+      <p class="desc">样本为全样本成熟成交样本（含 OOT）。新戳额模型从第 1 档到第 10 档单调上升，最高档 34.30%、
       lift 3.42×；线上模型第 1–9 档坏率在 4.15%–21.83% 之间，
       最高档 27.57%、lift 2.75×。</p>
       <div class="chart-wrap">
@@ -851,12 +856,12 @@
     
       <p class="note">两个模型均按各自的固定十分位切点分档：新戳额模型各档上界 0.0410 / 0.0509 / 0.0620 / 0.0740 / 0.0874 / 0.1046 / 0.1245 / 0.1569 / 0.2101 / 0.4313；
       线上模型各档上界 0.0486 / 0.0621 / 0.0756 / 0.0913 / 0.1092 / 0.1284 / 0.1546 / 0.1890 / 0.2400 / 0.6154。首档以下并入第 1 档，末档以上并入第 10 档，
-      落在相邻档间隔内的分数并入下一档。分数区间为样本内实际最小–最大值。</p>
+      落在相邻档间隔内的分数并入下一档。分数区间为本次样本实际最小–最大值，不是固定规则区间。</p>
     </section>
     
 
     <section class="card" id="cross">
-      <h2>五分位交叉矩阵<span class="tag" title="行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位相邻两档合并；每格为该组合的笔数坏率">FPD15</span></h2>
+      <h2>五分位交叉矩阵<span class="tag" title="全样本成熟成交样本（含 OOT）；行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位相邻两档合并；每格为该组合的笔数坏率">全样本成熟 · FPD15</span></h2>
       <p class="desc">每格是落在该组合的样本的笔数坏率；行、列均由低到高，1 档 = 分数最低（最安全），5 档 = 分数最高。横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差
       11.9pp；纵向看（线上档固定、新戳额模型 1→5 档）至少差 22.3pp
       ——风险差异主要由新戳额模型的分档解释，线上模型分档带来的额外区分很小。</p>
@@ -880,24 +885,24 @@
         <span><i class="sw h5"></i>≥15%</span>
       </div>
       <p class="note">行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位第 1–2、3–4、…、9–10 档合并，
-      1 档风险最低。样本为 FPD15 成熟且两个模型都有分的
+      1 档风险最低。样本为全样本 FPD15 成熟且两个模型都有分的
       9,613 笔，每格最少 7 笔；两模型落在同一档（对角线）的占
       28.8%，其余是重排。悬停方格可看该格坏样本数。</p>
     </section>
     
 
     <section class="card" id="oot">
-      <h2>OOT 表现<span class="tag" title="OOT = 戳额时间不早于 2026-09-30 的样本">按时间切分</span></h2>
-      <p class="desc">把样本内和 OOT 分开看，避免样本内表现掩盖上线后的真实区分度。OOT 上两个模型都用原始分数重新计算 AUC / KS，
-      不与前面的整体指标混算。下图每行是一组对照，蓝点越靠右区分度越高，右侧数字为 ΔAUC。</p>
+      <h2>OOT 表现<span class="tag" title="OOT 后 = 戳额时间不早于 2026-09-30 的样本；OOT 前 = 早于该切点的样本">OOT 后 vs OOT 前</span></h2>
+      <p class="desc">把 OOT 前和 OOT 后分开看，避免整体表现掩盖上线后的真实区分度。两个分段都用原始分数、各自的成熟样本重新计算 AUC / KS，
+      不与前面的全样本指标混算。下图每行是一组对照，蓝点越靠右区分度越高，右侧数字为 ΔAUC。</p>
       <div class="chart-wrap">
-        <svg id="ootChart" viewBox="0 0 1000 320" role="img" aria-label="全样本、样本内与 OOT 的 AUC 对比"></svg>
+        <svg id="ootChart" viewBox="0 0 1000 320" role="img" aria-label="全样本、OOT 前与 OOT 后的 AUC 对比"></svg>
         <div class="tip" id="ootTip"></div>
       </div>
       <div class="legend">
         <span><i class="dot new"></i>新戳额模型</span>
         <span><i class="dot old"></i>线上模型</span>
-        <span class="muted">右侧数字：ΔAUC（新 − 旧）· 灰底行 = OOT</span>
+        <span class="muted">右侧数字：ΔAUC（新 − 旧）· 灰底行 = OOT 后</span>
       </div>
       <div class="table-wrap">
         <table class="oot">
@@ -924,7 +929,7 @@
             </tr>
             <tr>
               <td class="w">FPD15</td>
-              <td>样本内</td>
+              <td>OOT 前</td>
               <td>5,620</td>
               <td>589</td>
               <td>10.48%</td>
@@ -937,7 +942,7 @@
             </tr>
             <tr class="oot">
               <td class="w">FPD15</td>
-              <td>OOT</td>
+              <td>OOT 后</td>
               <td>3,998</td>
               <td>375</td>
               <td>9.38%</td>
@@ -963,7 +968,7 @@
             </tr>
             <tr>
               <td class="w">FPD7</td>
-              <td>样本内</td>
+              <td>OOT 前</td>
               <td>5,750</td>
               <td>836</td>
               <td>14.54%</td>
@@ -976,7 +981,7 @@
             </tr>
             <tr class="oot">
               <td class="w">FPD7</td>
-              <td>OOT</td>
+              <td>OOT 后</td>
               <td>6,256</td>
               <td>826</td>
               <td>13.20%</td>
@@ -989,18 +994,19 @@
             </tr></tbody>
         </table>
       </div>
-      <p class="note">OOT 按戳额时间 last_limit_time ≥ 2026-09-30 划分，样本内为 2026-08-01 至 2026-09-29。
-      各窗口只统计已成熟样本；ΔAUC 用配对 DeLong 检验，仅取两模型都有分的样本。OOT 样本若尚未成熟，不计入对应窗口。</p>
+      <p class="note">OOT 按戳额时间 last_limit_time ≥ 2026-09-30 划分，OOT 后为 2026-09-30 及以后，
+      OOT 前为 2026-08-01 至 2026-09-29。各分段只统计已成熟样本，各模型 AUC 用各自有分样本计算；
+      ΔAUC 用配对 DeLong 检验，仅取两模型都有分的样本。OOT 样本若尚未成熟，不计入对应窗口。</p>
     </section>
     
 
     <section class="card" id="weekly">
-      <h2>分周稳定性<span class="tag" title="按放款周（周一起）计算成熟样本内的 AUC">周度 AUC</span></h2>
-      <p class="desc">新戳额模型在每一个可评估的周都高于线上模型。<span class="muted">FPD15（7 周）：线上模型 0.61–0.65，新戳额模型 0.75–0.81</span>；<span class="muted">FPD7（9 周）：线上模型 0.61–0.67，新戳额模型 0.70–0.82</span>。</p>
+      <h2>分周稳定性<span class="tag" title="按放款周逐周重算；不是 OOT 的单一切分，OOT 见上一张卡">逐周重算 · AUC</span></h2>
+      <p class="desc">新戳额模型在每一个可评估的周都高于线上模型。这是按放款周在每一周的成熟样本上逐周重算，和「OOT 表现」的单一切分不同。<span class="muted">FPD15（7 周）：线上模型 0.61–0.65，新戳额模型 0.75–0.81</span>；<span class="muted">FPD7（9 周）：线上模型 0.61–0.67，新戳额模型 0.70–0.82</span>。</p>
       <div class="grid2">
         
       <div class="panel">
-        <h3>FPD15 · AUC 按周<span class="muted">　成熟 9,618 笔 · 坏 964 笔</span></h3>
+        <h3>FPD15 · AUC 按周<span class="muted">　当周成熟 9,618 笔 · 坏 964 笔</span></h3>
         <div class="chart-wrap">
           <svg id="week15" viewBox="0 0 500 330" role="img" aria-label="FPD15 周度 AUC"></svg>
           <div class="tip" id="weekTip15"></div>
@@ -1012,7 +1018,7 @@
       </div>
     
       <div class="panel">
-        <h3>FPD7 · AUC 按周<span class="muted">　成熟 12,006 笔 · 坏 1,662 笔</span></h3>
+        <h3>FPD7 · AUC 按周<span class="muted">　当周成熟 12,006 笔 · 坏 1,662 笔</span></h3>
         <div class="chart-wrap">
           <svg id="week7" viewBox="0 0 500 330" role="img" aria-label="FPD7 周度 AUC"></svg>
           <div class="tip" id="weekTip7"></div>
@@ -1041,15 +1047,15 @@
           <tbody><tr><td>08-03</td><td>5</td><td class="soft">5</td><td>20.00%</td><td>—</td><td>—</td><td class="soft">5</td><td>20.00%</td><td>—</td><td>—</td></tr><tr><td>08-17</td><td>8</td><td class="soft">8</td><td>12.50%</td><td>—</td><td>—</td><td class="soft">8</td><td>12.50%</td><td>—</td><td>—</td></tr><tr><td>08-24</td><td>85</td><td class="soft">85</td><td>9.41%</td><td>—</td><td>—</td><td class="soft">85</td><td>11.76%</td><td>0.639</td><td>0.819</td></tr><tr><td>08-31</td><td>601</td><td class="soft">601</td><td>11.81%</td><td>0.647</td><td>0.812</td><td class="soft">601</td><td>14.31%</td><td>0.648</td><td>0.806</td></tr><tr><td>09-07</td><td>1,010</td><td class="soft">1,010</td><td>10.50%</td><td>0.611</td><td>0.791</td><td class="soft">1,010</td><td>14.26%</td><td>0.613</td><td>0.750</td></tr><tr><td>09-14</td><td>1,271</td><td class="soft">1,271</td><td>9.91%</td><td>0.620</td><td>0.795</td><td class="soft">1,271</td><td>14.16%</td><td>0.613</td><td>0.757</td></tr><tr><td>09-21</td><td>1,798</td><td class="soft">1,793</td><td>10.82%</td><td>0.631</td><td>0.786</td><td class="soft">1,798</td><td>15.41%</td><td>0.632</td><td>0.761</td></tr><tr><td>09-28</td><td>2,494</td><td class="soft">2,472</td><td>8.78%</td><td>0.635</td><td>0.795</td><td class="soft">2,482</td><td>13.05%</td><td>0.633</td><td>0.767</td></tr><tr><td>10-05</td><td>2,439</td><td class="soft">2,014</td><td>9.83%</td><td>0.648</td><td>0.757</td><td class="soft">2,420</td><td>12.93%</td><td>0.628</td><td>0.736</td></tr><tr><td>10-12</td><td>2,463</td><td class="soft">359</td><td>11.70%</td><td>0.647</td><td>0.748</td><td class="soft">1,961</td><td>13.82%</td><td>0.640</td><td>0.700</td></tr><tr><td>10-19</td><td>1,257</td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td class="soft">365</td><td>15.07%</td><td>0.675</td><td>0.746</td></tr></tbody>
         </table>
       </div>
-      <p class="note">AUC 在当周成熟样本内计算，坏样本或好样本少于 10 笔的周不计算（显示 —）。
+      <p class="note">AUC 在当周成熟样本上计算，坏样本或好样本少于 10 笔的周不计算（显示 —）。
       最近几周 FPD15 尚未成熟，FPD15 的趋势实际截止到 10-05 那一周；看单周波动不如看整体水平。</p>
     
     </section>
     
 
     <section class="card" id="money">
-      <h2>置入与置出<span class="tag" title="置入 = 放款本金 real_amount 之和；置出 = due+N 当天借据快照的未还本金之和">放款本金 vs 未还本金</span></h2>
-      <p class="desc">前面所有坏率都是笔数口径，这里换成钱。FPD15 成熟样本上，新戳额模型口径的置入
+      <h2>置入与置出<span class="tag" title="全样本 FPD15 成熟成交样本（含 OOT）；置入 = 放款本金 real_amount 之和；置出 = due+N 当天借据快照的未还本金之和">全样本成熟 · FPD15 · 金额</span></h2>
+      <p class="desc">前面所有坏率都是笔数口径，这里换成钱。全样本 FPD15 成熟成交样本上，新戳额模型口径的置入
       1,413,450、置出 132,500，置出率 9.37%，
       比同口径的笔数坏率 10.02% 低 0.65pp——坏样本的单笔金额小于整体平均。最高档只占置入的 7.5%，
       却贡献 28.0% 的置出（线上模型最高档 6.4%）。</p>
@@ -1238,14 +1244,14 @@
         </table>
       </div>
     
-      <p class="note">置入 = real_amount 之和；置出 = due + N 当天借据快照的未还本金之和，成熟样本内无缺失；
+      <p class="note">置入 = real_amount 之和；置出 = due + N 当天借据快照的未还本金之和，成熟样本上无缺失；
       置出率 = 置出 / 置入；留存 = 置入 − 置出。金额为放款本金口径，不含利息与费用。</p>
     </section>
     
 
     <section class="card" id="capture">
-      <h2>拦截收益<span class="tag" title="按分数从高到低拒绝，横轴为拒绝比例，纵轴为被拒样本中的坏账占比">FPD15</span></h2>
-      <p class="desc">拒绝同样比例的人，新戳额模型能拦下更多坏账。拒绝 30% 时，新戳额模型捕获
+      <h2>拦截收益<span class="tag" title="全样本成熟成交样本（含 OOT）；按分数从高到低拒绝，横轴为拒绝比例，纵轴为被拒样本中的坏账占比">全样本成熟 · FPD15</span></h2>
+      <p class="desc">在全样本成熟成交样本上，拒绝同样比例的人，新戳额模型能拦下更多坏账。拒绝 30% 时，新戳额模型捕获
       68.7% 的坏账，线上模型 46.4%。</p>
       <div class="chart-wrap">
         <svg id="captureChart" viewBox="0 0 1000 340" role="img" aria-label="坏账捕获曲线"></svg>
@@ -1387,7 +1393,7 @@
         </table>
       </div>
     
-      <p class="note">通过坏率 = 未被拒绝样本的笔数坏率；拦截坏账（笔数）= 被拒坏样本 / 全部坏样本；
+      <p class="note">样本为全样本 FPD15 成熟成交样本（含 OOT）。通过坏率 = 未被拒绝样本的笔数坏率；拦截坏账（笔数）= 被拒坏样本 / 全部坏样本；
       拦截坏账下的「金额」= 被拒样本的坏账损失本金 / 全部坏账损失本金，见「金额口径」卡。
       通过笔数按新戳额模型样本计（线上模型缺失 5 笔，各情景差异在 5 笔以内）。
       通过率 70% 为上方「结论」引用的口径。</p>
@@ -1395,8 +1401,8 @@
     
 
     <section class="card" id="through">
-      <h2>通过收益<span class="tag" title="把通过坏率控制在同一水平，各模型能达到的最高通过率">FPD15</span></h2>
-      <p class="desc">拦截的反面是通过。同样把通过坏率压在 8% 以内，线上模型只能通过
+      <h2>通过收益<span class="tag" title="全样本成熟成交样本（含 OOT）；把通过坏率控制在同一水平，各模型能达到的最高通过率">全样本成熟 · FPD15</span></h2>
+      <p class="desc">在全样本成熟成交样本上，把通过坏率压在同一水平，各模型能达到的最高通过率不同。以 8% 以内为例，线上模型只能通过
       73.5%（7,063 笔），新戳额模型可以通过 92.7%（8,914 笔），
       多 1,851 位客户、175,250 好客户本金。</p>
       <div class="chart-wrap">
@@ -1541,15 +1547,15 @@
         </table>
       </div>
     
-      <p class="note">坏率预算 = 通过样本的笔数坏率上限；通过率 = 该预算下可放行的最大比例，
+      <p class="note">样本为全样本 FPD15 成熟成交样本（含 OOT）。坏率预算 = 通过样本的笔数坏率上限；通过率 = 该预算下可放行的最大比例，
       多通过本金 = 两边"好客户"（未坏样本）的放款本金之差。线上模型缺失 5 笔，两个样本相差 5 笔以内。
       本金为放款金额 real_amount，不含利息与费用。线上模型在低预算档只放得出极少数人，说明它无法在该坏率水平上开展业务。</p>
     </section>
     
 
     <section class="card" id="swap">
-      <h2>决策互换矩阵<span class="tag" title="两个模型各拒绝最差 30% 后的人群交叉对比">FPD15 · 拒绝 30%</span></h2>
-      <p class="desc">同一批人、同样的拒绝比例，两个模型拒掉的人只有一部分重叠。分歧人群的实际坏率决定该信谁。</p>
+      <h2>决策互换矩阵<span class="tag" title="全样本成熟成交样本（含 OOT）；两个模型各拒绝最差 30% 后的人群交叉对比">全样本成熟 · FPD15 · 拒绝 30%</span></h2>
+      <p class="desc">同一批全样本成熟且两个模型都有分的人、同样的拒绝比例，两个模型拒掉的人只有一部分重叠。分歧人群的实际坏率决定该信谁。</p>
       
       <div class="swap">
         <div></div>
@@ -1582,7 +1588,7 @@
           <span>1,400 人 · 坏 357 笔</span>
         </div>
       </div>
-      <p class="note">按分数各拒绝最差的 30%（2,884 人）后交叉分组；
+      <p class="note">样本为全样本 FPD15 成熟且两个模型都有分的配对样本。按分数各拒绝最差的 30%（2,884 人）后交叉分组；
       全体坏率 10.02%，坏率后的 × 为该组相对全体坏率的 lift。
       两模型都拒绝的人群坏率最高，都通过的最低——分歧人群的坏率差距说明谁的判断更准。</p>
     
@@ -1768,21 +1774,21 @@
     <section class="card conclus" id="conclusion">
       <h2>结论</h2>
       <ul>
-        <li><b>区分度</b>：新戳额模型 FPD15 AUC 0.785，线上模型 0.634，
+        <li><b>区分度</b>（全样本成熟）：新戳额模型 FPD15 AUC 0.785，线上模型 0.634，
             提升 +0.151（95% CI +0.132 ~ +0.170，
             p &lt; 0.001）；FPD7 口径同样提升 +0.117，结论不依赖单一标签。</li>
-        <li><b>OOT 表现</b>：2026-09-30 起，FPD15 成熟 3,998 笔，
+        <li><b>OOT 表现</b>（OOT 后，2026-09-30 起）：FPD15 成熟 3,998 笔，
             新戳额模型 AUC 0.775 vs 线上 0.641，
             提升 +0.134；FPD7 成熟 6,256 笔，
             AUC 0.734 vs 0.633，
-            提升 +0.102，与样本内方向一致。</li>
-        <li><b>同样风控强度下坏率更低</b>：拒绝最差 30% 时，新戳额模型通过人群坏率 4.49%，
+            提升 +0.102，与 OOT 前方向一致。</li>
+        <li><b>同样风控强度下坏率更低</b>（全样本成熟）：拒绝最差 30% 时，新戳额模型通过人群坏率 4.49%，
             线上模型 7.67%（约 1.7 倍）；新戳额模型拦下 68.7% 的坏账，线上模型 46.4%。</li>
-        <li><b>同样坏率预算下通过更多</b>：把通过坏率压在同一水平，新戳额模型能多放客户。以 8% 为例，
+        <li><b>同样坏率预算下通过更多</b>（全样本成熟）：把通过坏率压在同一水平，新戳额模型能多放客户。以 8% 为例，
             线上模型最多通过 73.5%（7,063 笔），新戳额模型
             92.7%（8,914 笔），多 1,851 位客户、
             175,250 好客户本金。</li>
-        <li><b>分歧人群以新戳额模型判断为准</b>：新戳额模型拒绝而线上模型放行的 1,484 人坏率
+        <li><b>分歧人群以新戳额模型判断为准</b>（全样本成熟）：新戳额模型拒绝而线上模型放行的 1,484 人坏率
             20.55%，线上模型拒绝而新戳额模型放行的 1,484 人坏率仅
             6.06%，相差 3.4 倍。</li>
         <li><b>戳额转化</b>：戳额全量 50,291 人，借款申请率 36.14%，
@@ -1797,9 +1803,10 @@
     <footer class="foot">
       <ul class="notes">
         <li><b>样本口径</b>：wagego_02 的新客首笔成交样本（application_rank = 1，按戳额时间 2026-08-01 至 2026-10-23 筛选），
-            与新戳额模型打分文件按 last_limit_flow_id = flow_id 关联，共 13,431 人。
+            与新戳额模型打分文件按 last_limit_flow_id = flow_id 关联，共 13,431 人。首借客户每人一笔，人数与笔数一致。
             样本表中另有 958 笔未打分、不入样：均为窗口末尾放款、FPD7/FPD15 均未成熟，不影响评估。</li>
-        <li><b>OOT 口径</b>：OOT 按戳额时间 last_limit_time ≥ 2026-09-30 划分，样本内为 2026-08-01 至 2026-09-29；
+        <li><b>OOT 口径</b>：OOT 按戳额时间 last_limit_time ≥ 2026-09-30 划分；OOT 后为 2026-09-30 及以后，
+            OOT 前（切点之前）为 2026-08-01 至 2026-09-29。
             OOT 分段的 AUC / KS / ΔAUC 见「OOT 表现」卡，未成熟样本不计入对应窗口。</li>
         <li><b>戳额生产打分全量</b>：wagego_new_user_credit_20260801_20261023_score.csv 为新客戳额环节的生产打分全量，共 50,291 人，
             覆盖 2026-08-03 至 2026-10-23；已打分 48,026 人、
@@ -1811,14 +1818,16 @@
         <li><b>坏率口径</b>：笔数坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和；成熟条件为 due + N &lt; 观察日（2026-11-02），
             未成熟不判坏。本报告坏率均为笔数口径；金额仅出现在「通过收益」卡，为放款本金 real_amount，
             好客户本金 = 未坏样本的放款本金之和，不含利息与费用。</li>
-        <li><b>指标口径</b>：AUC / Gini / KS 在成熟样本内计算；AUC 置信区间与两模型差异用 DeLong 法（差异检验为配对 DeLong）。
+        <li><b>指标口径</b>：除「OOT 表现」「分周稳定性」单独标注外，正文 AUC / Gini / KS 均为<b>全样本成熟成交样本</b>口径
+            （全部成熟样本，含 OOT 时段，不是只算 OOT，也不是只算 OOT 前）。OOT 卡为切点后 / 切点前子样本，
+            周度卡为逐周成熟子样本。各模型 AUC 用各自有分样本计算；AUC 置信区间与两模型差异用 DeLong 法（差异检验为配对 DeLong）。
             两个模型的十分位均按各自的固定分箱规则切档（切点见「十分位坏率」分档明细），第 1 档最低风险。</li>
         <li><b>lift 口径</b>：lift = 该组笔数坏率 / 全体笔数坏率。分档 lift 按档计算（第 10 档即最高档坏率 / 全体坏率）；
             互换矩阵按格计算，基数取该口径下的全体坏率；拦截 lift = 被拒人群坏率 / 全体坏率，也等于拦截坏账占比 / 拒绝比例。</li>
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_new_user_credit_analysis.py；生成时间 2026-11-02 16:54。</li>
+        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_new_user_credit_analysis.py；生成时间 2026-11-02 17:41。</li>
       </ul>
     </footer>
     
@@ -2436,7 +2445,7 @@ function drawOot() {
   const rows = [];
   ['15', '7'].forEach(w => {
     const segs = DATA.windows[w].segments;
-    [['all', '全样本'], ['pre_oot', '样本内'], ['oot', 'OOT']].forEach(pair => {
+    [['all', '全样本'], ['pre_oot', 'OOT 前'], ['oot', 'OOT 后']].forEach(pair => {
       const seg = segs[pair[0]];
       rows.push({
         label: 'FPD' + w + ' · ' + pair[1],
