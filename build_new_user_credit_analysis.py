@@ -438,8 +438,161 @@ def _dist_rows(values, cuts, mins) -> list[dict]:
     return rows
 
 
-def load_limit_data(limit_csv: Path, old_score_csv: Path | None = None) -> dict:
-    """戳额生产打分全量样本的新旧分数分布与档位迁移（无标签，不计算坏率 / AUC）。"""
+def _pct(num: int, den: int) -> float | None:
+    return round(num / den * 100, 2) if den else None
+
+
+def _conversion_stats(df: pd.DataFrame, obs_dt: pd.Timestamp) -> dict:
+    """用户级转化漏斗：戳额 → 借款申请 → 成交。"""
+    n = int(len(df))
+    applied = int(df["has_apply"].sum())
+    disbursed = int(df["has_disburse"].sum())
+    age = (obs_dt.normalize() - df["sample_datetime"].dt.normalize()).dt.days
+
+    def window(days: int, label: str) -> dict:
+        mature = df[age >= days]
+        den = int(len(mature))
+        apply_n = int((mature["days_to_apply"] <= days).sum())
+        disb_n = int((mature["days_to_disburse"] <= days).sum())
+        return {
+            "key": f"t{days}",
+            "label": label,
+            "n": den,
+            "applied": apply_n,
+            "apply_rate": _pct(apply_n, den),
+            "disbursed": disb_n,
+            "disburse_rate": _pct(disb_n, den),
+        }
+
+    apply_days = df.loc[df["has_apply"], "days_to_apply"].dropna()
+    disb_days = df.loc[df["has_disburse"], "days_to_disburse"].dropna()
+    amount_total = float(df["disburse_amount"].sum())
+    return {
+        "n": n,
+        "applied": applied,
+        "disbursed": disbursed,
+        "apply_rate": _pct(applied, n),
+        "disburse_rate": _pct(disbursed, n),
+        "apply_to_disburse": _pct(disbursed, applied),
+        "amount_per_disbursed": round(amount_total / disbursed, 2) if disbursed else None,
+        "median_days_to_apply": float(apply_days.median()) if len(apply_days) else None,
+        "p90_days_to_apply": float(apply_days.quantile(0.9)) if len(apply_days) else None,
+        "median_days_to_disburse": float(disb_days.median()) if len(disb_days) else None,
+        "p90_days_to_disburse": float(disb_days.quantile(0.9)) if len(disb_days) else None,
+        "windows": [
+            window(0, "t0 当天"),
+            window(1, "t1 0–1 天"),
+            window(7, "t7 0–7 天"),
+        ],
+    }
+
+
+def _load_conversion(limit: pd.DataFrame, label_csv: Path) -> dict | None:
+    """用戳额全量分关联借款申请，计算用户级转化；不依赖成交样本的 Y 标签。"""
+    if limit.empty:
+        return None
+    apps = pd.read_csv(
+        label_csv,
+        encoding="utf-8-sig",
+        usecols=[
+            "user_id",
+            "apply_time",
+            "is_disburse_success",
+            "disburse_time",
+            "real_amount",
+            "obs_dt",
+        ],
+    )
+    apps["apply_time"] = pd.to_datetime(apps["apply_time"], errors="coerce")
+    apps["disburse_time"] = pd.to_datetime(apps["disburse_time"], errors="coerce")
+    apps["is_disburse_success"] = (
+        pd.to_numeric(apps["is_disburse_success"], errors="coerce").fillna(0).astype(int)
+    )
+    apps["real_amount"] = pd.to_numeric(apps["real_amount"], errors="coerce").fillna(0.0)
+    obs_dt = pd.to_datetime(apps["obs_dt"], errors="coerce").max()
+    if pd.isna(obs_dt):
+        obs_dt = pd.Timestamp.today().normalize()
+
+    base = limit.dropna(subset=["sample_datetime"]).drop_duplicates("user_id").copy()
+    base["sample_datetime"] = pd.to_datetime(base["sample_datetime"], errors="coerce")
+    base = base.dropna(subset=["sample_datetime"])
+    events = apps.merge(
+        base[["user_id", "sample_datetime"]], on="user_id", how="inner"
+    )
+    events = events[
+        events["apply_time"].notna()
+        & (events["apply_time"] >= events["sample_datetime"])
+    ].copy()
+    events["success_amount"] = np.where(
+        events["is_disburse_success"] == 1, events["real_amount"], 0.0
+    )
+    events["success_disburse_time"] = events["disburse_time"].where(
+        events["is_disburse_success"] == 1
+    )
+
+    agg = events.groupby("user_id", as_index=False).agg(
+        n_apps=("apply_time", "size"),
+        first_apply_time=("apply_time", "min"),
+        any_disburse=("is_disburse_success", "max"),
+        first_disburse_time=("success_disburse_time", "min"),
+        disburse_amount=("success_amount", "sum"),
+    )
+    conv = base.merge(agg, on="user_id", how="left")
+    conv["has_apply"] = conv["n_apps"].fillna(0).gt(0)
+    conv["has_disburse"] = conv["any_disburse"].fillna(0).gt(0)
+    conv["disburse_amount"] = (
+        pd.to_numeric(conv["disburse_amount"], errors="coerce").fillna(0.0)
+    )
+    conv["days_to_apply"] = (
+        conv["first_apply_time"].dt.normalize()
+        - conv["sample_datetime"].dt.normalize()
+    ).dt.days
+    conv["days_to_disburse"] = (
+        conv["first_disburse_time"].dt.normalize()
+        - conv["sample_datetime"].dt.normalize()
+    ).dt.days
+
+    scored = conv.dropna(subset=["score"]).copy()
+    paired = (
+        scored.dropna(subset=["old_score"]).copy()
+        if "old_score" in scored
+        else scored.iloc[0:0]
+    )
+    new_rows, old_rows = [], []
+    if len(paired):
+        paired["new_q"] = _decile_of(paired["score"], NEW_DECILE_CUTS)
+        paired["old_q"] = _decile_of(paired["old_score"], OLD_DECILE_CUTS)
+        for q in range(1, 11):
+            new_rows.append(
+                {"q": q, **_conversion_stats(paired[paired["new_q"] == q], obs_dt)}
+            )
+            old_rows.append(
+                {"q": q, **_conversion_stats(paired[paired["old_q"] == q], obs_dt)}
+            )
+    elif len(scored):
+        scored["new_q"] = _decile_of(scored["score"], NEW_DECILE_CUTS)
+        for q in range(1, 11):
+            new_rows.append(
+                {"q": q, **_conversion_stats(scored[scored["new_q"] == q], obs_dt)}
+            )
+
+    return {
+        "obs_dt": obs_dt.strftime("%Y-%m-%d"),
+        "scored_n": int(len(scored)),
+        "paired_n": int(len(paired)),
+        "has_old": bool(old_rows),
+        "new_deciles": new_rows,
+        "old_deciles": old_rows,
+        **_conversion_stats(conv, obs_dt),
+    }
+
+
+def load_limit_data(
+    limit_csv: Path,
+    old_score_csv: Path | None = None,
+    label_csv: Path | None = None,
+) -> dict:
+    """戳额生产打分全量样本的分数分布、档位迁移与戳额后转化。"""
     limit = pd.read_csv(
         limit_csv,
         encoding="utf-8-sig",
@@ -528,6 +681,7 @@ def load_limit_data(limit_csv: Path, old_score_csv: Path | None = None) -> dict:
         "old_coverage": round(float(limit["old_score"].notna().mean() * 100), 2),
         "pair_n": int(len(base)),
         "migration": migration,
+        "conversion": _load_conversion(limit, label_csv) if label_csv else None,
         "monthly": monthly,
     }
 
@@ -872,6 +1026,14 @@ def fmt_days(days):
     return f"{days:.1f} 天"
 
 
+def fmt_elapsed_days(days):
+    if days is None:
+        return "—"
+    if days <= 0:
+        return "当天"
+    return f"{days:.0f} 天"
+
+
 def fmt_range(lo, hi):
     if lo is None or hi is None:
         return "—"
@@ -1156,6 +1318,128 @@ def limit_card(limit) -> str:
     """
 
 
+def conversion_card(limit, data) -> str:
+    if not limit:
+        return ""
+    conv = limit.get("conversion")
+    if not conv:
+        return ""
+    f15 = data["windows"]["15"]["models"]
+    new_bad = {r["q"]: r["rate"] for r in f15["new"]["deciles"]}
+    old_bad = {r["q"]: r["rate"] for r in f15["old"]["deciles"]}
+    has_old = bool(conv["has_old"] and conv["old_deciles"])
+
+    window_rows = "".join(
+        f"""
+            <tr>
+              <td>{w['label']}</td>
+              <td>{fmt_int(w['n'])}</td>
+              <td>{fmt_pct(w['apply_rate'])}<span class="n">{fmt_int(w['applied'])} 人</span></td>
+              <td>{fmt_pct(w['disburse_rate'])}<span class="n">{fmt_int(w['disbursed'])} 人</span></td>
+            </tr>"""
+        for w in conv["windows"]
+    )
+
+    def cells(row, bad_map):
+        return f"""
+              <td>{fmt_int(row['n'])}</td>
+              <td>{fmt_pct(row['apply_rate'])}</td>
+              <td>{fmt_pct(row['disburse_rate'])}</td>
+              <td class="soft">{fmt_elapsed_days(row['median_days_to_disburse'])}</td>
+              <td class="soft">{fmt_pct(bad_map.get(row['q']))}</td>"""
+
+    decile_html = ""
+    if conv["new_deciles"]:
+        rows = []
+        for i, nrow in enumerate(conv["new_deciles"]):
+            orow = conv["old_deciles"][i] if has_old else None
+            rows.append(
+                f"<tr><td>{nrow['q']}</td>{cells(nrow, new_bad)}"
+                f"{cells(orow, old_bad) if orow else ''}</tr>"
+            )
+        if has_old:
+            head = """
+            <tr>
+              <th rowspan="2">档位</th>
+              <th colspan="5" class="group new">新戳额模型</th>
+              <th colspan="5" class="group old">线上模型</th>
+            </tr>
+            <tr>
+              <th>人数</th><th>申请率</th><th>成交率</th><th>成交中位天数</th><th>FPD15 坏率</th>
+              <th>人数</th><th>申请率</th><th>成交率</th><th>成交中位天数</th><th>FPD15 坏率</th>
+            </tr>"""
+        else:
+            head = """
+            <tr>
+              <th rowspan="2">档位</th>
+              <th colspan="5" class="group new">新戳额模型</th>
+            </tr>
+            <tr>
+              <th>人数</th><th>申请率</th><th>成交率</th><th>成交中位天数</th><th>FPD15 坏率</th>
+            </tr>"""
+        sample_note = (
+            f"分档表使用新旧分都有的 {fmt_int(conv['paired_n'])} 人"
+            if has_old
+            else f"分档表使用已打分 {fmt_int(conv['scored_n'])} 人"
+        )
+        decile_html = f"""
+      <div class="subhead">分档转化（{sample_note}）</div>
+      <p class="desc">第 1 档分数最低、第 10 档分数最高；坏率来自戳额成交样本的 FPD15 成熟样本，仅作同档对照。</p>
+      <div class="table-wrap">
+        <table class="decile">
+          <thead>{head}
+          </thead>
+          <tbody>{''.join(rows)}</tbody>
+        </table>
+      </div>"""
+
+    return f"""
+    <section class="card" id="conversion">
+      <h2>戳额转化漏斗<span class="tag" title="戳额生产打分全量关联借款申请，仅做描述性分析">生产全量 · 描述性</span></h2>
+      <p class="desc">从戳额到借款申请、成交的转化；分母为戳额打分全量，成交按任意一笔成功计算。
+      观察日 {escape(conv['obs_dt'])}，戳额全量 {fmt_int(conv['n'])} 人。</p>
+      <div class="conv-kpis">
+        <div class="kpi">
+          <span class="label">戳额打分全量</span>
+          <b>{fmt_int(conv['n'])}</b>
+          <span class="sub">观察日 {escape(conv['obs_dt'])}</span>
+        </div>
+        <div class="kpi">
+          <span class="label">戳额 → 借款申请</span>
+          <b>{fmt_pct(conv['apply_rate'])}</b>
+          <span class="sub">{fmt_int(conv['applied'])} 人</span>
+        </div>
+        <div class="kpi">
+          <span class="label">戳额 → 成交</span>
+          <b>{fmt_pct(conv['disburse_rate'])}</b>
+          <span class="sub">{fmt_int(conv['disbursed'])} 人</span>
+        </div>
+        <div class="kpi">
+          <span class="label">申请 → 成交</span>
+          <b>{fmt_pct(conv['apply_to_disburse'])}</b>
+          <span class="sub">{fmt_int(conv['disbursed'])} / {fmt_int(conv['applied'])} 人</span>
+        </div>
+      </div>
+      <div class="subhead">转化速度</div>
+      <p class="desc">从戳额日起算，t0 为当天、t1 为 0–1 天、t7 为 0–7 天；t1 / t7 只使用观察窗已满的用户。</p>
+      <div class="table-wrap">
+        <table class="decile">
+          <thead>
+            <tr><th>窗口</th><th>可观察人数</th><th>戳额 → 申请</th><th>戳额 → 成交</th></tr>
+          </thead>
+          <tbody>{window_rows}</tbody>
+        </table>
+      </div>
+      <p class="note">申请中位用时 {fmt_elapsed_days(conv['median_days_to_apply'])}（P90 {fmt_elapsed_days(conv['p90_days_to_apply'])}），
+      成交中位用时 {fmt_elapsed_days(conv['median_days_to_disburse'])}（P90 {fmt_elapsed_days(conv['p90_days_to_disburse'])}），
+      成交用户人均放款金额 {fmt_money(conv['amount_per_disbursed'])}。</p>{decile_html}
+      <p class="note">转化率分母为戳额打分全量（含未申请用户），成交按任意一笔成功计算，一人多次申请不重复计入人数。
+      FPD15 坏率来自成交样本的成熟样本，和转化率分母不同，仅作同档对照。
+      新模型尚未上线，分档转化率不受新模型审批影响；旧模型分档受现行审批策略影响，新旧绝对水平不可直接比较，重点看排序方向。</p>
+    </section>
+    """.strip()
+
+
 def scenario_table(data, window_key) -> str:
     entry = data["windows"][window_key]
     levels = sorted(c["reject_pct"] for c in entry["models"]["new"]["cutoffs"])
@@ -1380,6 +1664,18 @@ def summary_html(data) -> str:
     oot_consistent = oot15["delta"]["diff"] > 0 and oot7["delta"]["diff"] > 0
     oot_txt = "与样本内方向一致" if oot_consistent else "需关注样本内外差异"
 
+    conv = data.get("conversion")
+    conv_bullet = ""
+    if conv and conv.get("new_deciles"):
+        first_q, last_q = conv["new_deciles"][0], conv["new_deciles"][-1]
+        decile_n = conv["paired_n"] or conv["scored_n"]
+        conv_bullet = f"""
+        <li><b>戳额转化</b>：戳额全量 {fmt_int(conv['n'])} 人，借款申请率 {fmt_pct(conv['apply_rate'])}，
+            成交率 {fmt_pct(conv['disburse_rate'])}，申请到成交 {fmt_pct(conv['apply_to_disburse'])}；
+            在 {fmt_int(decile_n)} 人分档样本中，新戳额模型最低分档申请率 {fmt_pct(first_q['apply_rate'])}、
+            最高分档 {fmt_pct(last_q['apply_rate'])}，转化随分数升高而下降，与坏率方向一致。
+            该指标为描述性口径，新模型尚未上线，绝对水平不代表上线后效果。</li>"""
+
     return f"""
     <section class="card conclus" id="conclusion">
       <h2>结论</h2>
@@ -1400,7 +1696,7 @@ def summary_html(data) -> str:
             {fmt_money(ref['extra_good_amt'])} 好客户本金。</li>
         <li><b>分歧人群以新戳额模型判断为准</b>：新戳额模型拒绝而线上模型放行的 {fmt_int(new_only['n'])} 人坏率
             {fmt_pct(new_only['rate'])}，线上模型拒绝而新戳额模型放行的 {fmt_int(old_only['n'])} 人坏率仅
-            {fmt_pct(old_only['rate'])}{gap_txt}。</li>
+            {fmt_pct(old_only['rate'])}{gap_txt}。</li>{conv_bullet}
       </ul>
     </section>
     """
@@ -1945,6 +2241,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     display: grid; grid-template-columns: repeat(4, 1fr);
     gap: 12px; margin: 20px 0 6px;
   }
+  .conv-kpis {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 10px; margin: 8px 0 4px;
+  }
+  .conv-kpis .kpi { padding: 10px 12px; }
+  .conv-kpis .kpi b { font-size: 22px; }
   .kpi {
     background: var(--surface); border: 1px solid var(--ring);
     border-radius: 12px; padding: 13px 15px;
@@ -2151,12 +2453,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }
   @media (max-width: 900px) {
     .kpis { grid-template-columns: repeat(2, 1fr); }
+    .conv-kpis { grid-template-columns: repeat(2, 1fr); }
     .grid2 { grid-template-columns: 1fr; }
     .swap { grid-template-columns: 92px 1fr 1fr; }
   }
   @media (max-width: 560px) {
     h1 { font-size: 24px; }
     .kpis { grid-template-columns: 1fr; }
+    .conv-kpis { grid-template-columns: 1fr; }
   }
   @media (prefers-reduced-motion: reduce) {
     .toc { transition: none; }
@@ -2171,6 +2475,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 __TOC__
 __HEADER__
 __KPIS__
+__CONVERSION_CARD__
 __METRICS_CARD__
 __ROC_CARD__
 __DECILE_CARD__
@@ -2867,6 +3172,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
       <div class="chips">
         <span class="chip">样本 {fmt_int(meta['n_sample'])} 人</span>
         {f'<span class="chip">戳额全量 {fmt_int(limit["n"])} 人</span>' if limit else ''}
+        {f'<span class="chip">戳额→成交 {fmt_pct(limit["conversion"]["disburse_rate"])}</span>' if limit and limit.get("conversion") else ''}
         <span class="chip">FPD15 成熟 {fmt_int(data['windows']['15']['n_obs'])} 笔</span>
         <span class="chip">FPD7 成熟 {fmt_int(data['windows']['7']['n_obs'])} 笔</span>
         <span class="chip">OOT {escape(meta['oot_start'])} 起</span>
@@ -2883,7 +3189,10 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
       {metrics_table(data)}
     </section>
     """
-    toc_entries = [
+    toc_entries = []
+    if limit and limit.get("conversion"):
+        toc_entries.append(("conversion", "转化漏斗"))
+    toc_entries += [
         ("metrics", "核心指标"),
         ("roc", "ROC 曲线"),
         ("decile", "十分位坏率"),
@@ -2911,6 +3220,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
     html = HTML_TEMPLATE
     html = html.replace("__HEADER__", header)
     html = html.replace("__KPIS__", kpi_html(data))
+    html = html.replace("__CONVERSION_CARD__", conversion_card(limit, data))
     html = html.replace("__TOC__", toc)
     html = html.replace("__SUMMARY__", summary_html(data))
     html = html.replace("__METRICS_CARD__", metrics_card)
@@ -2968,7 +3278,10 @@ def main(argv=None):
         limit_data = load_limit_data(
             limit_path,
             limit_old_path if limit_old_path.exists() else None,
+            label_path,
         )
+        if limit_data.get("conversion"):
+            data["conversion"] = limit_data["conversion"]
     else:
         print(f"未找到戳额生产打分全量，跳过分布卡：{limit_path}")
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -2994,6 +3307,13 @@ def main(argv=None):
         print(
             f"  戳额全量配对 {m['n']:,} 人 | 新旧同档 {m['diag_share']:.1f}% | "
             f"秩相关 {m['spearman']:.3f}"
+        )
+
+    if limit_data and limit_data.get("conversion"):
+        c = limit_data["conversion"]
+        print(
+            f"  戳额转化 {c['n']:,} 人 | 申请 {c['apply_rate']:.2f}% | "
+            f"成交 {c['disburse_rate']:.2f}% | 申请→成交 {c['apply_to_disburse']:.2f}%"
         )
 
 
