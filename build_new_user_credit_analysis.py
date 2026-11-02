@@ -5,8 +5,8 @@
 新戳额模型分数取自戳额成交样本，按 last_limit_flow_id = 打分文件的 flow_id 关联；线上模型分数取自主表。
 
 用法：
-    python build_model_analysis.py
-    python build_model_analysis.py --score-csv xxx.csv --output 模型分分析.html
+    python build_new_user_credit_analysis.py
+    python build_new_user_credit_analysis.py --score-csv xxx.csv --output 新客戳额_模型分分析.html
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ DEFAULT_LABEL = RAW_DIR / "table_tmp_eliam_wagego_dwd_loan_apply_label.csv"
 DEFAULT_SCORE = _input_path("aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv")
 DEFAULT_LIMIT_SCORE = _input_path("wagego_new_user_credit_20260801_20261023_score.csv")
 DEFAULT_LIMIT_OLD_SCORE = _input_path("wagego_new_user_credit_20260801_20261023_old_score.csv")
-DEFAULT_OUTPUT = PROJECT_DIR / "模型分分析.html"
+DEFAULT_OUTPUT = PROJECT_DIR / "新客戳额_模型分分析.html"
 
 OLD_SCORE = "aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626"
 NEW_SCORE = "aus_new_wagego_credit_20261028_v1_0_txn_lgb_score"
@@ -1861,7 +1861,7 @@ def footer_html(data, generated_at, label_name, score_name, limit=None, limit_na
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：{escape(label_name)}、{escape(score_name)}；生成脚本 build_model_analysis.py；生成时间 {escape(generated_at)}。</li>
+        <li><b>数据源</b>：{escape(label_name)}、{escape(score_name)}；生成脚本 build_new_user_credit_analysis.py；生成时间 {escape(generated_at)}。</li>
       </ul>
     </footer>
     """

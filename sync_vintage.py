@@ -2,7 +2,7 @@
 """同步 Vintage 监控看板数据：执行 wagego_04_vintage分析.sql 的 8 个查询块。
 
 产出：同步数据/vintage_01~07.csv、vintage_data.zip。
-只服务监控看板；模型分分析的表同步见 sync_model_analysis.py。
+只服务监控看板；新客戳额模型分分析的表同步见 sync_new_user_credit_analysis.py。
 """
 
 from __future__ import annotations
