@@ -85,14 +85,18 @@
   .kpi b .vs { color: var(--muted); font-size: 15px; font-weight: 400; }
   .kpi .sub { display: block; color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
   .toc {
+    position: fixed; top: 36px; z-index: 20;
+    left: max(24px, calc((100vw - 1532px) / 2));
+    width: 190px; max-height: calc(100vh - 72px); overflow-y: auto;
     background: var(--surface); border: 1px solid var(--ring);
-    border-radius: 12px; padding: 14px 18px 12px; margin: 14px 0 6px;
+    border-radius: 12px; padding: 12px 14px;
+    transition: width .18s ease, padding .18s ease;
   }
-  .toc-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 7px; }
+  .toc-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 5px; }
   .toc-head h2 { font-size: 13px; margin: 0; letter-spacing: .02em; }
   .toc ol {
     list-style: none; margin: 0; padding: 0; counter-reset: toc;
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px 18px;
+    display: grid; grid-template-columns: 1fr; gap: 0;
   }
   .toc li { counter-increment: toc; min-width: 0; }
   .toc a {
@@ -259,21 +263,45 @@
   ul.notes { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 12px; }
   ul.notes li { margin: 5px 0; }
   ul.notes b { color: var(--ink); font-weight: 600; }
+  @media (max-width: 1580px) {
+    .toc { width: 44px; padding: 9px 0; overflow: hidden; }
+    .toc-head { justify-content: center; margin: 0; }
+    .toc-head h2 { letter-spacing: .02em; font-size: 12px; }
+    .toc-head .muted { display: none; }
+    .toc ol { display: none; }
+    .toc:hover, .toc:focus-within { width: 200px; padding: 12px 14px; }
+    .toc:hover .toc-head, .toc:focus-within .toc-head { justify-content: space-between; }
+    .toc:hover .toc-head h2, .toc:focus-within .toc-head h2 { font-size: 13px; }
+    .toc:hover ol, .toc:focus-within ol { display: grid; }
+  }
+  @media (max-width: 1279px) {
+    .toc { display: none; }
+  }
   @media (max-width: 900px) {
     .kpis { grid-template-columns: repeat(2, 1fr); }
-    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid2 { grid-template-columns: 1fr; }
     .swap { grid-template-columns: 92px 1fr 1fr; }
   }
   @media (max-width: 560px) {
     h1 { font-size: 24px; }
     .kpis { grid-template-columns: 1fr; }
-    .toc ol { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .toc { transition: none; }
+  }
+  @media print {
+    .toc { display: none; }
   }
 </style>
 </head>
 <body>
 <main>
+
+    <nav class="toc" aria-label="目录" tabindex="0">
+      <div class="toc-head"><h2>目录</h2><span class="muted">点击跳转</span></div>
+      <ol><li><a href="#metrics">核心指标</a></li><li><a href="#roc">ROC 曲线</a></li><li><a href="#decile">十分位坏率</a></li><li><a href="#cross">五分位交叉矩阵</a></li><li><a href="#oot">OOT 表现</a></li><li><a href="#weekly">分周稳定性</a></li><li><a href="#money">置入与置出</a></li><li><a href="#capture">拦截收益</a></li><li><a href="#through">通过收益</a></li><li><a href="#swap">决策互换矩阵</a></li><li><a href="#limit">戳额生产打分全量</a></li><li><a href="#conclusion">结论</a></li></ol>
+    </nav>
+    
 
     <header>
       <p class="eyebrow">WAGEGO · 新客首借成交样本</p>
@@ -317,12 +345,6 @@
         <span class="sub">口径：笔数坏率</span>
       </div>
     </div>
-    
-
-    <nav class="toc" aria-label="目录">
-      <div class="toc-head"><h2>目录</h2><span class="muted">点击跳转</span></div>
-      <ol><li><a href="#metrics">核心指标</a></li><li><a href="#roc">ROC 曲线</a></li><li><a href="#decile">十分位坏率</a></li><li><a href="#cross">五分位交叉矩阵</a></li><li><a href="#oot">OOT 表现</a></li><li><a href="#weekly">分周稳定性</a></li><li><a href="#money">置入与置出</a></li><li><a href="#capture">拦截收益</a></li><li><a href="#through">通过收益</a></li><li><a href="#swap">决策互换矩阵</a></li><li><a href="#limit">戳额生产打分全量</a></li><li><a href="#conclusion">结论</a></li></ol>
-    </nav>
     
 
     <section class="card" id="metrics">
@@ -1566,7 +1588,7 @@
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_model_analysis.py；生成时间 2026-11-02 14:16。</li>
+        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_model_analysis.py；生成时间 2026-11-02 14:40。</li>
       </ul>
     </footer>
     

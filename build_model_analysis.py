@@ -1957,14 +1957,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .kpi b .vs { color: var(--muted); font-size: 15px; font-weight: 400; }
   .kpi .sub { display: block; color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
   .toc {
+    position: fixed; top: 36px; z-index: 20;
+    left: max(24px, calc((100vw - 1532px) / 2));
+    width: 190px; max-height: calc(100vh - 72px); overflow-y: auto;
     background: var(--surface); border: 1px solid var(--ring);
-    border-radius: 12px; padding: 14px 18px 12px; margin: 14px 0 6px;
+    border-radius: 12px; padding: 12px 14px;
+    transition: width .18s ease, padding .18s ease;
   }
-  .toc-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 7px; }
+  .toc-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 5px; }
   .toc-head h2 { font-size: 13px; margin: 0; letter-spacing: .02em; }
   .toc ol {
     list-style: none; margin: 0; padding: 0; counter-reset: toc;
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px 18px;
+    display: grid; grid-template-columns: 1fr; gap: 0;
   }
   .toc li { counter-increment: toc; min-width: 0; }
   .toc a {
@@ -2131,24 +2135,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   ul.notes { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 12px; }
   ul.notes li { margin: 5px 0; }
   ul.notes b { color: var(--ink); font-weight: 600; }
+  @media (max-width: 1580px) {
+    .toc { width: 44px; padding: 9px 0; overflow: hidden; }
+    .toc-head { justify-content: center; margin: 0; }
+    .toc-head h2 { letter-spacing: .02em; font-size: 12px; }
+    .toc-head .muted { display: none; }
+    .toc ol { display: none; }
+    .toc:hover, .toc:focus-within { width: 200px; padding: 12px 14px; }
+    .toc:hover .toc-head, .toc:focus-within .toc-head { justify-content: space-between; }
+    .toc:hover .toc-head h2, .toc:focus-within .toc-head h2 { font-size: 13px; }
+    .toc:hover ol, .toc:focus-within ol { display: grid; }
+  }
+  @media (max-width: 1279px) {
+    .toc { display: none; }
+  }
   @media (max-width: 900px) {
     .kpis { grid-template-columns: repeat(2, 1fr); }
-    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid2 { grid-template-columns: 1fr; }
     .swap { grid-template-columns: 92px 1fr 1fr; }
   }
   @media (max-width: 560px) {
     h1 { font-size: 24px; }
     .kpis { grid-template-columns: 1fr; }
-    .toc ol { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .toc { transition: none; }
+  }
+  @media print {
+    .toc { display: none; }
   }
 </style>
 </head>
 <body>
 <main>
+__TOC__
 __HEADER__
 __KPIS__
-__TOC__
 __METRICS_CARD__
 __ROC_CARD__
 __DECILE_CARD__
@@ -2881,7 +2903,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
         for anchor, title in toc_entries
     )
     toc = f"""
-    <nav class="toc" aria-label="目录">
+    <nav class="toc" aria-label="目录" tabindex="0">
       <div class="toc-head"><h2>目录</h2><span class="muted">点击跳转</span></div>
       <ol>{toc_links}</ol>
     </nav>
