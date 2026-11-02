@@ -76,7 +76,7 @@ def read_csvs(input_path: Path):
         files = {p.name: p.read_bytes() for p in input_path.glob("vintage_*.csv")}
     elif input_path.is_file() and input_path.suffix.lower() == ".zip":
         with zipfile.ZipFile(input_path) as archive:
-            # zip 里可能还有整表拉取的 table_*.csv，只读看板需要的块结果
+            # 只读看板需要的块结果（zip 由 sync_vintage.py 生成）
             files = {
                 Path(name).name: archive.read(name)
                 for name in archive.namelist()
