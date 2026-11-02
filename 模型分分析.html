@@ -280,30 +280,6 @@
     </div>
     
 
-    <section class="card conclus">
-      <h2>结论</h2>
-      <ul>
-        <li><b>区分度</b>：新戳额模型 FPD15 AUC 0.785，线上模型 0.634，
-            提升 +0.151（95% CI +0.132 ~ +0.170，
-            p &lt; 0.001）；FPD7 口径同样提升 +0.117，结论不依赖单一标签。</li>
-        <li><b>OOT 表现</b>：2026-09-30 起，FPD15 成熟 3,998 笔，
-            新戳额模型 AUC 0.775 vs 线上 0.641，
-            提升 +0.134；FPD7 成熟 6,256 笔，
-            AUC 0.734 vs 0.633，
-            提升 +0.102，与样本内方向一致。</li>
-        <li><b>同样风控强度下坏率更低</b>：拒绝最差 30% 时，新戳额模型通过人群坏率 4.49%，
-            线上模型 7.67%（约 1.7 倍）；新戳额模型拦下 68.7% 的坏账，线上模型 46.4%。</li>
-        <li><b>同样坏率预算下通过更多</b>：把通过坏率压在同一水平，新戳额模型能多放客户。以 8% 为例，
-            线上模型最多通过 73.5%（7,063 笔），新戳额模型
-            92.7%（8,914 笔），多 1,851 位客户、
-            175,250 好客户本金。</li>
-        <li><b>分歧人群以新戳额模型判断为准</b>：新戳额模型拒绝而线上模型放行的 1,484 人坏率
-            20.55%，线上模型拒绝而新戳额模型放行的 1,484 人坏率仅
-            6.06%，相差 3.4 倍。</li>
-      </ul>
-    </section>
-    
-
     <section class="card">
       <h2>核心指标<span class="tag" title="AUC / Gini / KS 均在成熟样本内计算">排序能力</span></h2>
       <p class="desc">两个标签口径、两个模型放在同一批成熟样本上比。新戳额模型 AUC 0.79、KS 0.45，
@@ -394,105 +370,6 @@
       <p class="note">坏样本 = y_fpdN_ovd 之和；成熟样本 = y_fpdN_obs = 1（due + N &lt; 观察日）。
       最高档 = 十分位第 10 档（分数最高）；两个模型均按各自的固定切点分档。
       lift = 该档坏率 / 全体坏率。ΔAUC 用 DeLong 配对检验，仅取两模型都有分的样本。</p>    
-    </section>
-    
-
-    <section class="card">
-      <h2>OOT 表现<span class="tag" title="OOT = 戳额时间不早于 2026-09-30 的样本">按时间切分</span></h2>
-      <p class="desc">把样本内和 OOT 分开看，避免样本内表现掩盖上线后的真实区分度。OOT 上两个模型都用原始分数重新计算 AUC / KS，
-      不与前面的整体指标混算。</p>
-      <div class="table-wrap">
-        <table class="oot">
-          <thead>
-            <tr>
-              <th>窗口</th><th>分段</th><th>成熟样本</th><th>坏样本</th><th>笔数坏率</th>
-              <th>新 AUC</th><th>线上 AUC</th><th>ΔAUC（新 − 旧）</th><th>ΔAUC 95% CI</th>
-              <th>新 KS</th><th>线上 KS</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="w">FPD15</td>
-              <td>全样本</td>
-              <td>9,618</td>
-              <td>964</td>
-              <td>10.02%</td>
-              <td class="strong">0.785</td>
-              <td>0.634</td>
-              <td class="strong">+0.151</td>
-              <td class="soft">+0.132 ~ +0.170</td>
-              <td>0.446</td>
-              <td>0.193</td>
-            </tr>
-            <tr>
-              <td class="w">FPD15</td>
-              <td>样本内</td>
-              <td>5,620</td>
-              <td>589</td>
-              <td>10.48%</td>
-              <td class="strong">0.793</td>
-              <td>0.630</td>
-              <td class="strong">+0.163</td>
-              <td class="soft">+0.139 ~ +0.187</td>
-              <td>0.450</td>
-              <td>0.183</td>
-            </tr>
-            <tr class="oot">
-              <td class="w">FPD15</td>
-              <td>OOT</td>
-              <td>3,998</td>
-              <td>375</td>
-              <td>9.38%</td>
-              <td class="strong">0.775</td>
-              <td>0.641</td>
-              <td class="strong">+0.134</td>
-              <td class="soft">+0.103 ~ +0.164</td>
-              <td>0.448</td>
-              <td>0.219</td>
-            </tr>
-            <tr>
-              <td class="w">FPD7</td>
-              <td>全样本</td>
-              <td>12,006</td>
-              <td>1,662</td>
-              <td>13.84%</td>
-              <td class="strong">0.748</td>
-              <td>0.631</td>
-              <td class="strong">+0.117</td>
-              <td class="soft">+0.102 ~ +0.132</td>
-              <td>0.374</td>
-              <td>0.192</td>
-            </tr>
-            <tr>
-              <td class="w">FPD7</td>
-              <td>样本内</td>
-              <td>5,750</td>
-              <td>836</td>
-              <td>14.54%</td>
-              <td class="strong">0.763</td>
-              <td>0.629</td>
-              <td class="strong">+0.134</td>
-              <td class="soft">+0.113 ~ +0.155</td>
-              <td>0.397</td>
-              <td>0.188</td>
-            </tr>
-            <tr class="oot">
-              <td class="w">FPD7</td>
-              <td>OOT</td>
-              <td>6,256</td>
-              <td>826</td>
-              <td>13.20%</td>
-              <td class="strong">0.734</td>
-              <td>0.633</td>
-              <td class="strong">+0.102</td>
-              <td class="soft">+0.081 ~ +0.123</td>
-              <td>0.356</td>
-              <td>0.199</td>
-            </tr></tbody>
-        </table>
-      </div>
-      <p class="note">OOT 按戳额时间 last_limit_time ≥ 2026-09-30 划分，样本内为 2026-08-01 至 2026-09-29。
-      各窗口只统计已成熟样本；ΔAUC 用配对 DeLong 检验，仅取两模型都有分的样本。OOT 样本若尚未成熟，不计入对应窗口。</p>
     </section>
     
 
@@ -696,117 +573,185 @@
     
 
     <section class="card">
-      <h2>戳额生产打分全量：分数分布<span class="tag" title="新客戳额环节的生产打分全量，不按成交筛选">生产全量</span></h2>
-      <p class="desc">这份样本是新客戳额环节的生产打分全量，覆盖 2026-08-03 至 2026-10-23 共
-      50,291 人；已打分 48,026 人（95.50%），
-      缺分 2,265 人（4.50%）。按新模型固定十分位切点分档，第 1 档分数最低。</p>
+      <h2>五分位交叉矩阵<span class="tag" title="行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位相邻两档合并；每格为该组合的笔数坏率">FPD15</span></h2>
+      <p class="desc">每格是落在该组合的样本的笔数坏率。横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差
+      11.9pp；纵向看（线上档固定、新戳额模型 1→5 档）至少差 22.3pp
+      ——风险差异主要由新戳额模型的分档解释，线上模型分档带来的额外区分很小。</p>
+      
       <div class="table-wrap">
-        <table class="decile">
+        <table class="cross">
+          <thead>
+            <tr><th class="corner"></th><th colspan="5" class="group">线上模型 · 五分位</th></tr>
+            <tr><th class="rowhead">新戳额模型</th><th>1 档</th><th>2 档</th><th>3 档</th><th>4 档</th><th>5 档</th></tr>
+          </thead>
+          <tbody><tr><th class="rowhead">1 档</th><td class="h2" title="新戳额 1 档 × 线上 1 档：926 笔，坏 14 笔，坏率 1.51%"><b>1.51%</b><span>926 笔</span></td><td class="h2" title="新戳额 1 档 × 线上 2 档：634 笔，坏 8 笔，坏率 1.26%"><b>1.26%</b><span>634 笔</span></td><td class="h1" title="新戳额 1 档 × 线上 3 档：349 笔，坏 3 笔，坏率 0.86%"><b>0.86%</b><span>349 笔</span></td><td class="h3" title="新戳额 1 档 × 线上 4 档：62 笔，坏 2 笔，坏率 3.23%"><b>3.23%</b><span>62 笔</span></td><td class="h1" title="新戳额 1 档 × 线上 5 档：7 笔，坏 0 笔，坏率 0.00%"><b>0.00%</b><span>7 笔</span></td></tr><tr><th class="rowhead">2 档</th><td class="h2" title="新戳额 2 档 × 线上 1 档：636 笔，坏 18 笔，坏率 2.83%"><b>2.83%</b><span>636 笔</span></td><td class="h3" title="新戳额 2 档 × 线上 2 档：701 笔，坏 22 笔，坏率 3.14%"><b>3.14%</b><span>701 笔</span></td><td class="h3" title="新戳额 2 档 × 线上 3 档：586 笔，坏 20 笔，坏率 3.41%"><b>3.41%</b><span>586 笔</span></td><td class="h2" title="新戳额 2 档 × 线上 4 档：150 笔，坏 4 笔，坏率 2.67%"><b>2.67%</b><span>150 笔</span></td><td class="h4" title="新戳额 2 档 × 线上 5 档：29 笔，坏 3 笔，坏率 10.34%"><b>10.34%</b><span>29 笔</span></td></tr><tr><th class="rowhead">3 档</th><td class="h3" title="新戳额 3 档 × 线上 1 档：382 笔，坏 26 笔，坏率 6.81%"><b>6.81%</b><span>382 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 2 档：647 笔，坏 43 笔，坏率 6.65%"><b>6.65%</b><span>647 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 3 档：602 笔，坏 41 笔，坏率 6.81%"><b>6.81%</b><span>602 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 4 档：198 笔，坏 10 笔，坏率 5.05%"><b>5.05%</b><span>198 笔</span></td><td class="h4" title="新戳额 3 档 × 线上 5 档：48 笔，坏 6 笔，坏率 12.50%"><b>12.50%</b><span>48 笔</span></td></tr><tr><th class="rowhead">4 档</th><td class="h4" title="新戳额 4 档 × 线上 1 档：265 笔，坏 22 笔，坏率 8.30%"><b>8.30%</b><span>265 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 2 档：476 笔，坏 66 笔，坏率 13.87%"><b>13.87%</b><span>476 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 3 档：701 笔，坏 90 笔，坏率 12.84%"><b>12.84%</b><span>701 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 4 档：251 笔，坏 33 笔，坏率 13.15%"><b>13.15%</b><span>251 笔</span></td><td class="h5" title="新戳额 4 档 × 线上 5 档：124 笔，坏 25 笔，坏率 20.16%"><b>20.16%</b><span>124 笔</span></td></tr><tr><th class="rowhead">5 档</th><td class="h5" title="新戳额 5 档 × 线上 1 档：150 笔，坏 38 笔，坏率 25.33%"><b>25.33%</b><span>150 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 2 档：427 笔，坏 110 笔，坏率 25.76%"><b>25.76%</b><span>427 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 3 档：664 笔，坏 190 笔，坏率 28.61%"><b>28.61%</b><span>664 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 4 档：308 笔，坏 77 笔，坏率 25.00%"><b>25.00%</b><span>308 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 5 档：290 笔，坏 92 笔，坏率 31.72%"><b>31.72%</b><span>290 笔</span></td></tr></tbody>
+        </table>
+      </div>
+    
+      <div class="heat-legend">
+        <span class="muted">笔数坏率</span>
+        <span><i class="sw h1"></i>&lt;1%</span>
+        <span><i class="sw h2"></i>1–3%</span>
+        <span><i class="sw h3"></i>3–7%</span>
+        <span><i class="sw h4"></i>7–15%</span>
+        <span><i class="sw h5"></i>≥15%</span>
+      </div>
+      <p class="note">行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位第 1–2、3–4、…、9–10 档合并，
+      1 档风险最低。样本为 FPD15 成熟且两个模型都有分的
+      9,613 笔，每格最少 7 笔；两模型落在同一档（对角线）的占
+      28.8%，其余是重排。悬停方格可看该格坏样本数。</p>
+    </section>
+    
+
+    <section class="card">
+      <h2>OOT 表现<span class="tag" title="OOT = 戳额时间不早于 2026-09-30 的样本">按时间切分</span></h2>
+      <p class="desc">把样本内和 OOT 分开看，避免样本内表现掩盖上线后的真实区分度。OOT 上两个模型都用原始分数重新计算 AUC / KS，
+      不与前面的整体指标混算。</p>
+      <div class="table-wrap">
+        <table class="oot">
           <thead>
             <tr>
-              <th>档位</th><th>规则分数区间</th><th>实际分数范围</th><th>人数</th>
-              <th>占已打分</th><th>累计占比</th><th>与参考 10% 偏差</th>
+              <th>窗口</th><th>分段</th><th>成熟样本</th><th>坏样本</th><th>笔数坏率</th>
+              <th>新 AUC</th><th>线上 AUC</th><th>ΔAUC（新 − 旧）</th><th>ΔAUC 95% CI</th>
+              <th>新 KS</th><th>线上 KS</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>1</td>
-              <td class="soft">0.0211–0.0410</td>
-              <td class="soft">0.0186–0.0410</td>
-              <td>2,460</td>
-              <td>5.12%</td>
-              <td>5.12%</td>
-              <td class="strong">-4.88pp</td>
+              <td class="w">FPD15</td>
+              <td>全样本</td>
+              <td>9,618</td>
+              <td>964</td>
+              <td>10.02%</td>
+              <td class="strong">0.785</td>
+              <td>0.634</td>
+              <td class="strong">+0.151</td>
+              <td class="soft">+0.132 ~ +0.170</td>
+              <td>0.446</td>
+              <td>0.193</td>
             </tr>
             <tr>
-              <td>2</td>
-              <td class="soft">0.0410–0.0509</td>
-              <td class="soft">0.0410–0.0509</td>
-              <td>2,612</td>
-              <td>5.44%</td>
-              <td>10.56%</td>
-              <td class="strong">-4.56pp</td>
+              <td class="w">FPD15</td>
+              <td>样本内</td>
+              <td>5,620</td>
+              <td>589</td>
+              <td>10.48%</td>
+              <td class="strong">0.793</td>
+              <td>0.630</td>
+              <td class="strong">+0.163</td>
+              <td class="soft">+0.139 ~ +0.187</td>
+              <td>0.450</td>
+              <td>0.183</td>
+            </tr>
+            <tr class="oot">
+              <td class="w">FPD15</td>
+              <td>OOT</td>
+              <td>3,998</td>
+              <td>375</td>
+              <td>9.38%</td>
+              <td class="strong">0.775</td>
+              <td>0.641</td>
+              <td class="strong">+0.134</td>
+              <td class="soft">+0.103 ~ +0.164</td>
+              <td>0.448</td>
+              <td>0.219</td>
             </tr>
             <tr>
-              <td>3</td>
-              <td class="soft">0.0509–0.0620</td>
-              <td class="soft">0.0509–0.0620</td>
-              <td>3,129</td>
-              <td>6.52%</td>
-              <td>17.08%</td>
-              <td class="strong">-3.48pp</td>
+              <td class="w">FPD7</td>
+              <td>全样本</td>
+              <td>12,006</td>
+              <td>1,662</td>
+              <td>13.84%</td>
+              <td class="strong">0.748</td>
+              <td>0.631</td>
+              <td class="strong">+0.117</td>
+              <td class="soft">+0.102 ~ +0.132</td>
+              <td>0.374</td>
+              <td>0.192</td>
             </tr>
             <tr>
-              <td>4</td>
-              <td class="soft">0.0621–0.0740</td>
-              <td class="soft">0.0620–0.0740</td>
-              <td>3,363</td>
-              <td>7.00%</td>
-              <td>24.08%</td>
-              <td class="strong">-3.00pp</td>
+              <td class="w">FPD7</td>
+              <td>样本内</td>
+              <td>5,750</td>
+              <td>836</td>
+              <td>14.54%</td>
+              <td class="strong">0.763</td>
+              <td>0.629</td>
+              <td class="strong">+0.134</td>
+              <td class="soft">+0.113 ~ +0.155</td>
+              <td>0.397</td>
+              <td>0.188</td>
             </tr>
-            <tr>
-              <td>5</td>
-              <td class="soft">0.0741–0.0874</td>
-              <td class="soft">0.0740–0.0874</td>
-              <td>3,558</td>
-              <td>7.41%</td>
-              <td>31.49%</td>
-              <td class="strong">-2.59pp</td>
-            </tr>
-            <tr>
-              <td>6</td>
-              <td class="soft">0.0874–0.1046</td>
-              <td class="soft">0.0874–0.1046</td>
-              <td>4,087</td>
-              <td>8.51%</td>
-              <td>40.00%</td>
-              <td class="soft">-1.49pp</td>
-            </tr>
-            <tr>
-              <td>7</td>
-              <td class="soft">0.1047–0.1245</td>
-              <td class="soft">0.1047–0.1244</td>
-              <td>5,278</td>
-              <td>10.99%</td>
-              <td>50.99%</td>
-              <td class="soft">+0.99pp</td>
-            </tr>
-            <tr>
-              <td>8</td>
-              <td class="soft">0.1245–0.1569</td>
-              <td class="soft">0.1245–0.1568</td>
-              <td>6,026</td>
-              <td>12.55%</td>
-              <td>63.53%</td>
-              <td class="strong">+2.55pp</td>
-            </tr>
-            <tr>
-              <td>9</td>
-              <td class="soft">0.1570–0.2101</td>
-              <td class="soft">0.1569–0.2101</td>
-              <td>9,195</td>
-              <td>19.15%</td>
-              <td>82.68%</td>
-              <td class="strong">+9.15pp</td>
-            </tr>
-            <tr>
-              <td>10</td>
-              <td class="soft">0.2111–0.4313</td>
-              <td class="soft">0.2101–0.4901</td>
-              <td>8,318</td>
-              <td>17.32%</td>
-              <td>100.00%</td>
-              <td class="strong">+7.32pp</td>
+            <tr class="oot">
+              <td class="w">FPD7</td>
+              <td>OOT</td>
+              <td>6,256</td>
+              <td>826</td>
+              <td>13.20%</td>
+              <td class="strong">0.734</td>
+              <td>0.633</td>
+              <td class="strong">+0.102</td>
+              <td class="soft">+0.081 ~ +0.123</td>
+              <td>0.356</td>
+              <td>0.199</td>
             </tr></tbody>
         </table>
       </div>
-      <p class="note">该样本的分数整体偏高于固定切点：实际中位数 0.1221、P90 0.2366，
-      而切点的中位上界为 0.0874；第 9–10 档合计占 36.47%，并非十等分。
-      分数范围 0.0186–0.4901，低于首档下界 21 人、
-      高于末档上界 58 人，分别并入第 1 / 10 档。分月看：2026-08 487 人（缺分 3.49%）、2026-09 20,594 人（缺分 3.12%）、2026-10 29,210 人（缺分 5.49%）。</p>
-      <p class="note">该样本不含标签：未成交申请没有放款与表现数据，因此这里只看分数分布；
-      AUC / KS 等排序指标仅在戳额成交样本上计算，见本报告其余卡片。</p>
+      <p class="note">OOT 按戳额时间 last_limit_time ≥ 2026-09-30 划分，样本内为 2026-08-01 至 2026-09-29。
+      各窗口只统计已成熟样本；ΔAUC 用配对 DeLong 检验，仅取两模型都有分的样本。OOT 样本若尚未成熟，不计入对应窗口。</p>
+    </section>
+    
+
+    <section class="card">
+      <h2>分周稳定性<span class="tag" title="按放款周（周一起）计算成熟样本内的 AUC">周度 AUC</span></h2>
+      <p class="desc">新戳额模型在每一个可评估的周都高于线上模型。<span class="muted">FPD15（7 周）：线上模型 0.61–0.65，新戳额模型 0.75–0.81</span>；<span class="muted">FPD7（9 周）：线上模型 0.61–0.67，新戳额模型 0.70–0.82</span>。</p>
+      <div class="grid2">
+        
+      <div class="panel">
+        <h3>FPD15 · AUC 按周<span class="muted">　成熟 9,618 笔 · 坏 964 笔</span></h3>
+        <div class="chart-wrap">
+          <svg id="week15" viewBox="0 0 500 330" role="img" aria-label="FPD15 周度 AUC"></svg>
+          <div class="tip" id="weekTip15"></div>
+        </div>
+        <div class="legend">
+          <span><i class="dot new"></i>新戳额模型</span>
+          <span><i class="dot old"></i>线上模型</span>
+        </div>
+      </div>
+    
+      <div class="panel">
+        <h3>FPD7 · AUC 按周<span class="muted">　成熟 12,006 笔 · 坏 1,662 笔</span></h3>
+        <div class="chart-wrap">
+          <svg id="week7" viewBox="0 0 500 330" role="img" aria-label="FPD7 周度 AUC"></svg>
+          <div class="tip" id="weekTip7"></div>
+        </div>
+        <div class="legend">
+          <span><i class="dot new"></i>新戳额模型</span>
+          <span><i class="dot old"></i>线上模型</span>
+        </div>
+      </div>
+    
+      </div>
+      
+      <div class="table-wrap">
+        <table class="weekly">
+          <thead>
+            <tr>
+              <th rowspan="2">放款周<br><span class="muted">周一起</span></th><th rowspan="2">放款笔数</th>
+              <th colspan="4" class="group">FPD15</th>
+              <th colspan="4" class="group">FPD7</th>
+            </tr>
+            <tr>
+              <th>成熟</th><th>坏率</th><th>AUC 旧</th><th>AUC 新</th>
+              <th>成熟</th><th>坏率</th><th>AUC 旧</th><th>AUC 新</th>
+            </tr>
+          </thead>
+          <tbody><tr><td>08-03</td><td>5</td><td class="soft">5</td><td>20.00%</td><td>—</td><td>—</td><td class="soft">5</td><td>20.00%</td><td>—</td><td>—</td></tr><tr><td>08-17</td><td>8</td><td class="soft">8</td><td>12.50%</td><td>—</td><td>—</td><td class="soft">8</td><td>12.50%</td><td>—</td><td>—</td></tr><tr><td>08-24</td><td>85</td><td class="soft">85</td><td>9.41%</td><td>—</td><td>—</td><td class="soft">85</td><td>11.76%</td><td>0.639</td><td>0.819</td></tr><tr><td>08-31</td><td>601</td><td class="soft">601</td><td>11.81%</td><td>0.647</td><td>0.812</td><td class="soft">601</td><td>14.31%</td><td>0.648</td><td>0.806</td></tr><tr><td>09-07</td><td>1,010</td><td class="soft">1,010</td><td>10.50%</td><td>0.611</td><td>0.791</td><td class="soft">1,010</td><td>14.26%</td><td>0.613</td><td>0.750</td></tr><tr><td>09-14</td><td>1,271</td><td class="soft">1,271</td><td>9.91%</td><td>0.620</td><td>0.795</td><td class="soft">1,271</td><td>14.16%</td><td>0.613</td><td>0.757</td></tr><tr><td>09-21</td><td>1,798</td><td class="soft">1,793</td><td>10.82%</td><td>0.631</td><td>0.786</td><td class="soft">1,798</td><td>15.41%</td><td>0.632</td><td>0.761</td></tr><tr><td>09-28</td><td>2,494</td><td class="soft">2,472</td><td>8.78%</td><td>0.635</td><td>0.795</td><td class="soft">2,482</td><td>13.05%</td><td>0.633</td><td>0.767</td></tr><tr><td>10-05</td><td>2,439</td><td class="soft">2,014</td><td>9.83%</td><td>0.648</td><td>0.757</td><td class="soft">2,420</td><td>12.93%</td><td>0.628</td><td>0.736</td></tr><tr><td>10-12</td><td>2,463</td><td class="soft">359</td><td>11.70%</td><td>0.647</td><td>0.748</td><td class="soft">1,961</td><td>13.82%</td><td>0.640</td><td>0.700</td></tr><tr><td>10-19</td><td>1,257</td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td class="soft">365</td><td>15.07%</td><td>0.675</td><td>0.746</td></tr></tbody>
+        </table>
+      </div>
+      <p class="note">AUC 在当周成熟样本内计算，坏样本或好样本少于 10 笔的周不计算（显示 —）。
+      最近几周 FPD15 尚未成熟，FPD15 的趋势实际截止到 10-05 那一周；看单周波动不如看整体水平。</p>
+    
     </section>
     
 
@@ -1003,37 +948,6 @@
     
       <p class="note">置入 = real_amount 之和；置出 = due + N 当天借据快照的未还本金之和，成熟样本内无缺失；
       置出率 = 置出 / 置入；留存 = 置入 − 置出。金额为放款本金口径，不含利息与费用。</p>
-    </section>
-    
-
-    <section class="card">
-      <h2>五分位交叉矩阵<span class="tag" title="行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位相邻两档合并；每格为该组合的笔数坏率">FPD15</span></h2>
-      <p class="desc">每格是落在该组合的样本的笔数坏率。横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差
-      11.9pp；纵向看（线上档固定、新戳额模型 1→5 档）至少差 22.3pp
-      ——风险差异主要由新戳额模型的分档解释，线上模型分档带来的额外区分很小。</p>
-      
-      <div class="table-wrap">
-        <table class="cross">
-          <thead>
-            <tr><th class="corner"></th><th colspan="5" class="group">线上模型 · 五分位</th></tr>
-            <tr><th class="rowhead">新戳额模型</th><th>1 档</th><th>2 档</th><th>3 档</th><th>4 档</th><th>5 档</th></tr>
-          </thead>
-          <tbody><tr><th class="rowhead">1 档</th><td class="h2" title="新戳额 1 档 × 线上 1 档：926 笔，坏 14 笔，坏率 1.51%"><b>1.51%</b><span>926 笔</span></td><td class="h2" title="新戳额 1 档 × 线上 2 档：634 笔，坏 8 笔，坏率 1.26%"><b>1.26%</b><span>634 笔</span></td><td class="h1" title="新戳额 1 档 × 线上 3 档：349 笔，坏 3 笔，坏率 0.86%"><b>0.86%</b><span>349 笔</span></td><td class="h3" title="新戳额 1 档 × 线上 4 档：62 笔，坏 2 笔，坏率 3.23%"><b>3.23%</b><span>62 笔</span></td><td class="h1" title="新戳额 1 档 × 线上 5 档：7 笔，坏 0 笔，坏率 0.00%"><b>0.00%</b><span>7 笔</span></td></tr><tr><th class="rowhead">2 档</th><td class="h2" title="新戳额 2 档 × 线上 1 档：636 笔，坏 18 笔，坏率 2.83%"><b>2.83%</b><span>636 笔</span></td><td class="h3" title="新戳额 2 档 × 线上 2 档：701 笔，坏 22 笔，坏率 3.14%"><b>3.14%</b><span>701 笔</span></td><td class="h3" title="新戳额 2 档 × 线上 3 档：586 笔，坏 20 笔，坏率 3.41%"><b>3.41%</b><span>586 笔</span></td><td class="h2" title="新戳额 2 档 × 线上 4 档：150 笔，坏 4 笔，坏率 2.67%"><b>2.67%</b><span>150 笔</span></td><td class="h4" title="新戳额 2 档 × 线上 5 档：29 笔，坏 3 笔，坏率 10.34%"><b>10.34%</b><span>29 笔</span></td></tr><tr><th class="rowhead">3 档</th><td class="h3" title="新戳额 3 档 × 线上 1 档：382 笔，坏 26 笔，坏率 6.81%"><b>6.81%</b><span>382 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 2 档：647 笔，坏 43 笔，坏率 6.65%"><b>6.65%</b><span>647 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 3 档：602 笔，坏 41 笔，坏率 6.81%"><b>6.81%</b><span>602 笔</span></td><td class="h3" title="新戳额 3 档 × 线上 4 档：198 笔，坏 10 笔，坏率 5.05%"><b>5.05%</b><span>198 笔</span></td><td class="h4" title="新戳额 3 档 × 线上 5 档：48 笔，坏 6 笔，坏率 12.50%"><b>12.50%</b><span>48 笔</span></td></tr><tr><th class="rowhead">4 档</th><td class="h4" title="新戳额 4 档 × 线上 1 档：265 笔，坏 22 笔，坏率 8.30%"><b>8.30%</b><span>265 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 2 档：476 笔，坏 66 笔，坏率 13.87%"><b>13.87%</b><span>476 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 3 档：701 笔，坏 90 笔，坏率 12.84%"><b>12.84%</b><span>701 笔</span></td><td class="h4" title="新戳额 4 档 × 线上 4 档：251 笔，坏 33 笔，坏率 13.15%"><b>13.15%</b><span>251 笔</span></td><td class="h5" title="新戳额 4 档 × 线上 5 档：124 笔，坏 25 笔，坏率 20.16%"><b>20.16%</b><span>124 笔</span></td></tr><tr><th class="rowhead">5 档</th><td class="h5" title="新戳额 5 档 × 线上 1 档：150 笔，坏 38 笔，坏率 25.33%"><b>25.33%</b><span>150 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 2 档：427 笔，坏 110 笔，坏率 25.76%"><b>25.76%</b><span>427 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 3 档：664 笔，坏 190 笔，坏率 28.61%"><b>28.61%</b><span>664 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 4 档：308 笔，坏 77 笔，坏率 25.00%"><b>25.00%</b><span>308 笔</span></td><td class="h5" title="新戳额 5 档 × 线上 5 档：290 笔，坏 92 笔，坏率 31.72%"><b>31.72%</b><span>290 笔</span></td></tr></tbody>
-        </table>
-      </div>
-    
-      <div class="heat-legend">
-        <span class="muted">笔数坏率</span>
-        <span><i class="sw h1"></i>&lt;1%</span>
-        <span><i class="sw h2"></i>1–3%</span>
-        <span><i class="sw h3"></i>3–7%</span>
-        <span><i class="sw h4"></i>7–15%</span>
-        <span><i class="sw h5"></i>≥15%</span>
-      </div>
-      <p class="note">行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位第 1–2、3–4、…、9–10 档合并，
-      1 档风险最低。样本为 FPD15 成熟且两个模型都有分的
-      9,613 笔，每格最少 7 笔；两模型落在同一档（对角线）的占
-      28.8%，其余是重排。悬停方格可看该格坏样本数。</p>
     </section>
     
 
@@ -1384,55 +1298,141 @@
     
 
     <section class="card">
-      <h2>分周稳定性<span class="tag" title="按放款周（周一起）计算成熟样本内的 AUC">周度 AUC</span></h2>
-      <p class="desc">新戳额模型在每一个可评估的周都高于线上模型。<span class="muted">FPD15（7 周）：线上模型 0.61–0.65，新戳额模型 0.75–0.81</span>；<span class="muted">FPD7（9 周）：线上模型 0.61–0.67，新戳额模型 0.70–0.82</span>。</p>
-      <div class="grid2">
-        
-      <div class="panel">
-        <h3>FPD15 · AUC 按周<span class="muted">　成熟 9,618 笔 · 坏 964 笔</span></h3>
-        <div class="chart-wrap">
-          <svg id="week15" viewBox="0 0 500 330" role="img" aria-label="FPD15 周度 AUC"></svg>
-          <div class="tip" id="weekTip15"></div>
-        </div>
-        <div class="legend">
-          <span><i class="dot new"></i>新戳额模型</span>
-          <span><i class="dot old"></i>线上模型</span>
-        </div>
-      </div>
-    
-      <div class="panel">
-        <h3>FPD7 · AUC 按周<span class="muted">　成熟 12,006 笔 · 坏 1,662 笔</span></h3>
-        <div class="chart-wrap">
-          <svg id="week7" viewBox="0 0 500 330" role="img" aria-label="FPD7 周度 AUC"></svg>
-          <div class="tip" id="weekTip7"></div>
-        </div>
-        <div class="legend">
-          <span><i class="dot new"></i>新戳额模型</span>
-          <span><i class="dot old"></i>线上模型</span>
-        </div>
-      </div>
-    
-      </div>
-      
+      <h2>戳额生产打分全量：分数分布<span class="tag" title="新客戳额环节的生产打分全量，不按成交筛选">生产全量</span></h2>
+      <p class="desc">这份样本是新客戳额环节的生产打分全量，覆盖 2026-08-03 至 2026-10-23 共
+      50,291 人；已打分 48,026 人（95.50%），
+      缺分 2,265 人（4.50%）。按新模型固定十分位切点分档，第 1 档分数最低。</p>
       <div class="table-wrap">
-        <table class="weekly">
+        <table class="decile">
           <thead>
             <tr>
-              <th rowspan="2">放款周<br><span class="muted">周一起</span></th><th rowspan="2">放款笔数</th>
-              <th colspan="4" class="group">FPD15</th>
-              <th colspan="4" class="group">FPD7</th>
-            </tr>
-            <tr>
-              <th>成熟</th><th>坏率</th><th>AUC 旧</th><th>AUC 新</th>
-              <th>成熟</th><th>坏率</th><th>AUC 旧</th><th>AUC 新</th>
+              <th>档位</th><th>规则分数区间</th><th>实际分数范围</th><th>人数</th>
+              <th>占已打分</th><th>累计占比</th><th>与参考 10% 偏差</th>
             </tr>
           </thead>
-          <tbody><tr><td>08-03</td><td>5</td><td class="soft">5</td><td>20.00%</td><td>—</td><td>—</td><td class="soft">5</td><td>20.00%</td><td>—</td><td>—</td></tr><tr><td>08-17</td><td>8</td><td class="soft">8</td><td>12.50%</td><td>—</td><td>—</td><td class="soft">8</td><td>12.50%</td><td>—</td><td>—</td></tr><tr><td>08-24</td><td>85</td><td class="soft">85</td><td>9.41%</td><td>—</td><td>—</td><td class="soft">85</td><td>11.76%</td><td>0.639</td><td>0.819</td></tr><tr><td>08-31</td><td>601</td><td class="soft">601</td><td>11.81%</td><td>0.647</td><td>0.812</td><td class="soft">601</td><td>14.31%</td><td>0.648</td><td>0.806</td></tr><tr><td>09-07</td><td>1,010</td><td class="soft">1,010</td><td>10.50%</td><td>0.611</td><td>0.791</td><td class="soft">1,010</td><td>14.26%</td><td>0.613</td><td>0.750</td></tr><tr><td>09-14</td><td>1,271</td><td class="soft">1,271</td><td>9.91%</td><td>0.620</td><td>0.795</td><td class="soft">1,271</td><td>14.16%</td><td>0.613</td><td>0.757</td></tr><tr><td>09-21</td><td>1,798</td><td class="soft">1,793</td><td>10.82%</td><td>0.631</td><td>0.786</td><td class="soft">1,798</td><td>15.41%</td><td>0.632</td><td>0.761</td></tr><tr><td>09-28</td><td>2,494</td><td class="soft">2,472</td><td>8.78%</td><td>0.635</td><td>0.795</td><td class="soft">2,482</td><td>13.05%</td><td>0.633</td><td>0.767</td></tr><tr><td>10-05</td><td>2,439</td><td class="soft">2,014</td><td>9.83%</td><td>0.648</td><td>0.757</td><td class="soft">2,420</td><td>12.93%</td><td>0.628</td><td>0.736</td></tr><tr><td>10-12</td><td>2,463</td><td class="soft">359</td><td>11.70%</td><td>0.647</td><td>0.748</td><td class="soft">1,961</td><td>13.82%</td><td>0.640</td><td>0.700</td></tr><tr><td>10-19</td><td>1,257</td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td class="dim">—</td><td class="soft">365</td><td>15.07%</td><td>0.675</td><td>0.746</td></tr></tbody>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td class="soft">0.0211–0.0410</td>
+              <td class="soft">0.0186–0.0410</td>
+              <td>2,460</td>
+              <td>5.12%</td>
+              <td>5.12%</td>
+              <td class="strong">-4.88pp</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td class="soft">0.0410–0.0509</td>
+              <td class="soft">0.0410–0.0509</td>
+              <td>2,612</td>
+              <td>5.44%</td>
+              <td>10.56%</td>
+              <td class="strong">-4.56pp</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td class="soft">0.0509–0.0620</td>
+              <td class="soft">0.0509–0.0620</td>
+              <td>3,129</td>
+              <td>6.52%</td>
+              <td>17.08%</td>
+              <td class="strong">-3.48pp</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td class="soft">0.0621–0.0740</td>
+              <td class="soft">0.0620–0.0740</td>
+              <td>3,363</td>
+              <td>7.00%</td>
+              <td>24.08%</td>
+              <td class="strong">-3.00pp</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td class="soft">0.0741–0.0874</td>
+              <td class="soft">0.0740–0.0874</td>
+              <td>3,558</td>
+              <td>7.41%</td>
+              <td>31.49%</td>
+              <td class="strong">-2.59pp</td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td class="soft">0.0874–0.1046</td>
+              <td class="soft">0.0874–0.1046</td>
+              <td>4,087</td>
+              <td>8.51%</td>
+              <td>40.00%</td>
+              <td class="soft">-1.49pp</td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td class="soft">0.1047–0.1245</td>
+              <td class="soft">0.1047–0.1244</td>
+              <td>5,278</td>
+              <td>10.99%</td>
+              <td>50.99%</td>
+              <td class="soft">+0.99pp</td>
+            </tr>
+            <tr>
+              <td>8</td>
+              <td class="soft">0.1245–0.1569</td>
+              <td class="soft">0.1245–0.1568</td>
+              <td>6,026</td>
+              <td>12.55%</td>
+              <td>63.53%</td>
+              <td class="strong">+2.55pp</td>
+            </tr>
+            <tr>
+              <td>9</td>
+              <td class="soft">0.1570–0.2101</td>
+              <td class="soft">0.1569–0.2101</td>
+              <td>9,195</td>
+              <td>19.15%</td>
+              <td>82.68%</td>
+              <td class="strong">+9.15pp</td>
+            </tr>
+            <tr>
+              <td>10</td>
+              <td class="soft">0.2111–0.4313</td>
+              <td class="soft">0.2101–0.4901</td>
+              <td>8,318</td>
+              <td>17.32%</td>
+              <td>100.00%</td>
+              <td class="strong">+7.32pp</td>
+            </tr></tbody>
         </table>
       </div>
-      <p class="note">AUC 在当周成熟样本内计算，坏样本或好样本少于 10 笔的周不计算（显示 —）。
-      最近几周 FPD15 尚未成熟，FPD15 的趋势实际截止到 10-05 那一周；看单周波动不如看整体水平。</p>
+      <p class="note">该样本的分数整体偏高于固定切点：实际中位数 0.1221、P90 0.2366，
+      而切点的中位上界为 0.0874；第 9–10 档合计占 36.47%，并非十等分。
+      分数范围 0.0186–0.4901，低于首档下界 21 人、
+      高于末档上界 58 人，分别并入第 1 / 10 档。分月看：2026-08 487 人（缺分 3.49%）、2026-09 20,594 人（缺分 3.12%）、2026-10 29,210 人（缺分 5.49%）。</p>
+      <p class="note">该样本不含标签：未成交申请没有放款与表现数据，因此这里只看分数分布；
+      AUC / KS 等排序指标仅在戳额成交样本上计算，见前文各卡片。</p>
+    </section>
     
+
+    <section class="card conclus">
+      <h2>结论</h2>
+      <ul>
+        <li><b>区分度</b>：新戳额模型 FPD15 AUC 0.785，线上模型 0.634，
+            提升 +0.151（95% CI +0.132 ~ +0.170，
+            p &lt; 0.001）；FPD7 口径同样提升 +0.117，结论不依赖单一标签。</li>
+        <li><b>OOT 表现</b>：2026-09-30 起，FPD15 成熟 3,998 笔，
+            新戳额模型 AUC 0.775 vs 线上 0.641，
+            提升 +0.134；FPD7 成熟 6,256 笔，
+            AUC 0.734 vs 0.633，
+            提升 +0.102，与样本内方向一致。</li>
+        <li><b>同样风控强度下坏率更低</b>：拒绝最差 30% 时，新戳额模型通过人群坏率 4.49%，
+            线上模型 7.67%（约 1.7 倍）；新戳额模型拦下 68.7% 的坏账，线上模型 46.4%。</li>
+        <li><b>同样坏率预算下通过更多</b>：把通过坏率压在同一水平，新戳额模型能多放客户。以 8% 为例，
+            线上模型最多通过 73.5%（7,063 笔），新戳额模型
+            92.7%（8,914 笔），多 1,851 位客户、
+            175,250 好客户本金。</li>
+        <li><b>分歧人群以新戳额模型判断为准</b>：新戳额模型拒绝而线上模型放行的 1,484 人坏率
+            20.55%，线上模型拒绝而新戳额模型放行的 1,484 人坏率仅
+            6.06%，相差 3.4 倍。</li>
+      </ul>
     </section>
     
 
@@ -1460,7 +1460,7 @@
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_model_analysis.py；生成时间 2026-11-02 13:39。</li>
+        <li><b>数据源</b>：table_tmp_eliam_wagego_dwd_loan_apply_label.csv、aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv；生成脚本 build_model_analysis.py；生成时间 2026-11-02 13:41。</li>
       </ul>
     </footer>
     

@@ -991,7 +991,7 @@ def limit_card(limit) -> str:
       分数范围 {fmt_num(limit['score_min'], 4)}–{fmt_num(limit['score_max'], 4)}，低于首档下界 {fmt_int(limit['below_min'])} 人、
       高于末档上界 {fmt_int(limit['above_max'])} 人，分别并入第 1 / 10 档。分月看：{months}。</p>
       <p class="note">该样本不含标签：未成交申请没有放款与表现数据，因此这里只看分数分布；
-      AUC / KS 等排序指标仅在戳额成交样本上计算，见本报告其余卡片。</p>
+      AUC / KS 等排序指标仅在戳额成交样本上计算，见前文各卡片。</p>
     </section>
     """
 
@@ -1949,18 +1949,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <main>
 __HEADER__
 __KPIS__
-__SUMMARY__
 __METRICS_CARD__
-__OOT_CARD__
 __ROC_CARD__
 __DECILE_CARD__
-__LIMIT_CARD__
-__MONEY_CARD__
 __CROSS_CARD__
+__OOT_CARD__
+__WEEKLY_CARD__
+__MONEY_CARD__
 __CAPTURE_CARD__
 __THROUGH_CARD__
 __SWAP_CARD__
-__WEEKLY_CARD__
+__LIMIT_CARD__
+__SUMMARY__
 __FOOTER__
 </main>
 <script>
