@@ -43,6 +43,7 @@ def _input_path(name: str) -> Path:
 DEFAULT_LABEL = RAW_DIR / "table_tmp_eliam_wagego_dwd_loan_apply_label.csv"
 DEFAULT_SCORE = _input_path("aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv")
 DEFAULT_LIMIT_SCORE = _input_path("wagego_new_user_credit_20260801_20261023_score.csv")
+DEFAULT_LIMIT_OLD_SCORE = _input_path("wagego_new_user_credit_20260801_20261023_old_score.csv")
 DEFAULT_OUTPUT = PROJECT_DIR / "模型分分析.html"
 
 OLD_SCORE = "aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626"
@@ -405,21 +406,16 @@ def segment_metrics(base, ovd_col, mask):
     return out
 
 
-def load_limit_data(limit_csv: Path) -> dict:
-    """戳额生产打分全量样本的分数分布（不含标签，不计算 AUC / KS）。"""
-    limit = pd.read_csv(
-        limit_csv,
-        encoding="utf-8-sig",
-        usecols=["user_id", "application_id", "sample_datetime", NEW_SCORE],
-    )
-    limit["flow_id"] = limit["application_id"].astype(str).str.strip()
-    limit["sample_datetime"] = pd.to_datetime(limit["sample_datetime"], errors="coerce")
-    limit["score"] = pd.to_numeric(limit[NEW_SCORE], errors="coerce")
-    scored = limit.dropna(subset=["score"])
+def _decile_of(values, cuts):
+    edges = np.asarray(cuts, dtype=float)
+    return np.searchsorted(edges, np.asarray(values, dtype=float), side="left").clip(
+        0, len(edges) - 1
+    ) + 1
 
-    score_arr = scored["score"].to_numpy(float)
-    edges = np.asarray(NEW_DECILE_CUTS, dtype=float)
-    q = np.searchsorted(edges, score_arr, side="left").clip(0, len(edges) - 1) + 1
+
+def _dist_rows(values, cuts, mins) -> list[dict]:
+    arr = np.asarray(values, dtype=float)
+    q = _decile_of(arr, cuts)
     rows = []
     cum = 0
     for k in range(1, 11):
@@ -430,15 +426,75 @@ def load_limit_data(limit_csv: Path) -> dict:
             {
                 "q": k,
                 "n": n,
-                "share": round(n / len(scored) * 100, 2),
-                "cum": round(cum / len(scored) * 100, 2),
-                "dev": round(n / len(scored) * 100 - 10, 2),
-                "score_min": float(score_arr[mask].min()) if n else None,
-                "score_max": float(score_arr[mask].max()) if n else None,
-                "rule_min": NEW_DECILE_MIN[k - 1],
-                "rule_max": NEW_DECILE_CUTS[k - 1],
+                "share": round(n / len(arr) * 100, 2),
+                "cum": round(cum / len(arr) * 100, 2),
+                "dev": round(n / len(arr) * 100 - 10, 2),
+                "score_min": float(arr[mask].min()) if n else None,
+                "score_max": float(arr[mask].max()) if n else None,
+                "rule_min": mins[k - 1],
+                "rule_max": cuts[k - 1],
             }
         )
+    return rows
+
+
+def load_limit_data(limit_csv: Path, old_score_csv: Path | None = None) -> dict:
+    """戳额生产打分全量样本的新旧分数分布与档位迁移（无标签，不计算坏率 / AUC）。"""
+    limit = pd.read_csv(
+        limit_csv,
+        encoding="utf-8-sig",
+        usecols=["user_id", "application_id", "sample_datetime", NEW_SCORE],
+    )
+    limit["flow_id"] = limit["application_id"].astype(str).str.strip()
+    limit["sample_datetime"] = pd.to_datetime(limit["sample_datetime"], errors="coerce")
+    limit["score"] = pd.to_numeric(limit[NEW_SCORE], errors="coerce")
+
+    if old_score_csv is not None:
+        old = pd.read_csv(old_score_csv, encoding="utf-8-sig", usecols=["flow_id", "old_score"])
+        old["flow_id"] = old["flow_id"].astype(str).str.strip()
+        old["old_score"] = pd.to_numeric(old["old_score"], errors="coerce")
+        old.loc[old["old_score"] < 0, "old_score"] = np.nan
+        limit = limit.merge(old.drop_duplicates("flow_id", keep="last"), on="flow_id", how="left")
+    else:
+        limit["old_score"] = np.nan
+
+    scored = limit.dropna(subset=["score"])
+    base = scored.dropna(subset=["old_score"]) if old_score_csv is not None else scored
+    rows = _dist_rows(base["score"], NEW_DECILE_CUTS, NEW_DECILE_MIN)
+    old_rows = (
+        _dist_rows(base["old_score"], OLD_DECILE_CUTS, OLD_DECILE_MIN)
+        if old_score_csv is not None
+        else []
+    )
+
+    migration = None
+    if old_score_csv is not None:
+        q_new = _decile_of(base["score"], NEW_DECILE_CUTS)
+        q_old = _decile_of(base["old_score"], OLD_DECILE_CUTS)
+        counts = [[0] * 10 for _ in range(10)]
+        for a, b in zip(q_new, q_old):
+            counts[int(a) - 1][int(b) - 1] += 1
+        totals = [sum(row) for row in counts]
+        row_share = [
+            [round(c / total * 100, 1) if total else 0.0 for c in row]
+            for row, total in zip(counts, totals)
+        ]
+        diag = sum(counts[i][i] for i in range(10))
+        adjacent = sum(
+            counts[i][j] for i in range(10) for j in range(10) if abs(i - j) <= 1
+        )
+        rank_new = base["score"].rank(method="average").to_numpy(float)
+        rank_old = base["old_score"].rank(method="average").to_numpy(float)
+        migration = {
+            "n": int(len(base)),
+            "counts": counts,
+            "row_share": row_share,
+            "diag_share": round(diag / len(base) * 100, 1) if len(base) else None,
+            "adjacent_share": round(adjacent / len(base) * 100, 1) if len(base) else None,
+            "spearman": round(float(np.corrcoef(rank_new, rank_old)[0, 1]), 3)
+            if len(base)
+            else None,
+        }
 
     monthly = []
     month_key = limit["sample_datetime"].dt.strftime("%Y-%m")
@@ -451,6 +507,7 @@ def load_limit_data(limit_csv: Path) -> dict:
             }
         )
 
+    score_arr = scored["score"].to_numpy(float)
     return {
         "n": int(len(limit)),
         "n_scored": int(len(scored)),
@@ -465,6 +522,12 @@ def load_limit_data(limit_csv: Path) -> dict:
         "below_min": int((score_arr < NEW_DECILE_MIN[0]).sum()),
         "above_max": int((score_arr > NEW_DECILE_CUTS[-1]).sum()),
         "deciles": rows,
+        "old_deciles": old_rows,
+        "old_n": int(limit["old_score"].notna().sum()),
+        "old_missing": int(limit["old_score"].isna().sum()),
+        "old_coverage": round(float(limit["old_score"].notna().mean() * 100), 2),
+        "pair_n": int(len(base)),
+        "migration": migration,
         "monthly": monthly,
     }
 
@@ -924,7 +987,7 @@ def oot_card(data) -> str:
             </tr>"""
             )
     return f"""
-    <section class="card">
+    <section class="card" id="oot">
       <h2>OOT 表现<span class="tag" title="OOT = 戳额时间不早于 {escape(oot_start)} 的样本">按时间切分</span></h2>
       <p class="desc">把样本内和 OOT 分开看，避免样本内表现掩盖上线后的真实区分度。OOT 上两个模型都用原始分数重新计算 AUC / KS，
       不与前面的整体指标混算。</p>
@@ -946,14 +1009,47 @@ def oot_card(data) -> str:
     """
 
 
+def _share_level(share: float) -> int:
+    if share >= 20:
+        return 5
+    if share >= 10:
+        return 4
+    if share >= 5:
+        return 3
+    if share >= 2:
+        return 2
+    return 1
+
+
 def limit_card(limit) -> str:
     if not limit:
         return ""
+    has_old = bool(limit["old_n"] and limit["migration"])
     rows = []
     for d in limit["deciles"]:
-        cls = "strong" if abs(d["dev"]) >= 2 else "soft"
-        rows.append(
-            f"""
+        if has_old:
+            o = limit["old_deciles"][d["q"] - 1]
+            diff = d["share"] - o["share"]
+            cls = "strong" if abs(diff) >= 2 else "soft"
+            rows.append(
+                f"""
+            <tr>
+              <td>{d['q']}</td>
+              <td class="soft">{fmt_range(d['score_min'], d['score_max'])}</td>
+              <td>{fmt_int(d['n'])}</td>
+              <td>{fmt_pct(d['share'])}</td>
+              <td>{fmt_pct(d['cum'])}</td>
+              <td class="soft">{fmt_range(o['score_min'], o['score_max'])}</td>
+              <td>{fmt_int(o['n'])}</td>
+              <td>{fmt_pct(o['share'])}</td>
+              <td>{fmt_pct(o['cum'])}</td>
+              <td class="{cls}">{diff:+.2f}pp</td>
+            </tr>"""
+            )
+        else:
+            cls = "strong" if abs(d["dev"]) >= 2 else "soft"
+            rows.append(
+                f"""
             <tr>
               <td>{d['q']}</td>
               <td class="soft">{fmt_range(d['rule_min'], d['rule_max'])}</td>
@@ -963,35 +1059,99 @@ def limit_card(limit) -> str:
               <td>{fmt_pct(d['cum'])}</td>
               <td class="{cls}">{d['dev']:+.2f}pp</td>
             </tr>"""
-        )
+            )
+    if has_old:
+        header = """
+            <tr>
+              <th rowspan="2">档位</th>
+              <th colspan="4" class="group new">新戳额模型</th>
+              <th colspan="4" class="group old">线上模型</th>
+              <th rowspan="2">占比差<br><span class="muted">新 − 旧</span></th>
+            </tr>
+            <tr>
+              <th>分数区间</th><th>人数</th><th>占比</th><th>累计</th>
+              <th>分数区间</th><th>人数</th><th>占比</th><th>累计</th>
+            </tr>"""
+    else:
+        header = """
+            <tr>
+              <th>档位</th><th>规则分数区间</th><th>实际分数范围</th><th>人数</th>
+              <th>占已打分</th><th>累计占比</th><th>与参考 10% 偏差</th>
+            </tr>"""
+
+    migration_html = ""
+    if has_old:
+        m = limit["migration"]
+        head = "".join(f"<th>{j}</th>" for j in range(1, 11))
+        body = []
+        for i, row in enumerate(m["row_share"], start=1):
+            cells = []
+            for j, share in enumerate(row, start=1):
+                n = m["counts"][i - 1][j - 1]
+                cells.append(
+                    f'<td class="m{_share_level(share)}" '
+                    f'title="新 {i} 档 × 旧 {j} 档：{fmt_int(n)} 人，占该新档 {share:.1f}%">'
+                    f"<b>{share:.1f}%</b><span>{fmt_int(n)} 人</span></td>"
+                )
+            body.append(f'<tr><th class="rowhead">{i} 档</th>{"".join(cells)}</tr>')
+        migration_html = f"""
+      <div class="subhead">新旧档位迁移矩阵</div>
+      <p class="desc">行 = 新戳额模型档位，列 = 线上模型档位；每格显示该新档人群落到各旧档的比例，颜色越深占比越高。</p>
+      <div class="table-wrap">
+        <table class="cross migration">
+          <thead>
+            <tr><th class="corner"></th><th colspan="10" class="group">线上模型 · 十分位</th></tr>
+            <tr><th class="rowhead">新戳额模型</th>{head}</tr>
+          </thead>
+          <tbody>{''.join(body)}</tbody>
+        </table>
+      </div>
+      <div class="heat-legend">
+        <span class="muted">占该新档比例</span>
+        <span><i class="sw m1"></i>&lt;2%</span>
+        <span><i class="sw m2"></i>2–5%</span>
+        <span><i class="sw m3"></i>5–10%</span>
+        <span><i class="sw m4"></i>10–20%</span>
+        <span><i class="sw m5"></i>≥20%</span>
+      </div>
+      <p class="note">迁移矩阵只使用新旧分都非空的 {fmt_int(limit['pair_n'])} 人；两模型落在同一档（对角线）的占
+      {fmt_pct(m['diag_share'], 1)}，相邻档（±1 档）合计占 {fmt_pct(m['adjacent_share'], 1)}，
+      新旧分数秩相关 {fmt_num(m['spearman'], 3)}。由于两个模型各用自己的固定切点，档位差异同时包含排序差异和分数分布差异。
+      旧模型分从模型运行日志按戳额流水取得，覆盖 {fmt_int(limit['old_n'])} / {fmt_int(limit['n'])} 人
+      （{fmt_pct(limit['old_coverage'])}）。</p>"""
+
     months = "、".join(
         f"{m['month']} {fmt_int(m['n'])} 人（缺分 {fmt_pct(m['missing_rate'])}）"
         for m in limit["monthly"]
     )
     top2 = limit["deciles"][8]["share"] + limit["deciles"][9]["share"]
+    old_desc = (
+        f"；旧模型按日志取分 {fmt_int(limit['old_n'])} 人（覆盖 {fmt_pct(limit['old_coverage'])}）"
+        if has_old
+        else ""
+    )
+    title = "新旧十分位对比" if has_old else "分数分布"
+    tag = "生产全量 · 无标签" if has_old else "生产全量"
     return f"""
-    <section class="card">
-      <h2>戳额生产打分全量：分数分布<span class="tag" title="新客戳额环节的生产打分全量，不按成交筛选">生产全量</span></h2>
+    <section class="card" id="limit">
+      <h2>戳额生产打分全量：{title}<span class="tag" title="新客戳额环节的生产打分全量，不按成交筛选">{tag}</span></h2>
       <p class="desc">这份样本是新客戳额环节的生产打分全量，覆盖 {escape(limit['dt_min'])} 至 {escape(limit['dt_max'])} 共
-      {fmt_int(limit['n'])} 人；已打分 {fmt_int(limit['n_scored'])} 人（{fmt_pct(limit['n_scored'] / limit['n'] * 100)}），
-      缺分 {fmt_int(limit['n_missing'])} 人（{fmt_pct(limit['missing_rate'])}）。按新模型固定十分位切点分档，第 1 档分数最低。</p>
+      {fmt_int(limit['n'])} 人；新模型已打分 {fmt_int(limit['n_scored'])} 人（{fmt_pct(limit['n_scored'] / limit['n'] * 100)}），
+      缺分 {fmt_int(limit['n_missing'])} 人（{fmt_pct(limit['missing_rate'])}）{old_desc}。
+      两个模型各按自身固定十分位切点分档，第 1 档分数最低。</p>
       <div class="table-wrap">
         <table class="decile">
-          <thead>
-            <tr>
-              <th>档位</th><th>规则分数区间</th><th>实际分数范围</th><th>人数</th>
-              <th>占已打分</th><th>累计占比</th><th>与参考 10% 偏差</th>
-            </tr>
+          <thead>{header}
           </thead>
           <tbody>{''.join(rows)}</tbody>
         </table>
       </div>
-      <p class="note">该样本的分数整体偏高于固定切点：实际中位数 {fmt_num(limit['median'], 4)}、P90 {fmt_num(limit['p90'], 4)}，
+      <p class="note">该样本的分数整体偏高于固定切点：新模型实际中位数 {fmt_num(limit['median'], 4)}、P90 {fmt_num(limit['p90'], 4)}，
       而切点的中位上界为 {fmt_num(NEW_DECILE_CUTS[4], 4)}；第 9–10 档合计占 {fmt_pct(top2)}，并非十等分。
-      分数范围 {fmt_num(limit['score_min'], 4)}–{fmt_num(limit['score_max'], 4)}，低于首档下界 {fmt_int(limit['below_min'])} 人、
-      高于末档上界 {fmt_int(limit['above_max'])} 人，分别并入第 1 / 10 档。分月看：{months}。</p>
-      <p class="note">该样本不含标签：未成交申请没有放款与表现数据，因此这里只看分数分布；
-      AUC / KS 等排序指标仅在戳额成交样本上计算，见前文各卡片。</p>
+      新模型分数范围 {fmt_num(limit['score_min'], 4)}–{fmt_num(limit['score_max'], 4)}，低于首档下界 {fmt_int(limit['below_min'])} 人、
+      高于末档上界 {fmt_int(limit['above_max'])} 人，分别并入第 1 / 10 档。分月看：{months}。</p>{migration_html}
+      <p class="note">该样本不含标签：未成交申请没有放款与表现数据，因此这里只比较分数分布和档位迁移，
+      不计算坏率 / AUC / KS；这些指标仅在戳额成交样本上计算，见前文各卡片。</p>
     </section>
     """
 
@@ -1221,7 +1381,7 @@ def summary_html(data) -> str:
     oot_txt = "与样本内方向一致" if oot_consistent else "需关注样本内外差异"
 
     return f"""
-    <section class="card conclus">
+    <section class="card conclus" id="conclusion">
       <h2>结论</h2>
       <ul>
         <li><b>区分度</b>：新戳额模型 FPD15 AUC {fmt_num(new['auc'])}，线上模型 {fmt_num(old['auc'])}，
@@ -1265,7 +1425,7 @@ def roc_card(data) -> str:
       </div>"""
         )
     return f"""
-    <section class="card">
+    <section class="card" id="roc">
       <h2>ROC 曲线<span class="tag" title="横轴假阳率、纵轴真阳率；对角线为随机模型">AUC 比较</span></h2>
       <p class="desc">曲线越靠左上越好；新戳额模型在两个标签口径下都明显更靠左上。</p>
       <div class="grid2">{''.join(panels)}</div>
@@ -1290,7 +1450,7 @@ def decile_card(data) -> str:
     rule_txt = " / ".join(f"{v:.4f}" for v in NEW_DECILE_CUTS)
     old_rule_txt = " / ".join(f"{v:.4f}" for v in OLD_DECILE_CUTS)
     return f"""
-    <section class="card">
+    <section class="card" id="decile">
       <h2>十分位坏率<span class="tag" title="两个模型均按各自的固定十分位切点分档，第 10 档风险最高">FPD15</span></h2>
       <p class="desc">新戳额模型{'从第 1 档到第 10 档单调上升' if mono else '各档基本拉开'}，最高档 {fmt_pct(new_dec[-1]['rate'])}、
       lift {fmt_num(new_dec[-1]['lift'], 2)}×；线上模型第 1–9 档坏率在 {fmt_pct(old_low)}–{fmt_pct(old_high)} 之间，
@@ -1346,7 +1506,7 @@ def cross_table(data, window_key="15") -> str:
 def cross_card(data) -> str:
     cross = data["windows"]["15"]["cross"]
     return f"""
-    <section class="card">
+    <section class="card" id="cross">
       <h2>五分位交叉矩阵<span class="tag" title="行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位相邻两档合并；每格为该组合的笔数坏率">FPD15</span></h2>
       <p class="desc">每格是落在该组合的样本的笔数坏率。横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差
       {cross['row_spread_max']:.1f}pp；纵向看（线上档固定、新戳额模型 1→5 档）至少差 {cross['col_spread_min']:.1f}pp
@@ -1468,7 +1628,7 @@ def money_card(data) -> str:
         </div>
       </div>"""
     return f"""
-    <section class="card">
+    <section class="card" id="money">
       <h2>置入与置出<span class="tag" title="置入 = 放款本金 real_amount 之和；置出 = due+N 当天借据快照的未还本金之和">放款本金 vs 未还本金</span></h2>
       <p class="desc">前面所有坏率都是笔数口径，这里换成钱。FPD15 成熟样本上，新戳额模型口径的置入
       {fmt_int(m['amt'])}、置出 {fmt_int(m['loss_amt'])}，置出率 {fmt_pct(m['amt_rate'])}，
@@ -1501,7 +1661,7 @@ def capture_card(data) -> str:
     reject = data["meta"]["reject_pct"]
     cut_new, cut_old = cut_for(entry, "new", reject), cut_for(entry, "old", reject)
     return f"""
-    <section class="card">
+    <section class="card" id="capture">
       <h2>拦截收益<span class="tag" title="按分数从高到低拒绝，横轴为拒绝比例，纵轴为被拒样本中的坏账占比">FPD15</span></h2>
       <p class="desc">拒绝同样比例的人，新戳额模型能拦下更多坏账。拒绝 {reject}% 时，新戳额模型捕获
       {fmt_pct(cut_new['capture'], 1)} 的坏账，线上模型 {fmt_pct(cut_old['capture'], 1)}。</p>
@@ -1574,7 +1734,7 @@ def through_card(data) -> str:
     ref = next(r for r in entry["through"]["rows"] if r["target"] == THROUGH_REF)
     o, n = ref["old"], ref["new"]
     return f"""
-    <section class="card">
+    <section class="card" id="through">
       <h2>通过收益<span class="tag" title="把通过坏率控制在同一水平，各模型能达到的最高通过率">FPD15</span></h2>
       <p class="desc">拦截的反面是通过。同样把通过坏率压在 {ref['target']}% 以内，线上模型只能通过
       {fmt_pct(o['approval'], 1)}（{fmt_int(o['kept'])} 笔），新戳额模型可以通过 {fmt_pct(n['approval'], 1)}（{fmt_int(n['kept'])} 笔），
@@ -1603,7 +1763,7 @@ def through_card(data) -> str:
 def swap_card(data) -> str:
     swap = data["windows"]["15"]["swap"]
     return f"""
-    <section class="card">
+    <section class="card" id="swap">
       <h2>决策互换矩阵<span class="tag" title="两个模型各拒绝最差 30% 后的人群交叉对比">FPD15 · 拒绝 {swap['reject_pct']}%</span></h2>
       <p class="desc">同一批人、同样的拒绝比例，两个模型拒掉的人只有一部分重叠。分歧人群的实际坏率决定该信谁。</p>
       {swap_html(data, '15')}
@@ -1636,7 +1796,7 @@ def weekly_card(data) -> str:
         else "新戳额模型整体领先，个别周有波动"
     )
     return f"""
-    <section class="card">
+    <section class="card" id="weekly">
       <h2>分周稳定性<span class="tag" title="按放款周（周一起）计算成熟样本内的 AUC">周度 AUC</span></h2>
       <p class="desc">{desc_head}。{'；'.join(parts)}。</p>
       <div class="grid2">
@@ -1679,7 +1839,7 @@ def footer_html(data, generated_at, label_name, score_name, limit=None, limit_na
         <li><b>戳额生产打分全量</b>：{escape(limit_name)} 为新客戳额环节的生产打分全量，共 {fmt_int(limit['n'])} 人，
             覆盖 {escape(limit['dt_min'])} 至 {escape(limit['dt_max'])}；已打分 {fmt_int(limit['n_scored'])} 人、
             缺分 {fmt_int(limit['n_missing'])} 人（{fmt_pct(limit['missing_rate'])}）。
-            该样本不含标签（未成交申请无表现数据），分布卡只展示分数分布；AUC / KS 仅在戳额成交样本上计算。</li>"""
+            该样本不含标签（未成交申请无表现数据），分布卡只比较新旧分数分布与档位迁移；AUC / KS 仅在戳额成交样本上计算。</li>"""
     return f"""
     <footer class="foot">
       <ul class="notes">
@@ -1796,6 +1956,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .kpi b { display: block; font-size: 27px; line-height: 1.2; margin: 4px 0 1px; }
   .kpi b .vs { color: var(--muted); font-size: 15px; font-weight: 400; }
   .kpi .sub { display: block; color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
+  .toc {
+    background: var(--surface); border: 1px solid var(--ring);
+    border-radius: 12px; padding: 14px 18px 12px; margin: 14px 0 6px;
+  }
+  .toc-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 7px; }
+  .toc-head h2 { font-size: 13px; margin: 0; letter-spacing: .02em; }
+  .toc ol {
+    list-style: none; margin: 0; padding: 0; counter-reset: toc;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px 18px;
+  }
+  .toc li { counter-increment: toc; min-width: 0; }
+  .toc a {
+    display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid transparent;
+    color: var(--ink-2); text-decoration: none; font-size: 12.5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .toc a::before {
+    content: counter(toc, decimal-leading-zero); color: var(--muted);
+    font-size: 10.5px; line-height: 1.85; font-variant-numeric: tabular-nums;
+  }
+  .toc a:hover { color: var(--ink); border-bottom-color: var(--grid); }
+  html { scroll-behavior: smooth; }
+  section[id] { scroll-margin-top: 14px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   .card {
     background: var(--surface); border: 1px solid var(--ring);
     border-radius: 12px; padding: 16px 18px 11px; margin: 13px 0;
@@ -1883,6 +2067,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   table.cross td.h3 { background: rgba(192,57,43,0.29); }
   table.cross td.h4 { background: rgba(192,57,43,0.46); }
   table.cross td.h5 { background: rgba(192,57,43,0.66); }
+  table.cross td.m1 { background: rgba(42,120,214,0.06); }
+  table.cross td.m2 { background: rgba(42,120,214,0.14); }
+  table.cross td.m3 { background: rgba(42,120,214,0.27); }
+  table.cross td.m4 { background: rgba(42,120,214,0.42); }
+  table.cross td.m5 { background: rgba(42,120,214,0.58); }
+  table.cross.migration td { padding: 8px 4px; }
+  table.cross.migration td b { font-size: 12px; }
+  table.cross.migration td span { font-size: 9.5px; }
   .heat-legend {
     display: flex; flex-wrap: wrap; align-items: center; gap: 15px;
     font-size: 11.5px; color: var(--ink-2); margin: 8px 2px 0;
@@ -1897,6 +2089,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .heat-legend .sw.h3 { background: rgba(192,57,43,0.29); }
   .heat-legend .sw.h4 { background: rgba(192,57,43,0.46); }
   .heat-legend .sw.h5 { background: rgba(192,57,43,0.66); }
+  .heat-legend .sw.m1 { background: rgba(42,120,214,0.06); }
+  .heat-legend .sw.m2 { background: rgba(42,120,214,0.14); }
+  .heat-legend .sw.m3 { background: rgba(42,120,214,0.27); }
+  .heat-legend .sw.m4 { background: rgba(42,120,214,0.42); }
+  .heat-legend .sw.m5 { background: rgba(42,120,214,0.58); }
   .heat-legend .sw.keep { background: var(--keep); }
   .heat-legend .sw.loss { background: var(--loss); }
   .defs {
@@ -1936,12 +2133,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   ul.notes b { color: var(--ink); font-weight: 600; }
   @media (max-width: 900px) {
     .kpis { grid-template-columns: repeat(2, 1fr); }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid2 { grid-template-columns: 1fr; }
     .swap { grid-template-columns: 92px 1fr 1fr; }
   }
   @media (max-width: 560px) {
     h1 { font-size: 24px; }
     .kpis { grid-template-columns: 1fr; }
+    .toc ol { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -1949,6 +2148,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <main>
 __HEADER__
 __KPIS__
+__TOC__
 __METRICS_CARD__
 __ROC_CARD__
 __DECILE_CARD__
@@ -2654,16 +2854,42 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
     """
     f15m = data["windows"]["15"]["models"]
     metrics_card = f"""
-    <section class="card">
+    <section class="card" id="metrics">
       <h2>核心指标<span class="tag" title="AUC / Gini / KS 均在成熟样本内计算">排序能力</span></h2>
       <p class="desc">两个标签口径、两个模型放在同一批成熟样本上比。新戳额模型 AUC {fmt_num(f15m['new']['auc'], 2)}、KS {fmt_num(f15m['new']['ks'], 2)}，
       线上模型 AUC {fmt_num(f15m['old']['auc'], 2)}、KS {fmt_num(f15m['old']['ks'], 2)}。</p>
       {metrics_table(data)}
     </section>
     """
+    toc_entries = [
+        ("metrics", "核心指标"),
+        ("roc", "ROC 曲线"),
+        ("decile", "十分位坏率"),
+        ("cross", "五分位交叉矩阵"),
+        ("oot", "OOT 表现"),
+        ("weekly", "分周稳定性"),
+        ("money", "置入与置出"),
+        ("capture", "拦截收益"),
+        ("through", "通过收益"),
+        ("swap", "决策互换矩阵"),
+    ]
+    if limit:
+        toc_entries.append(("limit", "戳额生产打分全量"))
+    toc_entries.append(("conclusion", "结论"))
+    toc_links = "".join(
+        f'<li><a href="#{anchor}">{escape(title)}</a></li>'
+        for anchor, title in toc_entries
+    )
+    toc = f"""
+    <nav class="toc" aria-label="目录">
+      <div class="toc-head"><h2>目录</h2><span class="muted">点击跳转</span></div>
+      <ol>{toc_links}</ol>
+    </nav>
+    """
     html = HTML_TEMPLATE
     html = html.replace("__HEADER__", header)
     html = html.replace("__KPIS__", kpi_html(data))
+    html = html.replace("__TOC__", toc)
     html = html.replace("__SUMMARY__", summary_html(data))
     html = html.replace("__METRICS_CARD__", metrics_card)
     html = html.replace("__OOT_CARD__", oot_card(data))
@@ -2689,7 +2915,9 @@ def main(argv=None):
     parser.add_argument("--label-csv", default=str(DEFAULT_LABEL), help="主表 CSV")
     parser.add_argument("--score-csv", default=str(DEFAULT_SCORE), help="戳额成交样本新模型分 CSV")
     parser.add_argument("--limit-score-csv", default=str(DEFAULT_LIMIT_SCORE),
-                        help="戳额生产打分全量新模型分 CSV（只做分数分布）")
+                        help="戳额生产打分全量新模型分 CSV")
+    parser.add_argument("--limit-old-score-csv", default=str(DEFAULT_LIMIT_OLD_SCORE),
+                        help="戳额生产打分全量线上旧模型分 CSV（按 flow_id 关联）")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="输出 HTML")
     parser.add_argument("--start", default="2026-08-01", help="戳额起始日")
     parser.add_argument("--end", default="2026-10-24", help="戳额结束日（不含）")
@@ -2700,6 +2928,7 @@ def main(argv=None):
     label_path = Path(args.label_csv)
     score_path = Path(args.score_csv)
     limit_path = Path(args.limit_score_csv)
+    limit_old_path = Path(args.limit_old_score_csv)
     for path in (label_path, score_path):
         if not path.exists():
             parser.error(f"文件不存在：{path}")
@@ -2712,7 +2941,12 @@ def main(argv=None):
     ).strftime("%Y-%m-%d")
     limit_data = None
     if limit_path.exists():
-        limit_data = load_limit_data(limit_path)
+        if not limit_old_path.exists():
+            print(f"未找到戳额旧模型分，分布卡仅展示新模型：{limit_old_path}")
+        limit_data = load_limit_data(
+            limit_path,
+            limit_old_path if limit_old_path.exists() else None,
+        )
     else:
         print(f"未找到戳额生产打分全量，跳过分布卡：{limit_path}")
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -2731,6 +2965,13 @@ def main(argv=None):
             f"  FPD{w}: 成熟 {e['n_obs']:,} / 坏 {e['n_bad']:,} | "
             f"AUC 新 {e['models']['new']['auc']:.3f} vs 旧 {e['models']['old']['auc']:.3f} | "
             f"Δ {e['delta']['diff']:+.3f}"
+        )
+
+    if limit_data and limit_data["migration"]:
+        m = limit_data["migration"]
+        print(
+            f"  戳额全量配对 {m['n']:,} 人 | 新旧同档 {m['diag_share']:.1f}% | "
+            f"秩相关 {m['spearman']:.3f}"
         )
 
 

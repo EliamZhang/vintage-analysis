@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """同步模型分分析输入：执行 wagego_05_模型分分析.sql 的查询块。
 
-产出：同步数据/ 下的主表、戳额成交样本新模型分、戳额生产打分全量新模型分，以及 model_analysis_data.zip。
-只服务模型分分析；监控看板见 sync_vintage.py。
+产出：同步数据/ 下的主表、戳额成交样本新模型分、戳额生产打分全量新旧模型分，
+以及 model_analysis_data.zip。只服务模型分分析；监控看板见 sync_vintage.py。
 """
 
 from __future__ import annotations
@@ -38,6 +38,11 @@ QUERY_SPECS = (
     {"id": "1", "file": "table_tmp_eliam_wagego_dwd_loan_apply_label.csv", "title": "Y 标签主表"},
     {"id": "2", "file": "aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv", "title": "戳额成交样本新模型分"},
     {"id": "3", "file": "wagego_new_user_credit_20260801_20261023_score.csv", "title": "戳额生产打分全量新模型分"},
+    {
+        "id": "4",
+        "file": "wagego_new_user_credit_20260801_20261023_old_score.csv",
+        "title": "戳额生产打分全量线上旧模型分",
+    },
 )
 
 
