@@ -353,7 +353,46 @@ def load_sample(label_csv: Path, score_csv: Path, start: str, end: str) -> pd.Da
     return merged
 
 
-def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
+def segment_metrics(base, ovd_col, mask):
+    """成熟样本内某一段的 AUC / KS / 配对 ΔAUC。"""
+    seg = base[mask]
+    out = {
+        "n": int(len(seg)),
+        "bad": int(seg[ovd_col].sum()),
+        "rate": round(float(seg[ovd_col].mean() * 100), 2) if len(seg) else None,
+        "models": {},
+    }
+    for key in ("old", "new"):
+        d = seg.dropna(subset=[f"{key}_score"])
+        y = d[ovd_col].astype(int).to_numpy()
+        s = d[f"{key}_score"].to_numpy(float)
+        auc, ks = auc_ks(s, y)
+        out["models"][key] = {
+            "n": int(len(d)),
+            "bad": int(y.sum()),
+            "auc": round(auc, 4) if auc is not None else None,
+            "ks": round(ks, 4) if ks is not None else None,
+        }
+    pair = seg.dropna(subset=["old_score", "new_score"])
+    if len(pair):
+        y = pair[ovd_col].astype(int).to_numpy()
+        test = delong_paired(
+            pair["old_score"].to_numpy(float), pair["new_score"].to_numpy(float), y
+        )["diff"]
+        out["delta"] = {
+            "n": int(len(pair)),
+            "diff": round(test["diff"], 4),
+            "ci_low": round(test["ci_low"], 4),
+            "ci_high": round(test["ci_high"], 4),
+            "p": test["p"],
+            "z": round(test["z"], 2),
+        }
+    else:
+        out["delta"] = None
+    return out
+
+
+def build_data(sample: pd.DataFrame, reject_pct: int, oot_start: str) -> dict:
     obs_at = pd.to_datetime(sample["obs_dt"]).max()
     data = {
         "meta": {
@@ -367,6 +406,7 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
             "reject_pct": reject_pct,
             "n_unscored": int(sample.attrs.get("unscored", 0)),
             "unscored_immature": bool(sample.attrs.get("unscored_immature", False)),
+            "oot_start": oot_start,
             "new_decile_rule": {
                 "thresholds": list(NEW_DECILE_THRESHOLDS),
                 "min_score": list(NEW_DECILE_MIN),
@@ -454,6 +494,14 @@ def build_data(sample: pd.DataFrame, reject_pct: int) -> dict:
             "ci_high": round(delta["ci_high"], 4),
             "p": delta["p"],
             "z": round(delta["z"], 2),
+        }
+
+        # 样本内 / OOT 分段指标（OOT 按戳额时间切）
+        oot_mask = (base["last_limit_time"] >= pd.Timestamp(oot_start)).to_numpy()
+        entry["segments"] = {
+            "all": segment_metrics(base, ovd_col, np.ones(len(base), dtype=bool)),
+            "pre_oot": segment_metrics(base, ovd_col, ~oot_mask),
+            "oot": segment_metrics(base, ovd_col, oot_mask),
         }
 
         # 决策互换矩阵
@@ -770,6 +818,57 @@ def metrics_table(data) -> str:
       lift = 该档坏率 / 全体坏率。ΔAUC 用 DeLong 配对检验，仅取两模型都有分的样本。</p>    """
 
 
+def oot_card(data) -> str:
+    meta = data["meta"]
+    start = meta["start"]
+    oot_start = meta["oot_start"]
+    pre_end = (pd.Timestamp(oot_start) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    rows = []
+    for w in WINDOWS:
+        entry = data["windows"][str(w)]
+        for key, name in (("all", "全样本"), ("pre_oot", "样本内"), ("oot", "OOT")):
+            seg = entry["segments"][key]
+            new_m, old_m, delta = seg["models"]["new"], seg["models"]["old"], seg["delta"]
+            cls = ' class="oot"' if key == "oot" else ""
+            rows.append(
+                f"""
+            <tr{cls}>
+              <td class="w">{entry['label']}</td>
+              <td>{name}</td>
+              <td>{fmt_int(seg['n'])}</td>
+              <td>{fmt_int(seg['bad'])}</td>
+              <td>{fmt_pct(seg['rate'])}</td>
+              <td class="strong">{fmt_num(new_m['auc'])}</td>
+              <td>{fmt_num(old_m['auc'])}</td>
+              <td class="strong">{fmt_signed(delta['diff'])}</td>
+              <td class="soft">{fmt_signed(delta['ci_low'])} ~ {fmt_signed(delta['ci_high'])}</td>
+              <td>{fmt_num(new_m['ks'])}</td>
+              <td>{fmt_num(old_m['ks'])}</td>
+            </tr>"""
+            )
+    return f"""
+    <section class="card">
+      <h2>OOT 表现<span class="tag" title="OOT = 戳额时间不早于 {escape(oot_start)} 的样本">按时间切分</span></h2>
+      <p class="desc">把样本内和 OOT 分开看，避免样本内表现掩盖上线后的真实区分度。OOT 上两个模型都用原始分数重新计算 AUC / KS，
+      不与前面的整体指标混算。</p>
+      <div class="table-wrap">
+        <table class="oot">
+          <thead>
+            <tr>
+              <th>窗口</th><th>分段</th><th>成熟样本</th><th>坏样本</th><th>笔数坏率</th>
+              <th>新 AUC</th><th>线上 AUC</th><th>ΔAUC（新 − 旧）</th><th>ΔAUC 95% CI</th>
+              <th>新 KS</th><th>线上 KS</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(rows)}</tbody>
+        </table>
+      </div>
+      <p class="note">OOT 按戳额时间 last_limit_time ≥ {escape(oot_start)} 划分，样本内为 {escape(start)} 至 {escape(pre_end)}。
+      各窗口只统计已成熟样本；ΔAUC 用配对 DeLong 检验，仅取两模型都有分的样本。OOT 样本若尚未成熟，不计入对应窗口。</p>
+    </section>
+    """
+
+
 def scenario_table(data, window_key) -> str:
     entry = data["windows"][window_key]
     levels = sorted(c["reject_pct"] for c in entry["models"]["new"]["cutoffs"])
@@ -989,6 +1088,10 @@ def summary_html(data) -> str:
     )
     gap_txt = f"，相差 {gap:.1f} 倍" if gap else ""
     ref = next(r for r in f15["through"]["rows"] if r["target"] == THROUGH_REF)
+    oot15, oot7 = f15["segments"]["oot"], f7["segments"]["oot"]
+    oot_start = data["meta"]["oot_start"]
+    oot_consistent = oot15["delta"]["diff"] > 0 and oot7["delta"]["diff"] > 0
+    oot_txt = "与样本内方向一致" if oot_consistent else "需关注样本内外差异"
 
     return f"""
     <section class="card conclus">
@@ -997,6 +1100,11 @@ def summary_html(data) -> str:
         <li><b>区分度</b>：新戳额模型 FPD15 AUC {fmt_num(new['auc'])}，线上模型 {fmt_num(old['auc'])}，
             提升 {fmt_signed(delta['diff'])}（95% CI {fmt_signed(delta['ci_low'])} ~ {fmt_signed(delta['ci_high'])}，
             {fmt_p(delta['p'])}）；FPD7 口径同样提升 {fmt_signed(f7['delta']['diff'])}，结论不依赖单一标签。</li>
+        <li><b>OOT 表现</b>：{escape(oot_start)} 起，FPD15 成熟 {fmt_int(oot15['n'])} 笔，
+            新戳额模型 AUC {fmt_num(oot15['models']['new']['auc'])} vs 线上 {fmt_num(oot15['models']['old']['auc'])}，
+            提升 {fmt_signed(oot15['delta']['diff'])}；FPD7 成熟 {fmt_int(oot7['n'])} 笔，
+            AUC {fmt_num(oot7['models']['new']['auc'])} vs {fmt_num(oot7['models']['old']['auc'])}，
+            提升 {fmt_signed(oot7['delta']['diff'])}，{oot_txt}。</li>
         <li><b>同样风控强度下坏率更低</b>：拒绝最差 {reject}% 时，新戳额模型通过人群坏率 {fmt_pct(cut_new['kept_rate'])}，
             线上模型 {fmt_pct(cut_old['kept_rate'])}（{ratio_txt}）；新戳额模型拦下 {fmt_pct(cut_new['capture'], 1)} 的坏账，线上模型 {fmt_pct(cut_old['capture'], 1)}。</li>
         <li><b>同样坏率预算下通过更多</b>：把通过坏率压在同一水平，新戳额模型能多放客户。以 {ref['target']}% 为例，
@@ -1436,12 +1544,16 @@ def footer_html(data, generated_at, label_name, score_name) -> str:
         if meta.get("unscored_immature")
         else "其中包含已成熟样本，评估时需注意覆盖度。"
     )
+    oot_start = meta["oot_start"]
+    pre_end = (pd.Timestamp(oot_start) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     return f"""
     <footer class="foot">
       <ul class="notes">
         <li><b>样本口径</b>：wagego_02 的新客首笔成交样本（application_rank = 1，按戳额时间 {escape(meta['start'])} 至 {escape(meta['end_display'])} 筛选），
             与新戳额模型打分文件按 last_limit_flow_id = flow_id 关联，共 {fmt_int(meta['n_sample'])} 人。
             样本表中另有 {fmt_int(meta['n_unscored'])} 笔未打分、不入样：{unscored_note}</li>
+        <li><b>OOT 口径</b>：OOT 按戳额时间 last_limit_time ≥ {escape(oot_start)} 划分，样本内为 {escape(meta['start'])} 至 {escape(pre_end)}；
+            OOT 分段的 AUC / KS / ΔAUC 见「OOT 表现」卡，未成熟样本不计入对应窗口。</li>
         <li><b>模型口径</b>：新戳额模型 {escape(NEW_SCORE)}（戳额场景，{NEW_DESC}）；线上模型 {escape(OLD_SCORE)}（发标场景，{OLD_DESC}）。
             两者决策时点接近——中位 {fmt_days(meta['median_days'])}、75 分位 {fmt_days(meta['p75_days'])}内即放款，比较视为同点。
             线上模型有 {fmt_int(meta['old_missing'])} 笔缺失（含 -1 哨兵值），按缺失处理，不参与排序。</li>
@@ -1616,6 +1728,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   td.bad { color: var(--ink-2); }
   table.metrics tr.delta td { border-bottom: 1px solid var(--grid); background: var(--page); }
   table.metrics tr.delta td.strong { font-weight: 600; }
+  table.oot tr.oot td { background: var(--page); border-top: 1px solid var(--grid); }
+  table.oot tr.oot td.strong { font-weight: 600; }
   table.decile td.lift { color: var(--ink-2); }
   table.cross { width: 100%; border-collapse: separate; border-spacing: 3px; }
   table.cross th {
@@ -1703,6 +1817,7 @@ __HEADER__
 __KPIS__
 __SUMMARY__
 __METRICS_CARD__
+__OOT_CARD__
 __ROC_CARD__
 __DECILE_CARD__
 __MONEY_CARD__
@@ -2395,6 +2510,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str) -> str
         <span class="chip">样本 {fmt_int(meta['n_sample'])} 人</span>
         <span class="chip">FPD15 成熟 {fmt_int(data['windows']['15']['n_obs'])} 笔</span>
         <span class="chip">FPD7 成熟 {fmt_int(data['windows']['7']['n_obs'])} 笔</span>
+        <span class="chip">OOT {escape(meta['oot_start'])} 起</span>
         <span class="chip">笔数坏率</span>
       </div>
     </header>
@@ -2413,6 +2529,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str) -> str
     html = html.replace("__KPIS__", kpi_html(data))
     html = html.replace("__SUMMARY__", summary_html(data))
     html = html.replace("__METRICS_CARD__", metrics_card)
+    html = html.replace("__OOT_CARD__", oot_card(data))
     html = html.replace("__ROC_CARD__", roc_card(data))
     html = html.replace("__DECILE_CARD__", decile_card(data))
     html = html.replace("__MONEY_CARD__", money_card(data))
@@ -2434,6 +2551,7 @@ def main(argv=None):
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="输出 HTML")
     parser.add_argument("--start", default="2026-08-01", help="戳额起始日")
     parser.add_argument("--end", default="2026-10-24", help="戳额结束日（不含）")
+    parser.add_argument("--oot-start", default="2026-09-30", help="OOT 起始日（按戳额时间）")
     parser.add_argument("--reject", type=int, default=30, help="互换矩阵的拒绝比例 %")
     args = parser.parse_args(argv)
 
@@ -2444,7 +2562,7 @@ def main(argv=None):
             parser.error(f"文件不存在：{path}")
 
     sample = load_sample(label_path, score_path, args.start, args.end)
-    data = build_data(sample, args.reject)
+    data = build_data(sample, args.reject, args.oot_start)
     data["meta"]["start"] = args.start
     data["meta"]["end_display"] = (
         pd.Timestamp(args.end) - pd.Timedelta(days=1)
