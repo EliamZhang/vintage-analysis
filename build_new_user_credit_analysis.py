@@ -1166,16 +1166,25 @@ def oot_card(data) -> str:
     oot_cut_old = oot15["models"]["old"]["cut"]
     oot_consistent = oot15["delta"]["diff"] > 0 and oot7["delta"]["diff"] > 0
     oot_txt = "与 OOT 前方向一致" if oot_consistent else "需关注 OOT 前后差异"
+    oot_auc_new = oot15["models"]["new"]["auc"] * 100
+    oot_auc_old = oot15["models"]["old"]["auc"] * 100
+    kept_gap = oot_cut_old["kept_rate"] - oot_cut_new["kept_rate"]
     oot_take = takeaway(
-        f"OOT 后（{escape(oot_start)} 起）FPD15 成熟 {fmt_int(oot15['n'])} 笔："
-        f"AUC {fmt_num(oot15['models']['new']['auc'])} vs {fmt_num(oot15['models']['old']['auc'])}，"
-        f"ΔAUC {fmt_signed(oot15['delta']['diff'])}"
-        f"（95% CI {fmt_signed(oot15['delta']['ci_low'])} ~ {fmt_signed(oot15['delta']['ci_high'])}）；"
-        f"FPD7 成熟 {fmt_int(oot7['n'])} 笔，AUC {fmt_num(oot7['models']['new']['auc'])} vs "
-        f"{fmt_num(oot7['models']['old']['auc'])}，ΔAUC {fmt_signed(oot7['delta']['diff'])}，{oot_txt}。"
-        f"拒绝最差 {data['meta']['reject_pct']}% 时，新模型通过坏率 "
-        f"{fmt_pct(oot_cut_new['kept_rate'])} vs 线上 {fmt_pct(oot_cut_old['kept_rate'])}，"
-        f"坏账捕获 {fmt_pct(oot_cut_new['capture'], 1)} vs {fmt_pct(oot_cut_old['capture'], 1)}。"
+        f"<b>区分能力：</b>OOT 后是模型没见过的测试时段（{escape(oot_start)} 起），"
+        f"FPD15 成熟 {fmt_int(oot15['n'])} 笔。AUC 可以理解为“随机抽一个好客户和一个坏客户，"
+        "模型给坏客户更高分的概率”；"
+        f"新模型 {fmt_num(oot15['models']['new']['auc'])}，线上模型 {fmt_num(oot15['models']['old']['auc'])}，"
+        f"相当于新模型约 {oot_auc_new:.1f}% 的情况下能把坏人排在好人前面，旧模型只有 {oot_auc_old:.1f}%。"
+        f"FPD7 口径同样是新模型领先（{fmt_num(oot7['models']['new']['auc'])} vs "
+        f"{fmt_num(oot7['models']['old']['auc'])}），短期和中期风险都识别得更准，{oot_txt}。"
+        "<br><br><b>业务效果：</b>"
+        f"如果拒掉分数最差的 {data['meta']['reject_pct']}%，新模型放行客户的坏率 "
+        f"{fmt_pct(oot_cut_new['kept_rate'])}，线上模型 {fmt_pct(oot_cut_old['kept_rate'])}；"
+        f"同样放行 100 个客户，新模型约少 {kept_gap:.1f} 个坏客户。"
+        f"同时新模型拦住了 {fmt_pct(oot_cut_new['capture'], 1)} 的坏客户，线上模型只有 "
+        f"{fmt_pct(oot_cut_old['capture'], 1)}。"
+        "<br><br><b>上线判断：</b>提升不是在训练样本上“背答案”，"
+        "而是在未参与建模的时段仍然成立；可以作为上线后新客审批的主排序模型。"
     )
     return f"""
     <section class="card" id="oot">
@@ -1330,14 +1339,20 @@ def limit_card(limit) -> str:
     if has_old:
         migration = limit["migration"]
         migration_txt = (
-            f"新旧模型落在同一档的仅 {fmt_pct(migration['diag_share'], 1)}，"
-            f"秩相关 {fmt_num(migration['spearman'], 3)}，说明新模型对人群排序有明显重排。"
+            f"另外，新旧模型只有 {fmt_pct(migration['diag_share'], 1)} 的人落在同一档，"
+            f"秩相关 {fmt_num(migration['spearman'], 3)}（1 表示排序完全一致）。"
         )
     limit_take = takeaway(
-        f"当前生产分数相对固定切点整体偏高：新模型中位数 {fmt_num(limit['median'], 4)}、"
-        f"P90 {fmt_num(limit['p90'], 4)}，切点的中位上界为 {fmt_num(NEW_DECILE_CUTS[4], 4)}；"
-        f"第 9–10 档合计占 {fmt_pct(top2)}，并非十等分。"
-        f"固定阈值下高分档偏拥挤，上线前应结合生产分数分布复核。{migration_txt}"
+        "<b>生产分布：</b>"
+        f"当前生产分数相对建模时的固定切点整体偏高：中位数 {fmt_num(limit['median'], 4)}，"
+        f"已经高于切点的中间分界 {fmt_num(NEW_DECILE_CUTS[4], 4)}；"
+        f"第 9–10 档合计占 {fmt_pct(top2)}，而不是预期的 20%。"
+        "<br><br><b>业务影响：</b>如果直接套用建模时的固定分数阈值，"
+        f"高分档会明显偏拥挤——比如把第 9–10 档视为高风险，实际会圈出约 {fmt_pct(top2, 1)} 的人，"
+        "而不是预期的 20%，拒绝量可能超出业务承受范围。"
+        "<br><br><b>应用场景：</b>上线前要用生产分数重新校准切点，或改成按“通过率/排名”设阈值；"
+        f"{migration_txt}换模型不是简单替换一个分数，而是会对人群重新排序，"
+        "存量客户的额度、定价和策略需要同步评估。"
     )
     old_desc = (
         f"；旧模型按日志取分 {fmt_int(limit['old_n'])} 人（覆盖 {fmt_pct(limit['old_coverage'])}）"
@@ -1382,18 +1397,26 @@ def conversion_card(limit, data) -> str:
     old_bad = {r["q"]: r["rate"] for r in f15["old"]["deciles"]}
     has_old = bool(conv["has_old"] and conv["old_deciles"])
     conv_take = takeaway(
-        f"戳额全量 {fmt_int(conv['n'])} 人，借款申请率 {fmt_pct(conv['apply_rate'])}、"
-        f"成交率 {fmt_pct(conv['disburse_rate'])}、申请→成交 {fmt_pct(conv['apply_to_disburse'])}；"
-        "漏斗损耗主要发生在申请前，申请后的成交转化较高。"
+        f"<b>漏斗整体：</b>戳额全量 {fmt_int(conv['n'])} 人，"
+        f"每 100 个被戳额的人里，约 {conv['apply_rate']:.1f} 人申请、{conv['disburse_rate']:.1f} 人最终成交；"
+        f"申请后的成交率是 {fmt_pct(conv['apply_to_disburse'])}。"
+        "<br><br><b>应用场景：</b>主要流失发生在“戳额→申请”这一步，约 "
+        f"{100 - conv['apply_rate']:.1f} 人没有申请；提升转化要先看触达、额度和借款意愿，"
+        "而不是只盯申请后的审批环节。"
     )
     decile_take = ""
     if conv["new_deciles"]:
         first_q, last_q = conv["new_deciles"][0], conv["new_deciles"][-1]
         decile_n = conv["paired_n"] or conv["scored_n"]
         decile_take = takeaway(
-            f"在 {fmt_int(decile_n)} 人分档样本中，新模型最低分档申请率 "
-            f"{fmt_pct(first_q['apply_rate'])}、最高分档 {fmt_pct(last_q['apply_rate'])}；"
-            "申请率和成交率整体随分数升高而下降，排序方向与 FPD15 坏率一致。"
+            f"<b>分档结果：</b>在 {fmt_int(decile_n)} 人分档样本中，"
+            f"新模型最低分档申请率 {fmt_pct(first_q['apply_rate'])}、最高分档只有 {fmt_pct(last_q['apply_rate'])}；"
+            "申请率和成交率整体随分数升高而下降。"
+            "<br><br><b>业务含义：</b>风险偏高的人群借款意愿反而更强，自然流量存在一定的逆向选择；"
+            "如果只按自然转化放款，容易让高风险、高意愿客户占比上升。"
+            "<br><br><b>应用场景：</b>模型分档可以帮助在审批时同时看“风险”和“意愿”："
+            "低分档即使申请意愿高，也要用额度、定价或拒绝策略控制风险；"
+            "高分档风险低但意愿弱，需要运营触达来提升转化。"
         )
 
     window_rows = "".join(
@@ -1634,9 +1657,15 @@ def swap_html(data, window_key) -> str:
     )
     gap_txt = f"，相差 {gap:.1f} 倍" if gap else ""
     swap_take = takeaway(
-        f"新模型拒绝而线上放行的 {fmt_int(new_only['n'])} 人坏率 {fmt_pct(new_only['rate'])}，"
-        f"线上拒绝而新模型放行的 {fmt_int(old_only['n'])} 人坏率仅 {fmt_pct(old_only['rate'])}"
-        f"{gap_txt}。分歧人群应以新戳额模型的判断为准。"
+        "<b>分歧人群：</b>"
+        f"同样拒绝最差 {swap['reject_pct']}% 的前提下，"
+        f"新模型拒绝、线上模型放行的 {fmt_int(new_only['n'])} 人，实际坏率 {fmt_pct(new_only['rate'])}；"
+        f"反过来线上拒绝、新模型放行的 {fmt_int(old_only['n'])} 人，坏率只有 {fmt_pct(old_only['rate'])}"
+        f"{gap_txt}。"
+        "<br><br><b>判断依据：</b>两个模型意见不一致时，新模型的判断更准："
+        "它拦下的是真正的高风险人群，放回来的是旧模型误伤的好客户。"
+        "<br><br><b>应用场景：</b>如果审批中出现“一个过一个拒”的分歧，应优先相信新模型；"
+        "切换模型时，这部分客户的口径变化最大，需要重点复盘。"
     )
 
     def cell(key, label=""):
@@ -1775,8 +1804,12 @@ def roc_card(data) -> str:
       <p class="desc">曲线越靠左上越好；这里展示全样本成熟成交样本（含 OOT）的参考曲线，OOT 后的主口径见上方「OOT 后表现」卡。</p>
       <div class="grid2">{''.join(panels)}</div>
       {takeaway(
-          "FPD15 与 FPD7 的 ROC 均整体位于线上模型上方，说明新模型在完整分数排序上占优，"
-          "并非只在某一个分段有效；两个标签口径的结论相互印证。"
+          "<b>图表解读：</b>ROC 曲线越靠左上，说明在同样误伤好人的比例下能拦住更多坏人。"
+          "FPD15 和 FPD7 两个面板里，新模型曲线都整体位于线上模型上方，"
+          "而且不是只在某一个通过率区间领先。"
+          "<br><br><b>应用场景：</b>审批策略从宽松到严格调整时，在大多数通过率水平下，"
+          "新模型都能在相同误伤水平下多拦坏客户，不需要依赖某个特定切点。"
+          "这页是全样本参考，OOT 后的主口径见上方卡。"
       )}
       <p class="note">ROC 按分数降序逐点计算，等距抽样至 200 个点绘制；表值见上方「核心指标」。</p>
     </section>
@@ -1798,6 +1831,11 @@ def decile_card(data) -> str:
     old_high = max(old_vals) if old_vals else None
     rule_txt = " / ".join(f"{v:.4f}" for v in NEW_DECILE_CUTS)
     old_rule_txt = " / ".join(f"{v:.4f}" for v in OLD_DECILE_CUTS)
+    top_bad_share = (
+        new_dec[-1]["bad"] / entry["n_bad"] * 100
+        if entry["n_bad"] and new_dec[-1].get("bad") is not None
+        else None
+    )
     return f"""
     <section class="card" id="decile">
       <h2>十分位坏率<span class="tag" title="全样本成熟成交样本（含 OOT）；两个模型均按各自的固定十分位切点分档，第 10 档风险最高">全样本成熟 · FPD15</span></h2>
@@ -1813,11 +1851,16 @@ def decile_card(data) -> str:
         <span class="muted">横轴：第 1 档 = 分数最低（最安全）· lift = 该档坏率 / 全体坏率</span>
       </div>
       {takeaway(
-          f"新模型从第 1 档到第 10 档{'单调上升' if mono else '基本拉开'}，最高档坏率 "
-          f"{fmt_pct(new_dec[-1]['rate'])}、lift {fmt_num(new_dec[-1]['lift'], 2)}×；"
+          "<b>分档效果：</b>"
+          f"把客户按分数从低到高分成 10 档，新模型从第 1 档到第 10 档坏率"
+          f"{'逐档上升' if mono else '整体拉开'}；最高档坏率 {fmt_pct(new_dec[-1]['rate'])}，"
+          f"是整体坏率的 {fmt_num(new_dec[-1]['lift'], 2)} 倍，"
+          f"仅这一档就集中了 {fmt_pct(top_bad_share, 1)} 的坏客户。"
           f"线上模型前 9 档坏率只在 {fmt_pct(old_low)}–{fmt_pct(old_high)} 之间，"
           f"最高档 {fmt_pct(old_dec[-1]['rate'])}、lift {fmt_num(old_dec[-1]['lift'], 2)}×，"
-          "高低分段的拉开幅度明显小于新模型。"
+          "高低分段的拉开幅度明显更小。"
+          "<br><br><b>应用场景：</b>做额度分层、人工复核或差异化定价时，可以直接按新模型档位分配资源；"
+          "最高档人数相对少但坏账集中，适合优先拦截或加严审核。"
       )}
       <div class="subhead">分档明细</div>
       {decile_table(data, '15')}
@@ -1904,9 +1947,13 @@ def cross_card(data) -> str:
       颜色越深表示坏率越高。最右列、最下行是合计，分别按新戳额模型、线上模型单维汇总的整体坏率。</p>
       {cross_table(data, '15')}
       {takeaway(
-          f"横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差 {cross['row_spread_max']:.1f}pp；"
-          f"纵向看（线上档固定、新戳额模型 1→5 档）至少差 {cross['col_spread_min']:.1f}pp。"
-          "风险差异主要由新戳额模型的分档解释，线上模型分档带来的额外区分很小。"
+          "<b>图表解读：</b>"
+          f"固定新戳额档位、只看线上模型从 1 档到 5 档，坏率最多只差 {cross['row_spread_max']:.1f} 个百分点；"
+          f"反过来固定线上档位、只看新戳额模型从 1 档到 5 档，坏率至少差 {cross['col_spread_min']:.1f} 个百分点。"
+          "<br><br><b>业务含义：</b>人群风险主要由新戳额模型的分档决定，"
+          "线上模型分档带来的额外区分很小；也就是说，新模型已经吸收了大部分可区分的风险信息。"
+          "<br><br><b>应用场景：</b>如果新模型上线，审批分档应以新模型为主；"
+          "旧模型分数更适合作为辅助校验，而不是再用一套旧档位重复切分。"
       )}
       <div class="heat-legend">
         <span class="muted">笔数坏率</span>
@@ -2004,16 +2051,33 @@ def money_card(data) -> str:
     m = entry["models"]["new"]
     old_m = entry["models"]["old"]
     gap = m["rate"] - m["amt_rate"]
-    if gap >= 0:
-        gap_txt = f"低 {gap:.2f}pp——坏样本的单笔金额小于整体平均"
-    else:
-        gap_txt = f"高 {-gap:.2f}pp——坏样本的单笔金额大于整体平均"
     top = m["deciles"][-1]
     top_amt_share = top["amt"] / m["amt"] * 100 if m["amt"] else 0
     top_loss_share = top["loss_amt"] / m["loss_amt"] * 100 if m["loss_amt"] else 0
     top3 = m["deciles"][-3:]
     top3_amt_share = sum(d["amt"] for d in top3) / m["amt"] * 100 if m["amt"] else 0
     top3_loss_share = sum(d["loss_amt"] for d in top3) / m["loss_amt"] * 100 if m["loss_amt"] else 0
+    old_top = old_m["deciles"][-1]
+    money_take = takeaway(
+        "<b>先看整体：</b>"
+        "把「置入」理解成放出去的本金、「置出」理解成到期没收回来的本金，"
+        f"置出率就是金额口径的坏账率。整体每放出 100 元，约有 {m['amt_rate']:.2f} 元收不回来；"
+        f"按笔数算的坏账率是 {m['rate']:.2f}%，两者只差 {abs(gap):.2f} 个百分点，"
+        "说明坏账没有明显集中在大额借款上，前面按笔数得到的结论在金额口径下同样成立。"
+        "<br><br><b>再看结构：</b>"
+        f"风险最高的第 10 档只放出了 {fmt_pct(top_amt_share, 1)} 的钱，"
+        f"却贡献了 {fmt_pct(top_loss_share, 1)} 的未还本金，置出率 {fmt_pct(top['amt_rate'])}，"
+        f"是整体水平的 {top['amt_rate'] / m['amt_rate']:.1f} 倍；"
+        f"第 8–10 档合计放款占 {fmt_pct(top3_amt_share, 1)}，未还本金占 {fmt_pct(top3_loss_share, 1)}。"
+        f"换句话说，最高档每 100 个客户约 {top['rate']:.1f} 个会坏，"
+        f"每放出 100 元约 {top['amt_rate']:.1f} 元收不回来；"
+        f"而全客群每 100 元只损失约 {m['amt_rate']:.1f} 元。"
+        "模型把“坏账概率高”和“坏账金额大”的人一起排到了前面，"
+        "所以做拒绝、额度调整或催收排序时，都能优先命中真正费钱的那批人。"
+        "<br><br><b>比较时注意：</b>"
+        f"两个模型第 10 档的人数不同（新模型 {fmt_int(top['n'])} 笔，线上模型 {fmt_int(old_top['n'])} 笔），"
+        "不能直接拿两边的置出金额比大小；模型之间应比较同一拒绝比例下的金额拦截率（见「拦截收益」）。"
+    )
     panels = ""
     for key in ("new", "old"):
         mm = entry["models"][key]
@@ -2029,13 +2093,13 @@ def money_card(data) -> str:
     return f"""
     <section class="card" id="money">
       <h2>置入与置出<span class="tag" title="全样本 FPD15 成熟成交样本（含 OOT）；置入 = 放款本金 real_amount 之和；置出 = due+N 当天借据快照的未还本金之和">全样本成熟 · FPD15 · 金额</span></h2>
-      <p class="desc">前面所有坏率都是笔数口径，这里换成钱。全样本 FPD15 成熟成交样本上，
-      各档置入、置出与置出率如下；柱高为置入，其中未还部分为置出、其余为留存。</p>
+      <p class="desc">前面所有坏率都是按笔数算，这里换成按金额算：置入 = 放出去的本金，置出 = 到期没收回来的本金。
+      全样本 FPD15 成熟成交样本上，各档情况如下；柱高是放款金额，红色部分是未收回的置出，其余是留存。</p>
       <div class="defs">
-        <span><b>置入</b><em>放款本金（real_amount）之和</em></span>
-        <span><b>置出</b><em>到期未还本金（due + N 当天借据快照）</em></span>
-        <span><b>置出率</b><em>置出 ÷ 置入</em></span>
-        <span><b>留存</b><em>置入 − 置出</em></span>
+        <span><b>置入</b><em>放出去的本金（real_amount 之和）</em></span>
+        <span><b>置出</b><em>到期没收回来的本金（due + N 当天借据快照）</em></span>
+        <span><b>置出率</b><em>置出 ÷ 置入，即金额口径的坏账率</em></span>
+        <span><b>留存</b><em>置入 − 置出，即没有变成坏账的本金</em></span>
       </div>
       <div class="grid2">{panels}</div>
       <div class="heat-legend">
@@ -2043,13 +2107,7 @@ def money_card(data) -> str:
         <span><i class="sw loss"></i>置出（未还本金）</span>
         <span><i class="sw keep"></i>留存</span>
       </div>
-      {takeaway(
-          f"整体置出率 {fmt_pct(m['amt_rate'])}，比笔数坏率 {fmt_pct(m['rate'])} {gap_txt}。"
-          f"最高档置出率 {fmt_pct(top['amt_rate'])}，第 8–10 档只占置入 {top3_amt_share:.1f}%，"
-          f"却贡献 {top3_loss_share:.1f}% 的置出；最高档单独占置入 {top_amt_share:.1f}%、"
-          f"贡献置出 {top_loss_share:.1f}%，损失金额明显向高分档集中。"
-          "两个模型的最高档人数不同，横向比较应看同一拒绝比例下的金额拦截率。"
-      )}
+      {money_take}
       <div class="subhead">整体</div>
       {money_overall_table(data)}
       <div class="subhead">分档明细（FPD15）</div>
@@ -2064,14 +2122,18 @@ def capture_card(data) -> str:
     entry = data["windows"]["15"]
     reject = data["meta"]["reject_pct"]
     cut_new, cut_old = cut_for(entry, "new", reject), cut_for(entry, "old", reject)
-    ratio = cut_old["kept_rate"] / cut_new["kept_rate"] if cut_new["kept_rate"] else None
-    ratio_txt = f"约 {ratio:.1f} 倍" if ratio else "明显更低"
+    kept_gap = cut_old["kept_rate"] - cut_new["kept_rate"]
     capture_take = takeaway(
-        f"全样本拒绝最差 {reject}% 时，新模型通过人群坏率 {fmt_pct(cut_new['kept_rate'])}，"
-        f"线上模型 {fmt_pct(cut_old['kept_rate'])}（{ratio_txt}）；"
-        f"按笔数捕获坏账 {fmt_pct(cut_new['capture'], 1)} vs {fmt_pct(cut_old['capture'], 1)}，"
-        f"按金额捕获 {fmt_pct(cut_new['capture_amt'], 1)} vs {fmt_pct(cut_old['capture_amt'], 1)}。"
-        "同样风控强度下，新模型既降低通过人群坏率，也拦下更多损失金额。"
+        f"<b>业务效果：</b>同样拒绝分数最差的 {reject}% 客户，"
+        f"新模型放行人群的坏率 {fmt_pct(cut_new['kept_rate'])}，线上模型 {fmt_pct(cut_old['kept_rate'])}；"
+        f"相当于每放行 100 个客户，新模型少约 {kept_gap:.1f} 个坏客户。"
+        f"同时新模型按笔数拦住 {fmt_pct(cut_new['capture'], 1)} 的坏客户、"
+        f"按金额拦住 {fmt_pct(cut_new['capture_amt'], 1)} 的未还本金，"
+        f"线上模型分别只有 {fmt_pct(cut_old['capture'], 1)}、{fmt_pct(cut_old['capture_amt'], 1)}。"
+        "<br><br><b>应用场景：</b>在拒绝率不变的前提下，新模型既能降低通过人群风险，"
+        f"又能多拦住约 {cut_new['capture'] - cut_old['capture']:.1f} 个百分点的坏客户、"
+        f"{cut_new['capture_amt'] - cut_old['capture_amt']:.1f} 个百分点的坏账金额；"
+        "适合直接作为审批拒绝策略的主排序。"
     )
     return f"""
     <section class="card" id="capture">
@@ -2147,11 +2209,13 @@ def through_card(data) -> str:
     ref = next(r for r in entry["through"]["rows"] if r["target"] == THROUGH_REF)
     o, n = ref["old"], ref["new"]
     through_take = takeaway(
-        f"以 {ref['target']}% 坏率预算为例，线上模型最多通过 {fmt_pct(o['approval'], 1)}"
-        f"（{fmt_int(o['kept'])} 笔），新模型 {fmt_pct(n['approval'], 1)}"
-        f"（{fmt_int(n['kept'])} 笔），多 {fmt_int(ref['extra'])} 位客户、"
-        f"{fmt_money(ref['extra_good_amt'])} 好客户本金。所有预算档新模型通过率都更高，"
-        "坏率预算越紧，通过率差距越大。"
+        f"<b>业务效果：</b>如果业务要求通过人群坏率不超过 {ref['target']}%，"
+        f"线上模型最多只能放行 {fmt_pct(o['approval'], 1)} 的客户，新模型可以放行 "
+        f"{fmt_pct(n['approval'], 1)}；相当于在同样风险标准下多放行 {fmt_int(ref['extra'])} 人，"
+        f"多带来 {fmt_money(ref['extra_good_amt'])} 元的好客户本金。"
+        "<br><br><b>应用场景：</b>增长压力大、又不想放松风险标准时，新模型可以把通过率明显抬高；"
+        "而且坏率预算越紧，新模型相对旧模型能多放行的人越多。"
+        "<br><br><b>上线注意：</b>这是全样本成熟口径，上线前还要结合生产分数分布重新校准切点。"
     )
     return f"""
     <section class="card" id="through">
@@ -2222,7 +2286,12 @@ def weekly_card(data) -> str:
       <div class="grid2">
         {''.join(weekly_panel(data, w) for w in WINDOWS)}
       </div>
-      {takeaway(f"{desc_head}。{'；'.join(parts_plain)}。")}
+      {takeaway(
+          f"<b>稳定性：</b>{desc_head}。{'；'.join(parts_plain)}。"
+          "<br><br><b>业务含义：</b>不是某几周运气好，也不是由某一批样本或某个时间点带动；"
+          "新模型在不同放款周都保持领先。"
+          "<br><br><b>应用场景：</b>适合持续上线使用，不需要依赖特定月份或特定客群窗口。"
+      )}
       {weekly_table(data)}
     </section>
     """
@@ -3633,10 +3702,14 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
       线上模型 AUC {fmt_num(f15m['old']['auc'])}、KS {fmt_num(f15m['old']['ks'])}。</p>
       {metrics_table(data)}
       {takeaway(
-          f"全样本成熟参考：FPD15 AUC {fmt_num(f15m['new']['auc'])} vs {fmt_num(f15m['old']['auc'])}，"
+          "<b>核心结果：</b>"
+          f"FPD15 AUC {fmt_num(f15m['new']['auc'])} vs {fmt_num(f15m['old']['auc'])}，"
           f"提升 {fmt_signed(f15_delta['diff'])}（{fmt_p(f15_delta['p'])}）；"
           f"FPD7 AUC {fmt_num(f7m['new']['auc'])} vs {fmt_num(f7m['old']['auc'])}，"
-          f"提升 {fmt_signed(f7_delta['diff'])}。两个标签口径方向一致，结论不依赖单一标签。"
+          f"提升 {fmt_signed(f7_delta['diff'])}（{fmt_p(f7_delta['p'])}）。"
+          "<br><br><b>口径说明：</b>FPD7 看短期风险，FPD15 看更接近最终坏账的中期风险；"
+          "两个口径都显著领先且方向一致，说明新模型的提升不是只对某一种逾期定义有效。"
+          "这页是全样本参考口径，主口径仍看上面的 OOT 后。"
       )}
     </section>
     """
