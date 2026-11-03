@@ -1585,7 +1585,6 @@ __RANK_CARD__
 __QUALITY_CARD__
 __FOOTER__
 </main>
-<script id="mbr-summary" type="application/json">__MBR_JSON__</script>
 <script>
 const DATA = __DATA_JSON__;
 const NS = 'http://www.w3.org/2000/svg';
@@ -2325,72 +2324,6 @@ renderMonthlyAuc();
 """
 
 
-def build_mbr_summary(data, generated_iso):
-    """MBR PPT 取数用的稳定 JSON：月度新老客 AUC + 最近 12 周整体 AUC + 头部 KPI。"""
-    metrics = []
-    for month in sorted(data["monthlyAuc"]):
-        for user_type in ("ALL", "New", "Old"):
-            row = data["monthlyAuc"][month].get(user_type)
-            if not row:
-                continue
-            metrics.append({
-                "userType": user_type,
-                "granularity": "month",
-                "period": month,
-                "auc": row["auc"],
-                "gini": row["gini"],
-                "ks": row["ks"],
-                "n": row["obs"],
-                "bad": row["bad"],
-                "rate": row["rate"],
-            })
-    for point in data["aucChart"]["points"][-12:]:
-        metrics.append({
-            "userType": "ALL",
-            "granularity": "week",
-            "period": point["week"],
-            "auc": point["auc"],
-            "gini": point["gini"],
-            "ks": point["ks"],
-            "n": point["obs"],
-            "bad": point["bad"],
-            "rate": point["rate"],
-            "maturity": point["maturity"],
-            "partial": point["partial"],
-        })
-
-    latest15 = data["latest"]["windows"].get(15) or {}
-    bins = []
-    for user_type, quintiles in data["score"].items():
-        for q, row in sorted(quintiles.items()):
-            bins.append({
-                "userType": user_type,
-                "quintile": q,
-                "scoreMin": row["min"],
-                "scoreMax": row["max"],
-                "scoreAvg": row["avg"],
-                "n": row["obs"],
-                "bad": row["bad"],
-                "rate": row["rate"],
-            })
-
-    return {
-        "source": "wagego",
-        "generatedAt": generated_iso,
-        "metrics": metrics,
-        "bins": bins,
-        "headline": {
-            "fpd15Week": data["latest"]["week"],
-            "fpd15Maturity": data["latest"]["fpd15Maturity"],
-            "fpd15": latest15,
-            "new15": data["new15"],
-            "old15": data["old15"],
-            "lift": data["lift"],
-            "fpd30Maturity": data["fpd30Maturity"],
-        },
-    }
-
-
 def render_html(data, generated_at, input_name, generated_iso):
     chart_data = {
         "fpdCurve": data["fpdCurve"],
@@ -2404,7 +2337,6 @@ def render_html(data, generated_at, input_name, generated_iso):
         "generatedAt": generated_iso,
     }
     data_json = json.dumps(chart_data, ensure_ascii=False).replace("</", "<\\/")
-    mbr_json = json.dumps(build_mbr_summary(data, generated_iso), ensure_ascii=False).replace("</", "<\\/")
     html = HTML_TEMPLATE
     replacements = {
         "__HEADER__": header_html(data),
@@ -2418,7 +2350,6 @@ def render_html(data, generated_at, input_name, generated_iso):
         "__QUALITY_CARD__": quality_card_html(data),
         "__FOOTER__": footer_html(data, generated_at, input_name),
         "__DATA_JSON__": data_json,
-        "__MBR_JSON__": mbr_json,
     }
     for key, value in replacements.items():
         html = html.replace(key, value)
