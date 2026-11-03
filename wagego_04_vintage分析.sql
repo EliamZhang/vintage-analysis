@@ -9,10 +9,10 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 --   4) 金额坏率 = 坏样本 due+N 时点未还本金 / 全部成熟放款本金（real_amount）
 --      FPD14 的余额取 due+14 当天借据快照（与主表 FPD 金额字段同机制）
 --   5) 块 3 按 user_type 拆分；块 4 按放款周（周一开始）拆 vintage 路径
---   6) 块 5-6 模型分五分位：FPD15 成熟样本内统一切分，切点固定后套到新老客和放款周
+--   6) 块 5-6 模型分固定 5 箱：按新客风险 1.0 阈值切分，套到新老客和放款周
 --   7) 块 7 按 application_rank 拆复借期数：1st / 2nd / 3rd / 4th+
 --   8) 块 8-9 周度模型监控：排序力（AUC/Gini/KS）与周度新老客拆分
---   9) 块 10 月度排序力：按放款月 × 新老客（New / Old / ALL），供 MBR 大盘取数
+--   9) 块 10 月度排序力：按放款月 × 新老客（New / Old / ALL）
 
 
 -- ============================================================
@@ -284,10 +284,10 @@ ORDER BY week_start, window_days
 
 
 -- ============================================================
--- 块 5：模型分五分位（FPD15 成熟样本）
+-- 块 5：模型分固定 5 箱（FPD15 成熟样本）
 --   5a 分数覆盖：FPD15 成熟样本中有分/缺分
---   5b 五分位 × 新老客：分数区间、样本、坏率
--- Q1=最低分，Q5=最高分；先看 Q1→Q5 是否单调，再决定页面是否合并档位
+--   5b 5 箱 × 新老客：分数区间、样本、坏率
+-- 第1箱=最低分，第5箱=最高分；按新客风险 1.0 的固定上限阈值切分
 -- ============================================================
 WITH base AS (
     SELECT
@@ -320,7 +320,13 @@ scored AS (
         ,b.user_type
         ,b.label
         ,b.score
-        ,NTILE(5) OVER (ORDER BY b.score, b.loan_no)                  AS q
+        ,CASE
+             WHEN b.score <= 0.062086 THEN 1
+             WHEN b.score <= 0.091284 THEN 2
+             WHEN b.score <= 0.128392 THEN 3
+             WHEN b.score <= 0.188973 THEN 4
+             ELSE 5
+         END                                                          AS q
     FROM base b
     WHERE b.score IS NOT NULL
 )
@@ -352,7 +358,7 @@ ORDER BY CASE segment WHEN 'ALL' THEN 0 WHEN 'New' THEN 1 ELSE 2 END, q
 
 
 -- ============================================================
--- 块 6：模型分五分位 × 放款周（五分位沿用 FPD15 成熟样本的 pooled 切点）
+-- 块 6：模型分固定 5 箱 × 放款周（沿用新客风险 1.0 的固定阈值）
 -- ============================================================
 WITH base AS (
     SELECT
@@ -369,7 +375,13 @@ scored AS (
         ,b.week_start
         ,b.label
         ,b.score
-        ,NTILE(5) OVER (ORDER BY b.score, b.loan_no)                  AS q
+        ,CASE
+             WHEN b.score <= 0.062086 THEN 1
+             WHEN b.score <= 0.091284 THEN 2
+             WHEN b.score <= 0.128392 THEN 3
+             WHEN b.score <= 0.188973 THEN 4
+             ELSE 5
+         END                                                          AS q
     FROM base b
     WHERE b.score IS NOT NULL
 )
@@ -551,7 +563,7 @@ ORDER BY week_start, user_type
 -- ============================================================
 -- 块 10：月度排序力（FPD15）× 新老客
 --   月度口径 = 放款日所在自然月；AUC / Gini / KS 算法与块 8 一致
---   输出 user_type = New / Old / ALL 三组，供 MBR 大盘直接取数
+--   输出 user_type = New / Old / ALL 三组
 -- ============================================================
 WITH base AS (
     SELECT

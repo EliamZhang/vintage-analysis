@@ -25,6 +25,8 @@ DEFAULT_OUTPUT = PROJECT_DIR / "vintage_监控看板.html"
 
 WINDOWS = (3, 7, 14, 15, 30)
 WINDOW_LABELS = {3: "FPD3", 7: "FPD7", 14: "FPD14", 15: "FPD15", 30: "FPD30"}
+# 新客风险 1.0 固定分箱上限；第 5 箱为 > 最后一个阈值
+SCORE_BIN_UPPER = (0.062086, 0.091284, 0.128392, 0.188973)
 REQUIRED_FILES = (
     "vintage_01_fpd_overall.csv",
     "vintage_02_fpd15_vs_fpd30.csv",
@@ -185,7 +187,7 @@ def build_data(raw):
             "rate": to_float(row["bad_rate_pct"]),
         }
     if any(not score[segment] for segment in score):
-        raise ValueError("模型分五分位缺少 ALL / New / Old 分组")
+        raise ValueError("模型分固定 5 箱缺少 ALL / New / Old 分组")
 
     score_week = {}
     for row in raw["vintage_06_score_quintile_week.csv"]:
@@ -200,7 +202,7 @@ def build_data(raw):
     score_week_weeks = [
         week
         for week in score_week_all
-        if min(score_week[week][q]["obs"] for q in range(1, 6)) >= 200
+        if min(score_week[week][q]["obs"] for q in range(1, 6)) >= 50
     ]
     if score_week_all and score_week_all[-1] not in score_week_weeks:
         score_week_weeks.append(score_week_all[-1])
@@ -872,10 +874,10 @@ def week_card_html(data):
 def score_table(score):
     def range_text(q):
         if q == 1:
-            return f"≤ {score['ALL'][1]['max']:.5f}"
+            return f"≤ {SCORE_BIN_UPPER[0]:.6f}"
         if q == 5:
-            return f"> {score['ALL'][5]['min']:.5f}"
-        return f"{score['ALL'][q]['min']:.5f}–{score['ALL'][q]['max']:.5f}"
+            return f"> {SCORE_BIN_UPPER[-1]:.6f}"
+        return f"{SCORE_BIN_UPPER[q - 2]:.6f}–{SCORE_BIN_UPPER[q - 1]:.6f}"
 
     def rate_cell(segment, q):
         row = score[segment][q]
@@ -1022,8 +1024,14 @@ def score_card_html(data):
         )
         heat_bits.append(f"{low_text} 灰显，仅参考")
     heat_note = "；".join(heat_bits) + "。" if heat_bits else ""
+    score = data["score"]
+    total_all = sum(score["ALL"][q]["obs"] for q in range(1, 6))
+    q1_share = score["ALL"][1]["obs"] / total_all if total_all else 0
+    q5_share = score["ALL"][5]["obs"] / total_all if total_all else 0
     note = (
-        f"坏率均为 FPD15 笔数口径。1档最低分，5档最高分。整体 5档/1档 = {lift['ALL']:.2f}x，"
+        f"坏率均为 FPD15 笔数口径。1档最低分，5档最高分；固定阈值下各档样本占比不等"
+        f"（1档 {fmt_pct0(q1_share)}、5档 {fmt_pct0(q5_share)}）。"
+        f"整体 5档/1档 = {lift['ALL']:.2f}x，"
         f"新客 {lift['New']:.2f}x，老客 {lift['Old']:.2f}x。{shape}"
         f"覆盖 {data['coverage']['pct']:.2f}%（{fmt_int(data['coverage']['scored'])}/{fmt_int(data['coverage']['obs'])}），"
         f"缺分 {fmt_int(data['coverage']['missing'])}。{heat_note}{sentinel}"
@@ -1035,7 +1043,7 @@ def score_card_html(data):
     return f"""
 <section class="card">
   <h2>模型分分档{TAG_COUNT}</h2>
-  <p class="desc">1档最低分 → 5档最高分（FPD15 成熟样本内 pooled 五分位）；整体、新客、老客的 FPD15 笔数坏率（y_fpd15_ovd / y_fpd15_obs）。</p>
+  <p class="desc">1档最低分 → 5档最高分（按新客风险 1.0 固定阈值切分）；整体、新客、老客的 FPD15 笔数坏率（y_fpd15_ovd / y_fpd15_obs）。</p>
   <div class="chart-wrap">
     <svg id="scoreChart" viewBox="0 0 1040 300" role="img" aria-label="模型分分档的整体、新客、老客 FPD15 笔数坏率"></svg>
     <div class="tip" id="scoreTip"></div>
@@ -1307,6 +1315,8 @@ def footer_html(data, generated_at, input_name):
             "<li>周度新老客：按放款周 × user_type 拆分 FPD15；结构拆分为组内变化"
             "（最新权重）+ 新老客占比变化（基线坏率），两者相加等于整体变化。</li>"
         )
+    bin_text = " / ".join(f"≤{value:.6f}" for value in SCORE_BIN_UPPER)
+    bin_text += f" / &gt;{SCORE_BIN_UPPER[-1]:.6f}"
     return f"""
 <footer class="foot">
   <ul class="notes">
@@ -1316,7 +1326,7 @@ def footer_html(data, generated_at, input_name):
     <li>监控状态与周度图：确认周 = 放款周完整且 FPD15 成熟度 ≥90%；基线 = 其前最多 4 个确认周（样本 ≥500）均值；±1σ / ±2σ 仅作波动提示。周度阴影为 FPD15 的 Wilson 95% 置信区间；浅灰柱为当周 FPD3 成熟样本数（放款量代理）。周度图可在笔数 / 金额口径间切换。</li>
     {''.join(extras)}
     <li>新老客：user_type 按首笔放款；复借期数 application_rank，1st = 首借，2nd 起为 Old，4th+ 含 4 次及以上。</li>
-    <li>模型分：FPD15 成熟样本内 pooled 五分位切 5 档，1档最低分、5档最高分；分数越高越坏。</li>
+    <li>模型分：按新客风险 1.0 固定阈值切 5 档（{bin_text}），1档最低分、5档最高分；分数越高越坏。固定阈值下各档样本占比不等。</li>
     <li>数据源：{escape(input_name)}（{data['csvCount']} 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：{escape(generated_at)}。</li>
   </ul>
 </footer>
