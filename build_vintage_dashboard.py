@@ -2360,10 +2360,25 @@ def build_mbr_summary(data, generated_iso):
         })
 
     latest15 = data["latest"]["windows"].get(15) or {}
+    bins = []
+    for user_type, quintiles in data["score"].items():
+        for q, row in sorted(quintiles.items()):
+            bins.append({
+                "userType": user_type,
+                "quintile": q,
+                "scoreMin": row["min"],
+                "scoreMax": row["max"],
+                "scoreAvg": row["avg"],
+                "n": row["obs"],
+                "bad": row["bad"],
+                "rate": row["rate"],
+            })
+
     return {
         "source": "wagego",
         "generatedAt": generated_iso,
         "metrics": metrics,
+        "bins": bins,
         "headline": {
             "fpd15Week": data["latest"]["week"],
             "fpd15Maturity": data["latest"]["fpd15Maturity"],
