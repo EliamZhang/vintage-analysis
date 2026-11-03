@@ -7,6 +7,7 @@ import argparse
 import csv
 import io
 import json
+import math
 import sys
 import zipfile
 from datetime import datetime
@@ -33,6 +34,11 @@ REQUIRED_FILES = (
     "vintage_05b_score_quintile.csv",
     "vintage_06_score_quintile_week.csv",
     "vintage_07_application_rank.csv",
+)
+# 新增块允许旧 zip 缺失；缺失时对应卡片不渲染，看板仍可生成。
+OPTIONAL_FILES = (
+    "vintage_08_weekly_auc.csv",
+    "vintage_09_week_user_type.csv",
 )
 
 
@@ -72,15 +78,20 @@ TAG_COUNT = (
 
 
 def read_csvs(input_path: Path):
+    wanted = REQUIRED_FILES + OPTIONAL_FILES
     if input_path.is_dir():
-        files = {p.name: p.read_bytes() for p in input_path.glob("vintage_*.csv")}
+        files = {
+            p.name: p.read_bytes()
+            for p in input_path.glob("vintage_*.csv")
+            if p.name in wanted
+        }
     elif input_path.is_file() and input_path.suffix.lower() == ".zip":
         with zipfile.ZipFile(input_path) as archive:
             # 只读看板需要的块结果（zip 由 sync_vintage.py 生成）
             files = {
                 Path(name).name: archive.read(name)
                 for name in archive.namelist()
-                if Path(name).name in REQUIRED_FILES
+                if Path(name).name in wanted
             }
     else:
         raise ValueError(f"输入既不是 zip 也不是目录：{input_path}")
@@ -90,7 +101,10 @@ def read_csvs(input_path: Path):
         raise ValueError(f"缺少 CSV：{', '.join(missing)}")
 
     parsed = {}
-    for name in REQUIRED_FILES:
+    for name in wanted:
+        if name not in files:
+            parsed[name] = None
+            continue
         text = files[name].decode("utf-8-sig")
         parsed[name] = list(csv.DictReader(io.StringIO(text)))
     return parsed
@@ -190,6 +204,113 @@ def build_data(raw):
     if score_week_all and score_week_all[-1] not in score_week_weeks:
         score_week_weeks.append(score_week_all[-1])
 
+    weekly_auc = {}
+    for row in raw.get("vintage_08_weekly_auc.csv") or []:
+        weekly_auc[row["week_start"]] = {
+            "week": row["week_start"],
+            "obs": to_int(row["obs_cnt"]),
+            "bad": to_int(row["bad_cnt"]),
+            "rate": to_float(row["bad_rate_pct"]),
+            "auc": to_float(row["auc"]),
+            "gini": to_float(row["gini"]),
+            "ks": to_float(row["ks"]),
+        }
+
+    week_user = {}
+    for row in raw.get("vintage_09_week_user_type.csv") or []:
+        week_user.setdefault(row["week_start"], {})[row["user_type"]] = {
+            "obs": to_int(row["obs_cnt"]),
+            "bad": to_int(row["bad_cnt"]),
+            "rate": to_float(row["bad_rate_pct"]),
+            "amtRate": to_float(row["bad_rate_amt_pct"]),
+        }
+
+    def psi_value(week, prior_weeks):
+        if not prior_weeks:
+            return None
+        current = score_week.get(week)
+        if not current or any(q not in current for q in range(1, 6)):
+            return None
+        base_counts = [
+            sum(score_week[w][q]["obs"] for w in prior_weeks if q in score_week.get(w, {}))
+            for q in range(1, 6)
+        ]
+        cur_counts = [current[q]["obs"] for q in range(1, 6)]
+        base_total = sum(base_counts)
+        cur_total = sum(cur_counts)
+        if not base_total or not cur_total or min(base_counts) <= 0 or min(cur_counts) <= 0:
+            return None
+        total = 0.0
+        for base_count, cur_count in zip(base_counts, cur_counts):
+            base_share = base_count / base_total
+            cur_share = cur_count / cur_total
+            total += (cur_share - base_share) * math.log(cur_share / base_share)
+        return total
+
+    psi_by_week = {}
+    for index, week in enumerate(score_week_weeks):
+        week_item = weeks_by.get(week)
+        if (
+            not week_item
+            or week_item["incomplete"]
+            or week_item["fpd15Maturity"] < 0.9
+        ):
+            continue
+        prior = [
+            item
+            for item in score_week_weeks[:index]
+            if weeks_by.get(item, {}).get("fpd15Maturity", 0) >= 0.9
+        ][-4:]
+        value = psi_value(week, prior)
+        if value is not None:
+            psi_by_week[week] = value
+
+    auc_chart = {"labels": [], "weeks": [], "points": []}
+    for week in sorted(weekly_auc):
+        row = weekly_auc[week]
+        week_item = weeks_by.get(week)
+        if row["auc"] is None or (row["obs"] or 0) < 200 or not week_item:
+            continue
+        auc_chart["labels"].append(week[5:])
+        auc_chart["weeks"].append(week)
+        auc_chart["points"].append(
+            {
+                "week": week,
+                "auc": row["auc"],
+                "gini": row["gini"],
+                "ks": row["ks"],
+                "obs": row["obs"],
+                "bad": row["bad"],
+                "rate": row["rate"],
+                "maturity": week_item["fpd15Maturity"],
+                "partial": week_item["fpd15Maturity"] < 0.9 or week_item["incomplete"],
+            }
+        )
+
+    mix_chart = {"labels": [], "weeks": [], "new": [], "old": []}
+    for item in chart_weeks:
+        week = item["week"]
+        row = week_user.get(week)
+        if not row or item["fpd15Maturity"] < 0.7:
+            continue
+        mix_chart["labels"].append(week[5:])
+        mix_chart["weeks"].append(week)
+        for key, segment in (("new", "New"), ("old", "Old")):
+            value = row.get(segment)
+            if not value or value["rate"] is None:
+                mix_chart[key].append(None)
+            else:
+                mix_chart[key].append(
+                    {
+                        "rate": value["rate"],
+                        "amtRate": value["amtRate"],
+                        "obs": value["obs"],
+                        "bad": value["bad"],
+                        "maturity": item["fpd15Maturity"],
+                        "partial": item["fpd15Maturity"] < 0.9 or item["incomplete"],
+                    }
+                )
+
     rank = []
     for row in raw["vintage_07_application_rank.csv"]:
         rank.append(
@@ -262,6 +383,7 @@ def build_data(raw):
         "fpd7Low": [],
         "fpd15": [],
         "fpd15Low": [],
+        "fpd15Amt": [],
     }
     for item in chart_weeks:
         fpd3_row = item["windows"].get(3)
@@ -320,6 +442,17 @@ def build_data(raw):
                 if fpd15_row and fpd15_row["maturity"] > 0
                 else None
             )
+        if fpd15_row and fpd15_row["maturity"] >= 0.7 and fpd15_row["amtRate"] is not None:
+            week_chart["fpd15Amt"].append(
+                {
+                    "rate": fpd15_row["amtRate"],
+                    "obs": fpd15_row["obs"],
+                    "maturity": fpd15_row["maturity"],
+                    "partial": fpd15_row["maturity"] < 0.9,
+                }
+            )
+        else:
+            week_chart["fpd15Amt"].append(None)
 
     def score_series(segment, name, color):
         return {
@@ -358,6 +491,47 @@ def build_data(raw):
         else None
     )
     complete_fpd15 = [item for item in chart_weeks if item["fpd15Maturity"] >= 0.9]
+    def mix_total_obs(week):
+        segments = week_user.get(week, {})
+        return sum(segments.get(seg, {}).get("obs", 0) for seg in ("New", "Old"))
+
+    confirmed_mix_weeks = [
+        item["week"]
+        for item in complete_fpd15
+        if "New" in week_user.get(item["week"], {})
+        and "Old" in week_user.get(item["week"], {})
+        and mix_total_obs(item["week"]) >= 500
+    ]
+    mix_effect = None
+    if len(confirmed_mix_weeks) >= 2:
+        latest_mix_week = confirmed_mix_weeks[-1]
+        base_weeks = confirmed_mix_weeks[:-1][-4:]
+
+        def segment_pool(weeks_list, segment):
+            obs = sum(week_user[w][segment]["obs"] for w in weeks_list)
+            bad = sum(week_user[w][segment]["bad"] for w in weeks_list)
+            return obs, bad
+
+        obs_nb, bad_nb = segment_pool(base_weeks, "New")
+        obs_ob, bad_ob = segment_pool(base_weeks, "Old")
+        obs_nc, bad_nc = segment_pool([latest_mix_week], "New")
+        obs_oc, bad_oc = segment_pool([latest_mix_week], "Old")
+        total_b = obs_nb + obs_ob
+        total_c = obs_nc + obs_oc
+        if min(obs_nb, obs_ob, obs_nc, obs_oc) > 0:
+            rn_b, ro_b = bad_nb / obs_nb * 100, bad_ob / obs_ob * 100
+            rn_c, ro_c = bad_nc / obs_nc * 100, bad_oc / obs_oc * 100
+            wn_b, wo_b = obs_nb / total_b, obs_ob / total_b
+            wn_c, wo_c = obs_nc / total_c, obs_oc / total_c
+            mix_effect = {
+                "week": latest_mix_week,
+                "baseWeeks": base_weeks,
+                "within": wn_c * (rn_c - rn_b) + wo_c * (ro_c - ro_b),
+                "mix": rn_b * (wn_c - wn_b) + ro_b * (wo_c - wo_b),
+                "total": (bad_nc + bad_oc) / total_c * 100 - (bad_nb + bad_ob) / total_b * 100,
+                "newShare": wn_c,
+                "newShareBase": wn_b,
+            }
     complete_fpd3 = [item for item in chart_weeks if not item["incomplete"]]
     complete_fpd30 = [
         item
@@ -400,6 +574,14 @@ def build_data(raw):
         "score": score,
         "scoreWeek": score_week,
         "scoreWeekWeeks": score_week_weeks,
+        "psiByWeek": psi_by_week,
+        "weeklyAuc": weekly_auc,
+        "aucChart": auc_chart,
+        "weekUser": week_user,
+        "mixChart": mix_chart,
+        "mixEffect": mix_effect,
+        "csvCount": len(REQUIRED_FILES)
+        + sum(1 for name in OPTIONAL_FILES if raw.get(name) is not None),
         "coverage": coverage,
         "rank": rank,
         "common": common,
@@ -458,6 +640,9 @@ def kpi_html(data):
     lift = data["lift"]["ALL"]
     q1 = data["score"]["ALL"][1]
     q5 = data["score"]["ALL"][5]
+    latest_confirmed = latest["fpd15Maturity"] >= 0.9
+    latest_label = "最新可用周 · 坏率（笔数）" if latest_confirmed else "最新可用周（未确认）· 坏率（笔数）"
+    latest_note = "" if latest_confirmed else " · 仅参考"
     return f"""
 <section class="kpis">
   <div class="kpi">
@@ -466,9 +651,9 @@ def kpi_html(data):
     <span class="sub">n={fmt_int(fpd15['obs'])} · 坏率（金额）{fmt_rate(fpd15['amtRate'])}</span>
   </div>
   <div class="kpi">
-    <span class="label">最新可用周 · 坏率（笔数）</span>
+    <span class="label">{latest_label}</span>
     <b>{fmt_rate(latest_rate)}</b>
-    <span class="sub">{latest['week']} · {fmt_pct0(latest['fpd15Maturity'])} 成熟 · 较前周 {fmt_delta(data['latestDelta'])}</span>
+    <span class="sub">{latest['week']} · {fmt_pct0(latest['fpd15Maturity'])} 成熟{latest_note} · 较前周 {fmt_delta(data['latestDelta'])}</span>
   </div>
   <div class="kpi">
     <span class="label">新客 / 老客 FPD15 · 坏率（笔数）</span>
@@ -559,6 +744,23 @@ def rate_cell(week, window):
     return f'<td class="num">{fmt_rate(row["rate"])}</td>'
 
 
+def amount_cell(week):
+    row = week["windows"].get(15)
+    if not row or row["amtRate"] is None:
+        return '<td class="num dim">—</td>'
+    maturity = row["maturity"]
+    if maturity < 0.7:
+        return (
+            f'<td class="num dim" title="成熟度 {fmt_pct0(maturity)}，低于 70%，不展示">—</td>'
+        )
+    if maturity < 0.9:
+        return (
+            f'<td class="num soft" title="成熟度 {fmt_pct0(maturity)}，仅参考">'
+            f"{sup(fmt_rate(row['amtRate']), '*')}</td>"
+        )
+    return f'<td class="num">{fmt_rate(row["amtRate"])}</td>'
+
+
 def week_table(data):
     rows = []
     for week in data["chartWeeks"]:
@@ -571,7 +773,9 @@ def week_table(data):
             maturity_class = "num soft"
         else:
             maturity_class = "num"
-        cells = [rate_cell(week, window) for window in (3, 7, 14, 15, 30)]
+        cells = [rate_cell(week, window) for window in (3, 7, 14, 15)]
+        cells.append(amount_cell(week))
+        cells.append(rate_cell(week, 30))
         rows.append(
             f"<tr><td>{week['week']}</td>"
             f"<td class='num'>{sample}</td>"
@@ -581,7 +785,7 @@ def week_table(data):
     return f"""
 <div class="table-wrap">
 <table>
-  <thead><tr><th>放款周</th><th>FPD15 成熟样本</th><th>FPD15 成熟度</th><th>FPD3</th><th>FPD7</th><th>FPD14</th><th>FPD15</th><th>FPD30</th></tr></thead>
+  <thead><tr><th>放款周</th><th>FPD15 成熟样本</th><th>FPD15 成熟度</th><th>FPD3</th><th>FPD7</th><th>FPD14</th><th>FPD15</th><th>FPD15 金额</th><th>FPD30</th></tr></thead>
   <tbody>{''.join(rows)}</tbody>
 </table>
 </div>
@@ -612,7 +816,8 @@ def week_card_html(data):
         f" vs 前周 {fmt_int(previous_week['windows'][3]['obs']) if previous_week else '—'}），仅参考"
     )
     note = (
-        "坏率均为笔数口径。成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。"
+        "除标注“金额”外，坏率均为笔数口径；金额坏率 = 坏样本未还本金 / 全部成熟样本放款本金。"
+        "成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。"
         "星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示（FPD30 采用 90% 阈值）。"
         f"≥90% 成熟的最后一周：FPD15 {complete['week']}（{fmt_rate(complete['windows'][15]['rate'])}）；"
         f"{latest['week']} 为 {fmt_pct0(latest['fpd15Maturity'])} 成熟（{fmt_rate(latest['windows'][15]['rate'])}*）。"
@@ -621,15 +826,27 @@ def week_card_html(data):
     return f"""
 <section class="card">
   <h2>按放款周：FPD15 与早期信号{TAG_COUNT}</h2>
-  <p class="desc">纵轴为笔数坏率；FPD15 是确认指标，FPD7 / FPD3 是早期信号；空心点表示成熟度不足或周未完整。</p>
+  <p class="desc">默认笔数口径：FPD15 是确认指标，FPD7 / FPD3 是早期信号；切换到金额口径可看 FPD15 未还本金坏率。空心点表示成熟度不足或周未完整；阴影为 FPD15 笔数坏率的 95% 置信区间；浅灰柱为当周放款量。</p>
+  <div class="chart-head">
+    <div class="seg" role="group" aria-label="周度图口径">
+      <button type="button" class="on" data-week-mode="count" aria-pressed="true">笔数</button>
+      <button type="button" data-week-mode="amount" aria-pressed="false">金额</button>
+    </div>
+  </div>
   <div class="chart-wrap">
-    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15、FPD7 与 FPD3 笔数坏率"></svg>
+    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15、FPD7 与 FPD3 坏率，含 FPD15 置信区间、放款量和金额口径切换"></svg>
     <div class="tip" id="weekTip"></div>
   </div>
-  <div class="legend">
+  <div class="legend" id="weekLegendCount">
     <span><i style="background:var(--c1)"></i>FPD15</span>
+    <span><i class="band" style="background:var(--c1)"></i>FPD15 95% CI</span>
     <span><i class="dash" style="border-top-color:var(--c3)"></i>FPD7 早期信号</span>
     <span><i class="dash"></i>FPD3 早期信号</span>
+    <span><i class="bar" style="background:var(--grid)"></i>放款量（FPD3 样本）</span>
+  </div>
+  <div class="legend" id="weekLegendAmount" hidden>
+    <span><i style="background:var(--c1)"></i>FPD15 金额坏率</span>
+    <span><i class="bar" style="background:var(--grid)"></i>放款量（FPD3 样本）</span>
   </div>
   {week_table(data)}
   <p class="note">{note}</p>
@@ -672,6 +889,15 @@ def score_table(score):
 def score_week_table(data):
     weeks = data["scoreWeekWeeks"]
     header = "".join(f"<th>{week[5:]}</th>" for week in weeks)
+
+    def maturity_style(week):
+        maturity = data["weeksBy"][week]["fpd15Maturity"] if week in data["weeksBy"] else 1.0
+        if maturity < 0.7:
+            return "num dim", f"FPD15 成熟度 {fmt_pct0(maturity)}，仅参考", "dim"
+        if maturity < 0.9:
+            return "num soft", f"FPD15 成熟度 {fmt_pct0(maturity)}，仅参考", "soft"
+        return "num", None, None
+
     rows = []
     for q in range(1, 6):
         cells = []
@@ -680,23 +906,62 @@ def score_week_table(data):
             if not row:
                 cells.append('<td class="num dim">—</td>')
                 continue
-            maturity = data["weeksBy"][week]["fpd15Maturity"] if week in data["weeksBy"] else 1.0
-            if maturity < 0.7:
-                cells.append(
-                    f'<td class="num dim" title="FPD15 成熟度 {fmt_pct0(maturity)}，仅参考">'
-                    f"{fmt_rate(row['rate'])}</td>"
-                )
-            elif maturity < 0.9:
-                cells.append(
-                    f'<td class="num soft" title="FPD15 成熟度 {fmt_pct0(maturity)}，仅参考">'
-                    f"{sup(fmt_rate(row['rate']), '*')}</td>"
-                )
-            else:
-                cells.append(f'<td class="num">{fmt_rate(row["rate"])}</td>')
+            cls, title, marker = maturity_style(week)
+            text = sup(fmt_rate(row["rate"]), "*") if marker == "soft" else fmt_rate(row["rate"])
+            attr = f' title="{title}"' if title else ""
+            cells.append(f'<td class="{cls}"{attr}>{text}</td>')
         rows.append(f"<tr><td>{q}档</td>{''.join(cells)}</tr>")
+
+    lift_cells = []
+    mono_cells = []
+    for week in weeks:
+        week_rows = data["scoreWeek"][week]
+        cls, title, marker = maturity_style(week)
+        attr = f' title="{title}"' if title else ""
+        q1 = week_rows.get(1)
+        q5 = week_rows.get(5)
+        lift_text = f"{q5['rate'] / q1['rate']:.2f}x" if q1 and q5 and q1["rate"] else "—"
+        values = [week_rows[q]["rate"] for q in range(1, 6) if week_rows.get(q)]
+        if len(values) < 5:
+            mono_text = "—"
+        else:
+            mono_text = "单调" if all(b >= a for a, b in zip(values, values[1:])) else "非单调"
+        if marker == "soft":
+            lift_text = sup(lift_text, "*")
+            mono_text = sup(mono_text, "*")
+        lift_cells.append(f'<td class="{cls}"{attr}>{lift_text}</td>')
+        mono_cells.append(f'<td class="{cls}"{attr}>{mono_text}</td>')
+    rows.append(f"<tr><td>5档/1档</td>{''.join(lift_cells)}</tr>")
+    rows.append(f"<tr><td>排序</td>{''.join(mono_cells)}</tr>")
+
+    psi_cells = []
+    for week in weeks:
+        psi = data["psiByWeek"].get(week)
+        cls, title, marker = maturity_style(week)
+        if psi is None:
+            psi_cells.append('<td class="num dim">—</td>')
+            continue
+        level = "alert" if psi >= 0.25 else "watch" if psi >= 0.1 else ""
+        if cls == "num dim":
+            cell_cls = "num dim"
+        elif cls == "num soft":
+            cell_cls = "num soft"
+        else:
+            cell_cls = f"num {level}" if level else "num"
+        text = f"{psi:.2f}"
+        if marker == "soft":
+            text = sup(text, "*")
+        title_bits = ["5档 PSI；<0.10 稳定，0.10–0.25 关注，≥0.25 预警"]
+        if title:
+            title_bits.append(title)
+        psi_cells.append(
+            f'<td class="{cell_cls}" title="{"; ".join(title_bits)}">{text}</td>'
+        )
+    rows.append(f"<tr><td>PSI（5档）</td>{''.join(psi_cells)}</tr>")
+
     return f"""
 <div class="table-wrap">
-<div class="subhead">分档 × 放款周（FPD15 笔数坏率）</div>
+<div class="subhead">分档 × 放款周（FPD15 笔数坏率）· 末三行为排序与漂移检查</div>
 <table class="compact">
   <thead><tr><th>分档</th>{header}</tr></thead>
   <tbody>{''.join(rows)}</tbody>
@@ -747,6 +1012,10 @@ def score_card_html(data):
         f"新客 {lift['New']:.2f}x，老客 {lift['Old']:.2f}x。{shape}"
         f"覆盖 {data['coverage']['pct']:.2f}%（{fmt_int(data['coverage']['scored'])}/{fmt_int(data['coverage']['obs'])}），"
         f"缺分 {fmt_int(data['coverage']['missing'])}。{heat_note}{sentinel}"
+        "分档×周表末三行为周度 5档/1档 倍数、排序单调性和 5 档 PSI。"
+        "倍数明显低于全期或出现非单调时关注；PSI 基线为前最多 4 个确认周，"
+        "仅对确认周计算（放款周完整且 FPD15 成熟度 ≥90%）；"
+        "<0.10 稳定，0.10–0.25 关注，≥0.25 预警（5 档粒度为近似）。"
     )
     return f"""
 <section class="card">
@@ -766,6 +1035,152 @@ def score_card_html(data):
     {score_week_table(data)}
   </div>
   <p class="note">{note}</p>
+</section>
+"""
+
+
+def stability_card_html(data):
+    points = data["aucChart"]["points"]
+    if not points:
+        return ""
+
+    def mark(text, marker):
+        return sup(text, marker) if marker and text != "—" else text
+
+    rows = []
+    for point in points:
+        maturity = point["maturity"]
+        if maturity < 0.7:
+            cls, marker = "num dim", None
+        elif maturity < 0.9 or point["partial"]:
+            cls, marker = "num soft", "*"
+        else:
+            cls, marker = "num", None
+        auc_text = mark(f"{point['auc']:.3f}", marker)
+        gini_text = mark(
+            f"{point['gini']:.3f}" if point["gini"] is not None else "—", marker
+        )
+        ks_text = mark(
+            f"{point['ks']:.3f}" if point["ks"] is not None else "—", marker
+        )
+        rows.append(
+            f"<tr><td>{point['week']}</td><td class='num'>{fmt_int(point['obs'])}</td>"
+            f"<td class='{cls}'>{auc_text}</td>"
+            f"<td class='{cls}'>{gini_text}</td>"
+            f"<td class='{cls}'>{ks_text}</td>"
+            f"<td class='num'>{fmt_rate(point['rate'])}</td>"
+            f"<td class='{cls}'>{fmt_pct0(maturity)}</td></tr>"
+        )
+
+    confirmed = [point for point in points if not point["partial"]]
+    latest = confirmed[-1] if confirmed else points[-1]
+    prior = [
+        point for point in points
+        if point["week"] < latest["week"] and not point["partial"]
+    ][-4:]
+    baseline_text = ""
+    if prior:
+        mean_auc = sum(point["auc"] for point in prior) / len(prior)
+        baseline_text = (
+            f"最新确认周 {latest['week']} AUC {latest['auc']:.3f}"
+            f"（前 {len(prior)} 周均值 {mean_auc:.3f}）"
+            f"，Gini {latest['gini']:.3f}，KS {latest['ks']:.3f}。"
+        )
+    psi = data["psiByWeek"]
+    psi_text = ""
+    if psi:
+        last_week = sorted(psi)[-1]
+        psi_text = f"最近一周 PSI {psi[last_week]:.2f}（{last_week}）。"
+    note = (
+        "AUC / Gini / KS 基于 FPD15 成熟样本，按周内分数排名计算，AUC 对并列分数取平均秩；"
+        "周样本少于 200 的周不纳入。星号 * 表示 70–90% 成熟，仅参考。"
+        f"{baseline_text}{psi_text}"
+        "AUC 连续走低或 KS 明显收缩时，优先检查模型分分布和入催客群变化。"
+    )
+    return f"""
+<section class="card">
+  <h2>周度排序力<span class="tag" title="AUC = P(坏样本分数高于好样本) + 0.5 × P(并列)；Gini = 2 × AUC − 1">模型监控</span></h2>
+  <p class="desc">按放款周看模型分对 FPD15 的排序能力；AUC 和 KS 越高越好。灰柱为当周 FPD15 成熟样本量。</p>
+  <div class="chart-wrap">
+    <svg id="aucChart" viewBox="0 0 1040 280" role="img" aria-label="周度 AUC 与 KS"></svg>
+    <div class="tip" id="aucTip"></div>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--c1)"></i>AUC</span>
+    <span><i class="dash" style="border-top-color:var(--c3)"></i>KS</span>
+    <span><i class="bar" style="background:var(--grid)"></i>FPD15 成熟样本</span>
+  </div>
+  <div class="table-wrap">
+  <table class="compact">
+    <thead><tr><th>放款周</th><th>成熟样本</th><th>AUC</th><th>Gini</th><th>KS</th><th>FPD15 坏率</th><th>成熟度</th></tr></thead>
+    <tbody>{''.join(rows)}</tbody>
+  </table>
+  </div>
+  <p class="note">{note}</p>
+</section>
+"""
+
+
+def mix_card_html(data):
+    chart = data["mixChart"]
+    if not chart["weeks"]:
+        return ""
+
+    rows = []
+    for week in chart["weeks"]:
+        segments = data["weekUser"][week]
+        new = segments.get("New")
+        old = segments.get("Old")
+        if not new or not old:
+            continue
+        total = new["obs"] + old["obs"]
+        share = new["obs"] / total if total else None
+        maturity = data["weeksBy"].get(week, {}).get("fpd15Maturity")
+        marker = "*" if maturity is not None and maturity < 0.9 else ""
+
+        def cell(row):
+            amount = fmt_rate(row["amtRate"]) if row["amtRate"] is not None else "—"
+            rate_text = sup(fmt_rate(row["rate"]), marker) if marker else fmt_rate(row["rate"])
+            return (
+                f"<td class='num'><b>{rate_text}</b>"
+                f"<span class='n'>n={fmt_int(row['obs'])} · 金额 {amount}</span></td>"
+            )
+
+        maturity_cls = "num soft" if marker else "num"
+        rows.append(
+            f"<tr><td>{week}</td>{cell(new)}{cell(old)}"
+            f"<td class='num'>{fmt_pct0(share)}</td>"
+            f"<td class='{maturity_cls}'>{fmt_pct0(maturity)}</td></tr>"
+        )
+
+    mix_note = ""
+    effect = data["mixEffect"]
+    if effect:
+        mix_note = (
+            f"最新确认周 {effect['week']} 较前 {len(effect['baseWeeks'])} 周："
+            f"整体 FPD15 {fmt_delta(effect['total'])} = 组内 {fmt_delta(effect['within'])}"
+            f" + 结构 {fmt_delta(effect['mix'])}；"
+            f"新客占比 {fmt_pct0(effect['newShare'])}（基线 {fmt_pct0(effect['newShareBase'])}）。"
+        )
+    return f"""
+<section class="card">
+  <h2>周度新老客与结构<span class="tag" title="坏率 = y_fpd15_ovd 之和 / y_fpd15_obs 之和">FPD15</span></h2>
+  <p class="desc">新客 / 老客的 FPD15 坏率（笔数）与金额坏率；结构拆分用于区分“客群本身变坏”和“新老客占比变化”。</p>
+  <div class="chart-wrap">
+    <svg id="mixChart" viewBox="0 0 1040 280" role="img" aria-label="新客与老客的周度 FPD15 笔数坏率"></svg>
+    <div class="tip" id="mixTip"></div>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--c1)"></i>新客</span>
+    <span><i style="background:var(--c2)"></i>老客</span>
+  </div>
+  <div class="table-wrap">
+  <table class="compact">
+    <thead><tr><th>放款周</th><th>新客</th><th>老客</th><th>新客占比</th><th>成熟度</th></tr></thead>
+    <tbody>{''.join(rows)}</tbody>
+  </table>
+  </div>
+  <p class="note">坏率为 FPD15 笔数口径，金额坏率列在样本下方。{mix_note}</p>
 </section>
 """
 
@@ -864,15 +1279,30 @@ def quality_card_html(data):
 
 
 def footer_html(data, generated_at, input_name):
+    extras = []
+    if data["aucChart"].get("points"):
+        extras.append(
+            "<li>周度排序力与漂移：AUC 按周内分数排名计算，并列分数取平均秩；"
+            "Gini = 2×AUC−1；KS 按分数分组累计好坏分布计算；周样本少于 200 的周不纳入。"
+            "PSI 按 5 档份额计算，基线为前最多 4 个确认周；&lt;0.10 稳定，"
+            "0.10–0.25 关注，≥0.25 预警（5 档粒度为近似）。</li>"
+        )
+    if data["mixChart"].get("weeks"):
+        extras.append(
+            "<li>周度新老客：按放款周 × user_type 拆分 FPD15；结构拆分为组内变化"
+            "（最新权重）+ 新老客占比变化（基线坏率），两者相加等于整体变化。</li>"
+        )
     return f"""
 <footer class="foot">
   <ul class="notes">
     <li>笔数坏率（看板默认口径）：y_fpdN_ovd 之和 / y_fpdN_obs 之和。FPD-X：首期应还日 due + X 天前未还清首期；成熟样本为 y_fpdN_obs = 1（is_deal = 1、观察日有借据快照且 due + X &lt; obs_dt），未成熟不判坏（即使已结清）。FPD14 由 stg_debt_snp 首期实还日补算，成熟条件同口径。</li>
     <li>金额坏率（仅总览表与 KPI 子行）：estimate_principal_remaining_fpdN 之和 / 全部成熟样本放款本金；余额取 due+X 当天借据快照（FPD14 同机制），当天无快照的不计入分子。</li>
     <li>成熟度：该窗口成熟样本 / 当周 FPD3 样本；星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示；FPD30 采用 90% 阈值。</li>
+    <li>监控状态与周度图：确认周 = 放款周完整且 FPD15 成熟度 ≥90%；基线 = 其前最多 4 个确认周（样本 ≥500）均值；±1σ / ±2σ 仅作波动提示。周度阴影为 FPD15 的 Wilson 95% 置信区间；浅灰柱为当周 FPD3 成熟样本数（放款量代理）。周度图可在笔数 / 金额口径间切换。</li>
+    {''.join(extras)}
     <li>新老客：user_type 按首笔放款；复借期数 application_rank，1st = 首借，2nd 起为 Old，4th+ 含 4 次及以上。</li>
     <li>模型分：FPD15 成熟样本内 pooled 五分位切 5 档，1档最低分、5档最高分；分数越高越坏。</li>
-    <li>数据源：{escape(input_name)}（8 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：{escape(generated_at)}。</li>
+    <li>数据源：{escape(input_name)}（{data['csvCount']} 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：{escape(generated_at)}。</li>
   </ul>
 </footer>
 """
@@ -897,6 +1327,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     --c1: #2a78d6;
     --c2: #eb6834;
     --c3: #008300;
+    --ok: #008300;
+    --warn: #9a6700;
+    --bad: #b3261e;
     --ring: rgba(11,11,11,0.10);
   }
   @media (prefers-color-scheme: dark) {
@@ -912,6 +1345,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --c1: #3987e5;
       --c2: #d95926;
       --c3: #008300;
+      --ok: #4caf50;
+      --warn: #e0a000;
+      --bad: #ef6b62;
       --ring: rgba(255,255,255,0.10);
     }
   }
@@ -955,6 +1391,34 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .kpi b.split { font-size: 21px; }
   .kpi .sub { display: block; color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
+  .monitor-wrap { margin: 0 0 14px; }
+  .monitor {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+  }
+  .m-item {
+    display: flex; flex-direction: column; gap: 2px;
+    background: var(--surface); border: 1px solid var(--ring);
+    border-radius: 12px; padding: 11px 13px;
+  }
+  .m-label { color: var(--muted); font-size: 11.5px; }
+  .m-value {
+    font-size: 19px; font-weight: 650; line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+  }
+  .m-value small { color: var(--muted); font-size: 11px; font-weight: 500; margin-left: 4px; }
+  .m-sub { color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
+  .m-status {
+    align-self: flex-start; margin-top: 3px;
+    border-radius: 999px; padding: 1px 8px;
+    font-size: 10.5px; font-weight: 600;
+    border: 1px solid var(--ring); color: var(--ink-2);
+  }
+  .m-status.ok { color: var(--ok); border-color: var(--ok); }
+  .m-status.watch { color: var(--warn); border-color: var(--warn); }
+  .m-status.alert { color: var(--bad); border-color: var(--bad); }
+  .m-status.na { color: var(--muted); }
+  .m-note { margin: 6px 2px 0; }
   .card {
     background: var(--surface); border: 1px solid var(--ring);
     border-radius: 12px; padding: 16px 18px 11px; margin: 13px 0;
@@ -982,6 +1446,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     width: 16px; height: 0; border-radius: 0; border-top: 2px dashed var(--muted);
     vertical-align: 3px;
   }
+  .legend i.band {
+    width: 14px; height: 8px; border-radius: 2px; opacity: .35;
+  }
+  .legend i.bar {
+    width: 10px; height: 10px; border-radius: 2px; opacity: .65;
+  }
+  .chart-head { display: flex; justify-content: flex-end; margin: -2px 0 2px; }
+  .seg {
+    display: inline-flex; border: 1px solid var(--ring);
+    border-radius: 999px; overflow: hidden;
+  }
+  .seg button {
+    appearance: none; border: 0; background: transparent;
+    color: var(--muted); font: inherit; font-size: 11.5px;
+    padding: 4px 11px; cursor: pointer;
+  }
+  .seg button.on { background: var(--ink); color: var(--surface); }
   .tip {
     position: absolute; z-index: 2; pointer-events: none; display: none;
     transform: translate(-50%, -115%);
@@ -1010,6 +1491,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   table.compact th, table.compact td { padding: 6px 7px; }
   td.dim { color: var(--muted); }
   td.soft { color: var(--ink-2); }
+  td.watch { color: var(--warn); font-weight: 600; }
+  td.alert { color: var(--bad); font-weight: 600; }
   td.range { color: var(--ink-2); font-size: 11.5px; white-space: nowrap; }
   td .n { display: block; color: var(--muted); font-size: 10.5px; line-height: 1.3; }
   sup { font-size: 9px; color: var(--c2); margin-left: 1px; }
@@ -1048,12 +1531,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .hero { flex-direction: column; align-items: flex-start; }
     .chips { justify-content: flex-start; }
     .kpis { grid-template-columns: repeat(2, 1fr); }
+    .monitor { grid-template-columns: repeat(2, 1fr); }
     .split { grid-template-columns: 1fr; }
     .quality { grid-template-columns: 1fr; }
   }
   @media (max-width: 560px) {
     h1 { font-size: 24px; }
     .kpis { grid-template-columns: 1fr; }
+    .monitor { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -1061,9 +1546,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <main>
 __HEADER__
 __KPIS__
+<section class="monitor-wrap" aria-label="监控状态">
+  <div class="monitor" id="monitorStrip"></div>
+  <p class="note m-note">监控口径：确认周 = 放款周完整且 FPD15 成熟度 ≥90%；基线 = 其前最多 4 个确认周（样本 ≥500）均值；状态按 ±1σ / ±2σ 提示（σ 下限 0.5pp），只用于发现异常波动，不替代业务阈值。放款量为当周 FPD3 成熟样本数；新鲜度按生成时间计算。</p>
+</section>
 __FPD_CARD__
 __WEEK_CARD__
 __SCORE_CARD__
+__STABILITY_CARD__
+__MIX_CARD__
 __RANK_CARD__
 __QUALITY_CARD__
 __FOOTER__
@@ -1073,6 +1564,173 @@ const DATA = __DATA_JSON__;
 const NS = 'http://www.w3.org/2000/svg';
 const fmtRate = v => (v == null ? '—' : v.toFixed(2) + '%');
 const fmtInt = n => (n == null ? '—' : n.toLocaleString('en-US'));
+const fmtSigned = (v, digits = 2, unit = '') => (v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(digits) + unit);
+
+function wilsonCi(obs, ratePct, z = 1.96) {
+  if (!obs || ratePct == null) return null;
+  const n = obs;
+  const p = ratePct / 100;
+  const denom = 1 + z * z / n;
+  const center = (p + z * z / (2 * n)) / denom;
+  const half = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom;
+  return { lo: Math.max(0, (center - half) * 100), hi: Math.min(100, (center + half) * 100) };
+}
+
+function meanStd(values) {
+  const n = values.length;
+  if (!n) return null;
+  const mean = values.reduce((sum, value) => sum + value, 0) / n;
+  const variance = n > 1 ? values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (n - 1) : 0;
+  return { mean, std: Math.sqrt(variance), n };
+}
+
+function statusOf(latest, base) {
+  if (latest == null || !base) return { cls: 'na', text: '样本不足' };
+  const sigma = Math.max(base.std, 0.5);
+  const z = (latest - base.mean) / sigma;
+  if (z >= 2) return { cls: 'alert', text: '预警', z };
+  if (z >= 1) return { cls: 'watch', text: '关注', z };
+  if (z <= -1) return { cls: 'ok', text: '改善', z };
+  return { cls: 'ok', text: '正常', z };
+}
+
+function confirmedIndices(points, getMaturity) {
+  const out = [];
+  points.forEach((point, index) => {
+    if (!point || point.partial) return;
+    const maturity = getMaturity ? getMaturity(point) : 1;
+    if (maturity >= 0.9) out.push(index);
+  });
+  return out;
+}
+
+function baselineStats(indices, points) {
+  const pool = indices.slice(0, -1).filter(index => points[index].obs >= 500).slice(-4);
+  if (!pool.length) return null;
+  const stats = meanStd(pool.map(index => points[index].rate));
+  return { ...stats, indices: pool };
+}
+
+function monitorItem(label, value, sub, status) {
+  return `<div class="m-item"><span class="m-label">${label}</span>`
+    + `<span class="m-value">${value}</span>`
+    + `<span class="m-sub">${sub}</span>`
+    + `<span class="m-status ${status.cls}">${status.text}</span></div>`;
+}
+
+function renderMonitor() {
+  const strip = document.getElementById('monitorStrip');
+  if (!strip) return;
+  const chart = DATA.weekChart;
+  const fpd15Idx = confirmedIndices(chart.fpd15, point => point.maturity == null ? 1 : point.maturity);
+  const fpd3Idx = confirmedIndices(chart.fpd3);
+  const items = [];
+
+  const i15 = fpd15Idx[fpd15Idx.length - 1];
+  const b15 = baselineStats(fpd15Idx, chart.fpd15);
+  const p15 = chart.fpd15[i15];
+  const s15 = statusOf(p15.rate, b15);
+  const d15 = b15 ? p15.rate - b15.mean : null;
+  items.push(monitorItem(
+    'FPD15 确认周 · 坏率',
+    `${fmtRate(p15.rate)} <small>${chart.weeks[i15].slice(5)}</small>`,
+    `n=${fmtInt(p15.obs)} · 基线 ${fmtRate(b15 ? b15.mean : null)}（${b15 ? b15.n : 0} 周）· 较基线 ${fmtSigned(d15, 2, 'pp')} · z=${fmtSigned(s15.z, 2, 'σ')}`,
+    s15
+  ));
+
+  const i3 = fpd3Idx[fpd3Idx.length - 1];
+  const b3 = baselineStats(fpd3Idx, chart.fpd3);
+  const p3 = chart.fpd3[i3];
+  const s3 = statusOf(p3.rate, b3);
+  const d3 = b3 ? p3.rate - b3.mean : null;
+  items.push(monitorItem(
+    'FPD3 早期信号 · 坏率',
+    `${fmtRate(p3.rate)} <small>${chart.weeks[i3].slice(5)}</small>`,
+    `n=${fmtInt(p3.obs)} · 基线 ${fmtRate(b3 ? b3.mean : null)}（${b3 ? b3.n : 0} 周）· 较基线 ${fmtSigned(d3, 2, 'pp')} · z=${fmtSigned(s3.z, 2, 'σ')}`,
+    s3
+  ));
+
+  const volumes = fpd3Idx.map(index => chart.fpd3[index].obs);
+  const latestVolume = volumes[volumes.length - 1];
+  const volumeBase = meanStd(volumes.slice(0, -1).slice(-4));
+  const volumeDelta = volumeBase ? (latestVolume / volumeBase.mean - 1) * 100 : null;
+  const volumeStatus = volumeDelta == null
+    ? { cls: 'na', text: '样本不足' }
+    : volumeDelta >= 15 ? { cls: 'watch', text: '放量' }
+    : volumeDelta <= -15 ? { cls: 'watch', text: '缩量' }
+    : { cls: 'ok', text: '平稳' };
+  items.push(monitorItem(
+    '放款量 · 最新完整周',
+    `${fmtInt(latestVolume)} 笔 <small>${chart.weeks[i3].slice(5)}</small>`,
+    `前 4 周均值 ${fmtInt(volumeBase ? Math.round(volumeBase.mean) : null)} · 变化 ${fmtSigned(volumeDelta, 1, '%')}`,
+    volumeStatus
+  ));
+
+  const aucPoints = (DATA.aucChart && DATA.aucChart.points) || [];
+  const psiMap = DATA.psiByWeek || {};
+  if (aucPoints.length || Object.keys(psiMap).length) {
+    let aucIdx = -1;
+    aucPoints.forEach((point, index) => { if (!point.partial) aucIdx = index; });
+    if (aucIdx < 0 && aucPoints.length) aucIdx = aucPoints.length - 1;
+    const aucPoint = aucIdx >= 0 ? aucPoints[aucIdx] : null;
+    const priorAuc = aucPoints
+      .filter((point, index) => index < aucIdx && !point.partial)
+      .slice(-4);
+    const aucBase = priorAuc.length ? meanStd(priorAuc.map(point => point.auc)) : null;
+    const psiWeek = aucPoint ? aucPoint.week : Object.keys(psiMap).sort().pop();
+    const psi = psiWeek != null ? psiMap[psiWeek] : null;
+    const psiCls = psi == null ? 'na' : psi >= 0.25 ? 'alert' : psi >= 0.1 ? 'watch' : 'ok';
+    let aucCls = 'na';
+    if (aucPoint && aucBase) {
+      const sigma = Math.max(aucBase.std, 0.01);
+      const z = (aucPoint.auc - aucBase.mean) / sigma;
+      aucCls = z <= -2 ? 'alert' : z <= -1 ? 'watch' : 'ok';
+    }
+    const cls = [psiCls, aucCls].includes('alert') ? 'alert'
+      : [psiCls, aucCls].includes('watch') ? 'watch'
+      : (psi != null || aucPoint) ? 'ok' : 'na';
+    const text = cls === 'alert'
+      ? (psiCls === 'alert' ? '分数漂移' : '排序走弱')
+      : cls === 'watch'
+        ? (psiCls === 'watch' ? '分数波动' : '排序关注')
+        : cls === 'ok' ? '稳定' : '样本不足';
+    const value = aucPoint
+      ? `AUC ${aucPoint.auc.toFixed(3)} <small>${aucPoint.week.slice(5)}</small>`
+      : psi != null
+        ? `PSI ${psi.toFixed(2)} <small>${psiWeek.slice(5)}</small>`
+        : '—';
+    const subBits = [];
+    if (aucPoint) {
+      subBits.push(`KS ${aucPoint.ks == null ? '—' : aucPoint.ks.toFixed(2)}`);
+      if (aucBase) subBits.push(`基线 AUC ${aucBase.mean.toFixed(3)}（${priorAuc.length} 周）`);
+      subBits.push(`PSI ${psi == null ? '—' : psi.toFixed(2)}`);
+    }
+    items.push(monitorItem(
+      aucPoint ? '排序力与分数漂移 · 最新确认周' : '分数漂移 · 最新确认周',
+      value,
+      subBits.join(' · '),
+      { cls, text }
+    ));
+  }
+
+  const generated = DATA.generatedAt ? new Date(DATA.generatedAt) : null;
+  let freshness = { cls: 'na', text: '未知' };
+  let freshnessValue = '—';
+  let freshnessSub = '未记录生成时间';
+  if (generated && !Number.isNaN(generated.getTime())) {
+    const days = Math.max(0, Math.floor((Date.now() - generated.getTime()) / 86400000));
+    freshnessValue = `${days} 天`;
+    freshnessSub = `生成于 ${generated.toLocaleDateString('zh-CN')} · 最新放款周 ${chart.weeks[chart.weeks.length - 1]}`;
+    freshness = days > 14 ? { cls: 'alert', text: '需刷新' }
+      : days > 7 ? { cls: 'watch', text: '偏旧' }
+      : { cls: 'ok', text: '正常' };
+  }
+  items.push(monitorItem('数据新鲜度 · 距生成', freshnessValue, freshnessSub, freshness));
+
+  strip.innerHTML = items.join('');
+}
+
+renderMonitor();
 
 function svgEl(svg, tag, attrs, text) {
   const node = document.createElementNS(NS, tag);
@@ -1089,7 +1747,8 @@ function clearSvg(svg) {
 function makeLineChart(svgId, tipId, cfg) {
   const svg = document.getElementById(svgId);
   const tip = document.getElementById(tipId);
-  const { width, height, margin, labels, series, yMax, yTicks, xLabel, yLabel } = cfg;
+  const { width, height, margin, labels, series, yMax, yTicks, xLabel, yLabel, volume, ciSeries, yFormat } = cfg;
+  const fmtY = yFormat || (value => value + '%');
   const innerW = width - margin.l - margin.r;
   const innerH = height - margin.t - margin.b;
   const n = labels.length;
@@ -1105,7 +1764,7 @@ function makeLineChart(svgId, tipId, cfg) {
     svgEl(svg, 'text', {
       x: margin.l - 8, y: y(v) + 1, 'text-anchor': 'end',
       fill: 'var(--muted)', 'font-size': 11.5
-    }, v + '%');
+    }, fmtY(v));
   });
 
   if (yLabel) {
@@ -1127,6 +1786,46 @@ function makeLineChart(svgId, tipId, cfg) {
     x: width - margin.r, y: height - 6, 'text-anchor': 'end',
     fill: 'var(--muted)', 'font-size': 11.5
   }, xLabel);
+
+  if (volume && volume.values) {
+    const values = volume.values.filter(value => value != null);
+    if (values.length) {
+      const maxVolume = Math.max(...values);
+      const volumeHeight = innerH * 0.28;
+      const barWidth = Math.min(46, innerW / n * 0.55);
+      const yVolume = value => margin.t + innerH - (value / maxVolume) * volumeHeight;
+      volume.values.forEach((value, i) => {
+        if (value == null) return;
+        const left = Math.max(margin.l, Math.min(width - margin.r - barWidth, x(i) - barWidth / 2));
+        svgEl(svg, 'rect', {
+          x: left, y: yVolume(value), width: barWidth, height: margin.t + innerH - yVolume(value),
+          fill: 'var(--grid)', opacity: 0.65, rx: 2
+        });
+      });
+      svgEl(svg, 'text', {
+        x: margin.l + 2, y: margin.t + innerH - volumeHeight - 4,
+        fill: 'var(--muted)', 'font-size': 10
+      }, '放款量');
+    }
+  }
+
+  if (ciSeries != null) {
+    const target = series[ciSeries];
+    const band = [];
+    target.points.forEach((point, i) => {
+      if (!point || point.rate == null || !point.obs) return;
+      const ci = wilsonCi(point.obs, point.rate);
+      if (ci) band.push({ i, lo: ci.lo, hi: ci.hi });
+    });
+    if (band.length > 1) {
+      const top = band.map(item => `${x(item.i)},${y(item.hi)}`).join(' L');
+      const bottom = band.slice().reverse().map(item => `${x(item.i)},${y(item.lo)}`).join(' L');
+      svgEl(svg, 'path', {
+        d: `M${top} L${bottom} Z`,
+        fill: target.color, opacity: 0.13, stroke: 'none'
+      });
+    }
+  }
 
   series.forEach(s => {
     for (let i = 0; i < n - 1; i++) {
@@ -1217,7 +1916,8 @@ function makeLineChart(svgId, tipId, cfg) {
 function makeBarChart(svgId, tipId, cfg) {
   const svg = document.getElementById(svgId);
   const tip = document.getElementById(tipId);
-  const { width, height, margin, data, yMax, yTicks, color, xLabel, yLabel } = cfg;
+  const { width, height, margin, data, yMax, yTicks, color, xLabel, yLabel, yFormat } = cfg;
+  const fmtY = yFormat || (value => value + '%');
   const innerW = width - margin.l - margin.r;
   const innerH = height - margin.t - margin.b;
   const y = v => margin.t + (1 - v / yMax) * innerH;
@@ -1233,7 +1933,7 @@ function makeBarChart(svgId, tipId, cfg) {
     svgEl(svg, 'text', {
       x: margin.l - 8, y: y(v) + 1, 'text-anchor': 'end',
       fill: 'var(--muted)', 'font-size': 11.5
-    }, v + '%');
+    }, fmtY(v));
   });
 
   if (yLabel) {
@@ -1318,24 +2018,27 @@ makeLineChart('fpdCurve', 'fpdTip', {
   }
 });
 
-const weekSeries = [
-  { name: 'FPD3', key: 'fpd3', color: 'var(--muted)', points: DATA.weekChart.fpd3, dash: '5 4', width: 1.8 },
-  { name: 'FPD7', key: 'fpd7', color: 'var(--c3)', points: DATA.weekChart.fpd7, dash: '5 4', width: 1.8 },
-  { name: 'FPD15', key: 'fpd15', color: 'var(--c1)', points: DATA.weekChart.fpd15, width: 2 }
-];
 const lastPointIndex = points => {
   for (let i = points.length - 1; i >= 0; i--) if (points[i]) return i;
   return -1;
 };
-const last15 = lastPointIndex(DATA.weekChart.fpd15);
-const last7 = lastPointIndex(DATA.weekChart.fpd7);
-const last3 = lastPointIndex(DATA.weekChart.fpd3);
-makeLineChart('weekChart', 'weekTip', {
-  width: 1040, height: 300, margin: { t: 30, r: 100, b: 46, l: 56 },
-  labels: DATA.weekChart.labels,
-  series: weekSeries,
-  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）', yLabel: '笔数坏率',
-  directLabels: [
+
+function renderWeekChart(mode) {
+  const amount = mode === 'amount';
+  const countSeries = [
+    { name: 'FPD3', key: 'fpd3', color: 'var(--muted)', points: DATA.weekChart.fpd3, dash: '5 4', width: 1.8 },
+    { name: 'FPD7', key: 'fpd7', color: 'var(--c3)', points: DATA.weekChart.fpd7, dash: '5 4', width: 1.8 },
+    { name: 'FPD15', key: 'fpd15', color: 'var(--c1)', points: DATA.weekChart.fpd15, width: 2 }
+  ];
+  const amountSeries = [
+    { name: 'FPD15 金额', key: 'fpd15Amt', color: 'var(--c1)', points: DATA.weekChart.fpd15Amt, width: 2 }
+  ];
+  const series = amount ? amountSeries : countSeries;
+  const last15 = lastPointIndex(DATA.weekChart.fpd15);
+  const last7 = lastPointIndex(DATA.weekChart.fpd7);
+  const last3 = lastPointIndex(DATA.weekChart.fpd3);
+  const lastAmt = lastPointIndex(DATA.weekChart.fpd15Amt);
+  const directLabels = amount ? [] : [
     {
       series: 2, index: last15,
       text: `FPD15 ${fmtRate(DATA.weekChart.fpd15[last15].rate)}${DATA.weekChart.fpd15[last15].partial ? '*' : ''}`,
@@ -1351,30 +2054,76 @@ makeLineChart('weekChart', 'weekTip', {
       text: `FPD3 ${fmtRate(DATA.weekChart.fpd3[last3].rate)}${DATA.weekChart.fpd3[last3].partial ? '†' : ''}`,
       dx: -8, dy: -10, anchor: 'end'
     }
-  ],
-  tooltip: index => {
-    const parts = [`<b>${DATA.weekChart.weeks[index]} · 笔数坏率</b>`];
-    const fpd3 = DATA.weekChart.fpd3[index];
-    const fpd7 = DATA.weekChart.fpd7[index];
-    const fpd15 = DATA.weekChart.fpd15[index];
-    if (fpd3) parts.push(`<span><i style="background:var(--muted)"></i>FPD3 <b>${fmtRate(fpd3.rate)}</b> · n=${fmtInt(fpd3.obs)}${fpd3.partial ? ' · 周未完整' : ''}</span>`);
-    if (fpd7) parts.push(`<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(fpd7.rate)}</b> · n=${fmtInt(fpd7.obs)} · ${Math.round(fpd7.maturity * 100)}% 成熟${fpd7.partial ? '*' : ''}</span>`);
-    else {
-      const low7 = DATA.weekChart.fpd7Low[index];
-      parts.push(low7
-        ? `<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(low7.rate)}</b> · n=${fmtInt(low7.obs)} · ${Math.round(low7.maturity * 100)}% 成熟（低于 70%，未入图）</span>`
-        : '<span>FPD7 尚未达到 70% 成熟</span>');
-    }
-    if (fpd15) parts.push(`<span><i style="background:var(--c1)"></i>FPD15 <b>${fmtRate(fpd15.rate)}</b> · n=${fmtInt(fpd15.obs)} · ${Math.round(fpd15.maturity * 100)}% 成熟${fpd15.partial ? '*' : ''}</span>`);
-    else {
-      const low = DATA.weekChart.fpd15Low[index];
-      parts.push(low
-        ? `<span><i style="background:var(--muted)"></i>FPD15 <b>${fmtRate(low.rate)}</b> · n=${fmtInt(low.obs)} · ${Math.round(low.maturity * 100)}% 成熟（低于 70%，未入图）</span>`
-        : '<span>FPD15 尚未达到 70% 成熟</span>');
-    }
-    return parts.join('<br>');
+  ];
+  if (amount && lastAmt >= 0) {
+    directLabels.push({
+      series: 0, index: lastAmt,
+      text: `FPD15 金额 ${fmtRate(DATA.weekChart.fpd15Amt[lastAmt].rate)}${DATA.weekChart.fpd15Amt[lastAmt].partial ? '*' : ''}`,
+      dx: 8, dy: -10, anchor: 'start'
+    });
   }
+  makeLineChart('weekChart', 'weekTip', {
+    width: 1040, height: 300, margin: { t: 30, r: 100, b: 46, l: 56 },
+    labels: DATA.weekChart.labels,
+    series,
+    volume: { values: DATA.weekChart.fpd3.map(point => point ? point.obs : null) },
+    ciSeries: amount ? null : 2,
+    yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）', yLabel: amount ? '金额坏率' : '笔数坏率',
+    directLabels,
+    tooltip: index => {
+      const fpd3 = DATA.weekChart.fpd3[index];
+      const fpd7 = DATA.weekChart.fpd7[index];
+      const fpd15 = DATA.weekChart.fpd15[index];
+      if (amount) {
+        const parts = [`<b>${DATA.weekChart.weeks[index]} · 金额坏率</b>`];
+        const amt = DATA.weekChart.fpd15Amt[index];
+        parts.push(amt
+          ? `<span><i style="background:var(--c1)"></i>FPD15 金额 <b>${fmtRate(amt.rate)}</b> · n=${fmtInt(amt.obs)} · ${Math.round(amt.maturity * 100)}% 成熟${amt.partial ? '*' : ''}</span>`
+          : '<span>FPD15 金额坏率尚未达到 70% 成熟</span>');
+        if (fpd15) parts.push(`<span>笔数坏率 ${fmtRate(fpd15.rate)}（n=${fmtInt(fpd15.obs)}）</span>`);
+        if (fpd3) parts.push(`<span>FPD3 早期信号 ${fmtRate(fpd3.rate)}</span>`);
+        return parts.join('<br>');
+      }
+      const parts = [`<b>${DATA.weekChart.weeks[index]} · 笔数坏率</b>`];
+      if (fpd3) parts.push(`<span><i style="background:var(--muted)"></i>FPD3 <b>${fmtRate(fpd3.rate)}</b> · n=${fmtInt(fpd3.obs)}${fpd3.partial ? ' · 周未完整' : ''}</span>`);
+      if (fpd7) parts.push(`<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(fpd7.rate)}</b> · n=${fmtInt(fpd7.obs)} · ${Math.round(fpd7.maturity * 100)}% 成熟${fpd7.partial ? '*' : ''}</span>`);
+      else {
+        const low7 = DATA.weekChart.fpd7Low[index];
+        parts.push(low7
+          ? `<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(low7.rate)}</b> · n=${fmtInt(low7.obs)} · ${Math.round(low7.maturity * 100)}% 成熟（低于 70%，未入图）</span>`
+          : '<span>FPD7 尚未达到 70% 成熟</span>');
+      }
+      if (fpd15) {
+        const ci = wilsonCi(fpd15.obs, fpd15.rate);
+        parts.push(`<span><i style="background:var(--c1)"></i>FPD15 <b>${fmtRate(fpd15.rate)}</b> · n=${fmtInt(fpd15.obs)} · ${Math.round(fpd15.maturity * 100)}% 成熟${fpd15.partial ? '*' : ''}${ci ? ` · 95% CI ${fmtRate(ci.lo)}–${fmtRate(ci.hi)}` : ''}</span>`);
+      }
+      else {
+        const low = DATA.weekChart.fpd15Low[index];
+        parts.push(low
+          ? `<span><i style="background:var(--muted)"></i>FPD15 <b>${fmtRate(low.rate)}</b> · n=${fmtInt(low.obs)} · ${Math.round(low.maturity * 100)}% 成熟（低于 70%，未入图）</span>`
+          : '<span>FPD15 尚未达到 70% 成熟</span>');
+      }
+      return parts.join('<br>');
+    }
+  });
+  const countLegend = document.getElementById('weekLegendCount');
+  const amountLegend = document.getElementById('weekLegendAmount');
+  if (countLegend) countLegend.hidden = amount;
+  if (amountLegend) amountLegend.hidden = !amount;
+}
+
+const weekButtons = document.querySelectorAll('[data-week-mode]');
+weekButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    weekButtons.forEach(item => {
+      const active = item === button;
+      item.classList.toggle('on', active);
+      item.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    renderWeekChart(button.dataset.weekMode);
+  });
 });
+renderWeekChart('count');
 
 const scoreSeries = DATA.scoreChart.series;
 makeLineChart('scoreChart', 'scoreTip', {
@@ -1397,6 +2146,111 @@ makeLineChart('scoreChart', 'scoreTip', {
   }
 });
 
+if (DATA.aucChart && DATA.aucChart.points.length > 1) {
+  const aucPoints = DATA.aucChart.points;
+  const aucSeries = [
+    {
+      name: 'AUC', key: 'auc', color: 'var(--c1)', width: 2,
+      points: aucPoints.map(point => ({
+        rate: point.auc, obs: point.obs,
+        maturity: point.maturity, partial: point.partial
+      }))
+    },
+    {
+      name: 'KS', key: 'ks', color: 'var(--c3)', width: 1.8, dash: '5 4',
+      points: aucPoints.map(point => point.ks == null ? null : ({
+        rate: point.ks, obs: point.obs,
+        maturity: point.maturity, partial: point.partial
+      }))
+    }
+  ];
+  const lastAuc = lastPointIndex(aucSeries[0].points);
+  const lastKs = lastPointIndex(aucSeries[1].points);
+  const aucLabels = [];
+  if (lastAuc >= 0) {
+    aucLabels.push({
+      series: 0, index: lastAuc,
+      text: `AUC ${aucPoints[lastAuc].auc.toFixed(3)}`,
+      dx: 8, dy: -10, anchor: 'start'
+    });
+  }
+  if (lastKs >= 0) {
+    aucLabels.push({
+      series: 1, index: lastKs,
+      text: `KS ${aucPoints[lastKs].ks.toFixed(3)}`,
+      dx: 8, dy: 16, anchor: 'start'
+    });
+  }
+  makeLineChart('aucChart', 'aucTip', {
+    width: 1040, height: 280, margin: { t: 30, r: 110, b: 46, l: 56 },
+    labels: DATA.aucChart.labels,
+    series: aucSeries,
+    volume: { values: aucPoints.map(point => point.obs) },
+    yMax: 1, yTicks: [0, 0.25, 0.5, 0.75, 1],
+    yFormat: value => value.toFixed(2),
+    xLabel: '放款周（2026）', yLabel: 'AUC / KS',
+    directLabels: aucLabels,
+    tooltip: index => {
+      const point = aucPoints[index];
+      const gini = point.gini == null ? '—' : point.gini.toFixed(3);
+      const ks = point.ks == null ? '—' : point.ks.toFixed(3);
+      return `<b>${point.week} · 排序力</b><br>`
+        + `<span><i style="background:var(--c1)"></i>AUC <b>${point.auc.toFixed(3)}</b> · Gini ${gini}</span><br>`
+        + `<span><i style="background:var(--c3)"></i>KS <b>${ks}</b></span><br>`
+        + `<span>n=${fmtInt(point.obs)} · 坏 ${fmtInt(point.bad)} · ${Math.round(point.maturity * 100)}% 成熟${point.partial ? '*' : ''}</span>`;
+    }
+  });
+}
+
+if (DATA.mixChart && DATA.mixChart.weeks.length) {
+  const mixSeries = [
+    { name: '新客', key: 'New', color: 'var(--c1)', points: DATA.mixChart.new, width: 2 },
+    { name: '老客', key: 'Old', color: 'var(--c2)', points: DATA.mixChart.old, width: 2 }
+  ];
+  const lastNew = lastPointIndex(mixSeries[0].points);
+  const lastOld = lastPointIndex(mixSeries[1].points);
+  const mixLabels = [];
+  if (lastNew >= 0) {
+    mixLabels.push({
+      series: 0, index: lastNew,
+      text: `新客 ${fmtRate(mixSeries[0].points[lastNew].rate)}`,
+      dx: 8, dy: -10, anchor: 'start'
+    });
+  }
+  if (lastOld >= 0) {
+    mixLabels.push({
+      series: 1, index: lastOld,
+      text: `老客 ${fmtRate(mixSeries[1].points[lastOld].rate)}`,
+      dx: 8, dy: 16, anchor: 'start'
+    });
+  }
+  makeLineChart('mixChart', 'mixTip', {
+    width: 1040, height: 280, margin: { t: 30, r: 110, b: 46, l: 56 },
+    labels: DATA.mixChart.labels,
+    series: mixSeries,
+    yMax: 20, yTicks: [0, 5, 10, 15, 20],
+    xLabel: '放款周（2026）', yLabel: 'FPD15 笔数坏率',
+    directLabels: mixLabels,
+    tooltip: index => {
+      const parts = [`<b>${DATA.mixChart.weeks[index]} · FPD15 新老客</b>`];
+      mixSeries.forEach(series => {
+        const point = series.points[index];
+        if (!point) {
+          parts.push(`<span>${series.name} 尚未达到 70% 成熟</span>`);
+          return;
+        }
+        const amount = point.amtRate == null ? '—' : fmtRate(point.amtRate);
+        parts.push(
+          `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b>`
+          + ` · n=${fmtInt(point.obs)} · 金额 ${amount}`
+          + ` · ${Math.round(point.maturity * 100)}% 成熟${point.partial ? '*' : ''}</span>`
+        );
+      });
+      return parts.join('<br>');
+    }
+  });
+}
+
 makeBarChart('rankChart', 'rankTip', {
   width: 520, height: 300, margin: { t: 30, r: 24, b: 64, l: 52 },
   data: DATA.rankChart,
@@ -1409,12 +2263,16 @@ makeBarChart('rankChart', 'rankTip', {
 """
 
 
-def render_html(data, generated_at, input_name):
+def render_html(data, generated_at, input_name, generated_iso):
     chart_data = {
         "fpdCurve": data["fpdCurve"],
         "weekChart": data["weekChart"],
         "scoreChart": data["scoreChart"],
         "rankChart": data["rankChart"],
+        "aucChart": data["aucChart"],
+        "mixChart": data["mixChart"],
+        "psiByWeek": data["psiByWeek"],
+        "generatedAt": generated_iso,
     }
     data_json = json.dumps(chart_data, ensure_ascii=False).replace("</", "<\\/")
     html = HTML_TEMPLATE
@@ -1424,6 +2282,8 @@ def render_html(data, generated_at, input_name):
         "__FPD_CARD__": fpd_card_html(data),
         "__WEEK_CARD__": week_card_html(data),
         "__SCORE_CARD__": score_card_html(data),
+        "__STABILITY_CARD__": stability_card_html(data),
+        "__MIX_CARD__": mix_card_html(data),
         "__RANK_CARD__": rank_card_html(data),
         "__QUALITY_CARD__": quality_card_html(data),
         "__FOOTER__": footer_html(data, generated_at, input_name),
@@ -1451,8 +2311,10 @@ def main(argv=None):
     except ValueError as exc:
         parser.error(str(exc))
 
-    generated_at = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
-    html = render_html(data, generated_at, input_path.name)
+    generated_dt = datetime.now().astimezone()
+    generated_at = generated_dt.strftime("%Y-%m-%d %H:%M %Z")
+    generated_iso = generated_dt.isoformat(timespec="seconds")
+    html = render_html(data, generated_at, input_path.name, generated_iso)
     output_path.write_text(html, encoding="utf-8")
     print(f"已生成：{output_path}")
     print(f"图表周：{data['chartWeeks'][0]['week']} ~ {data['latestWeek']['week']}（{len(data['chartWeeks'])} 周）")

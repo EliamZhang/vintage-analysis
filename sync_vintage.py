@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""同步 Vintage 监控看板数据：执行 wagego_04_vintage分析.sql 的 8 个查询块。
+"""同步 Vintage 监控看板数据：执行 wagego_04_vintage分析.sql 的 10 个查询块。
 
-产出：同步数据/vintage_01~07.csv、vintage_data.zip。
+产出：同步数据/vintage_01~09.csv、vintage_data.zip。
 只服务监控看板；新客戳额模型分分析的表同步见 sync_new_user_credit_analysis.py。
 """
 
@@ -43,6 +43,8 @@ QUERY_SPECS = (
     {"id": "5b", "file": "vintage_05b_score_quintile", "title": "模型分五分位 × 新老客"},
     {"id": "6", "file": "vintage_06_score_quintile_week", "title": "模型分五分位 × 放款周"},
     {"id": "7", "file": "vintage_07_application_rank", "title": "老客复借期数（FPD15）"},
+    {"id": "8", "file": "vintage_08_weekly_auc", "title": "周度排序力（AUC/Gini/KS，FPD15）"},
+    {"id": "9", "file": "vintage_09_week_user_type", "title": "放款周 × 新老客（FPD15 笔数/金额）"},
 )
 
 
