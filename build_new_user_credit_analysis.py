@@ -59,12 +59,12 @@ WINDOWS = (15, 7)  # 主口径在前
 # 两个模型各用自己的一套固定切点，线上模型不再按当前样本等笔数切档。
 NEW_DECILE_THRESHOLDS = tuple(range(10, 101, 10))
 NEW_DECILE_MIN = (
-    0.021107, 0.041028, 0.050928, 0.062087, 0.074097,
-    0.087432, 0.104708, 0.124508, 0.156964, 0.211074,
+    0.024295, 0.038882, 0.048683, 0.059918, 0.073168,
+    0.086354, 0.103133, 0.127883, 0.153088, 0.203700,
 )
 NEW_DECILE_CUTS = (
-    0.040977, 0.050916, 0.062045, 0.074019, 0.087427,
-    0.104648, 0.124452, 0.156853, 0.210134, 0.431317,
+    0.038840, 0.048595, 0.059917, 0.073145, 0.086345,
+    0.103095, 0.127736, 0.153057, 0.203555, 0.435366,
 )
 OLD_DECILE_THRESHOLDS = tuple(range(10, 101, 10))
 OLD_DECILE_MIN = (
@@ -441,6 +441,13 @@ def _dist_rows(values, cuts, mins) -> list[dict]:
 
 def _pct(num: int, den: int) -> float | None:
     return round(num / den * 100, 2) if den else None
+
+
+def takeaway(text: str) -> str:
+    return (
+        '<div class="takeaway"><span class="takeaway-label">结论</span>'
+        f"<div>{text}</div></div>"
+    )
 
 
 def _conversion_stats(df: pd.DataFrame, obs_dt: pd.Timestamp) -> dict:
@@ -1153,6 +1160,23 @@ def oot_card(data) -> str:
               <td>{fmt_num(old_m['ks'])}</td>
             </tr>"""
             )
+    oot15 = data["windows"]["15"]["segments"]["oot"]
+    oot7 = data["windows"]["7"]["segments"]["oot"]
+    oot_cut_new = oot15["models"]["new"]["cut"]
+    oot_cut_old = oot15["models"]["old"]["cut"]
+    oot_consistent = oot15["delta"]["diff"] > 0 and oot7["delta"]["diff"] > 0
+    oot_txt = "与 OOT 前方向一致" if oot_consistent else "需关注 OOT 前后差异"
+    oot_take = takeaway(
+        f"OOT 后（{escape(oot_start)} 起）FPD15 成熟 {fmt_int(oot15['n'])} 笔："
+        f"AUC {fmt_num(oot15['models']['new']['auc'])} vs {fmt_num(oot15['models']['old']['auc'])}，"
+        f"ΔAUC {fmt_signed(oot15['delta']['diff'])}"
+        f"（95% CI {fmt_signed(oot15['delta']['ci_low'])} ~ {fmt_signed(oot15['delta']['ci_high'])}）；"
+        f"FPD7 成熟 {fmt_int(oot7['n'])} 笔，AUC {fmt_num(oot7['models']['new']['auc'])} vs "
+        f"{fmt_num(oot7['models']['old']['auc'])}，ΔAUC {fmt_signed(oot7['delta']['diff'])}，{oot_txt}。"
+        f"拒绝最差 {data['meta']['reject_pct']}% 时，新模型通过坏率 "
+        f"{fmt_pct(oot_cut_new['kept_rate'])} vs 线上 {fmt_pct(oot_cut_old['kept_rate'])}，"
+        f"坏账捕获 {fmt_pct(oot_cut_new['capture'], 1)} vs {fmt_pct(oot_cut_old['capture'], 1)}。"
+    )
     return f"""
     <section class="card" id="oot">
       <h2>OOT 后表现<span class="tag" title="主口径 = OOT 后（测试集），戳额时间不早于 {escape(oot_start)}；OOT 前 = 早于该切点">主口径 · OOT 后 vs OOT 前</span></h2>
@@ -1166,6 +1190,7 @@ def oot_card(data) -> str:
         <span><i class="dot old"></i>线上模型</span>
         <span class="muted">右侧数字：ΔAUC（新 − 旧）· 灰底行 = OOT 后</span>
       </div>
+      {oot_take}
       <div class="table-wrap">
         <table class="oot">
           <thead>
@@ -1301,6 +1326,19 @@ def limit_card(limit) -> str:
         for m in limit["monthly"]
     )
     top2 = limit["deciles"][8]["share"] + limit["deciles"][9]["share"]
+    migration_txt = ""
+    if has_old:
+        migration = limit["migration"]
+        migration_txt = (
+            f"新旧模型落在同一档的仅 {fmt_pct(migration['diag_share'], 1)}，"
+            f"秩相关 {fmt_num(migration['spearman'], 3)}，说明新模型对人群排序有明显重排。"
+        )
+    limit_take = takeaway(
+        f"当前生产分数相对固定切点整体偏高：新模型中位数 {fmt_num(limit['median'], 4)}、"
+        f"P90 {fmt_num(limit['p90'], 4)}，切点的中位上界为 {fmt_num(NEW_DECILE_CUTS[4], 4)}；"
+        f"第 9–10 档合计占 {fmt_pct(top2)}，并非十等分。"
+        f"固定阈值下高分档偏拥挤，上线前应结合生产分数分布复核。{migration_txt}"
+    )
     old_desc = (
         f"；旧模型按日志取分 {fmt_int(limit['old_n'])} 人（覆盖 {fmt_pct(limit['old_coverage'])}）"
         if has_old
@@ -1326,6 +1364,7 @@ def limit_card(limit) -> str:
       而切点的中位上界为 {fmt_num(NEW_DECILE_CUTS[4], 4)}；第 9–10 档合计占 {fmt_pct(top2)}，并非十等分。
       新模型分数范围 {fmt_num(limit['score_min'], 4)}–{fmt_num(limit['score_max'], 4)}，低于首档下界 {fmt_int(limit['below_min'])} 人、
       高于末档上界 {fmt_int(limit['above_max'])} 人，分别并入第 1 / 10 档。分月看：{months}。</p>{migration_html}
+      {limit_take}
       <p class="note">该样本不含标签：未成交申请没有放款与表现数据，因此这里只比较分数分布和档位迁移，
       不计算坏率 / AUC / KS；这些指标仅在戳额成交样本上计算，见前文各卡片。</p>
     </section>
@@ -1342,6 +1381,20 @@ def conversion_card(limit, data) -> str:
     new_bad = {r["q"]: r["rate"] for r in f15["new"]["deciles"]}
     old_bad = {r["q"]: r["rate"] for r in f15["old"]["deciles"]}
     has_old = bool(conv["has_old"] and conv["old_deciles"])
+    conv_take = takeaway(
+        f"戳额全量 {fmt_int(conv['n'])} 人，借款申请率 {fmt_pct(conv['apply_rate'])}、"
+        f"成交率 {fmt_pct(conv['disburse_rate'])}、申请→成交 {fmt_pct(conv['apply_to_disburse'])}；"
+        "漏斗损耗主要发生在申请前，申请后的成交转化较高。"
+    )
+    decile_take = ""
+    if conv["new_deciles"]:
+        first_q, last_q = conv["new_deciles"][0], conv["new_deciles"][-1]
+        decile_n = conv["paired_n"] or conv["scored_n"]
+        decile_take = takeaway(
+            f"在 {fmt_int(decile_n)} 人分档样本中，新模型最低分档申请率 "
+            f"{fmt_pct(first_q['apply_rate'])}、最高分档 {fmt_pct(last_q['apply_rate'])}；"
+            "申请率和成交率整体随分数升高而下降，排序方向与 FPD15 坏率一致。"
+        )
 
     window_rows = "".join(
         f"""
@@ -1420,7 +1473,7 @@ def conversion_card(limit, data) -> str:
       <div class="legend">{''.join(legend_parts)}</div>"""
         decile_html = f"""
       <div class="subhead">分档转化（{sample_note}）</div>
-      <p class="desc">第 1 档分数最低、第 10 档分数最高；曲线越低表示该档转化越弱。坏率来自戳额成交样本的 FPD15 成熟样本，仅作同档对照。</p>{conv_chart_html}
+      <p class="desc">第 1 档分数最低、第 10 档分数最高；曲线越低表示该档转化越弱。坏率来自戳额成交样本的 FPD15 成熟样本，仅作同档对照。</p>{conv_chart_html}{decile_take}
       <div class="table-wrap">
         <table class="decile">
           <thead>{head}
@@ -1456,6 +1509,7 @@ def conversion_card(limit, data) -> str:
           <span class="sub">{fmt_int(conv['disbursed'])} / {fmt_int(conv['applied'])} 人</span>
         </div>
       </div>
+      {conv_take}
       <div class="subhead">转化速度</div>
       <p class="desc">从戳额日起算，t0 为当天、t1 为 0–1 天、t7 为 0–7 天；t1 / t7 只使用观察窗已满的用户。</p>
       <div class="table-wrap">
@@ -1572,6 +1626,18 @@ def swap_html(data, window_key) -> str:
     entry = data["windows"][window_key]
     swap = entry["swap"]
     cells = {c["key"]: c for c in swap["cells"]}
+    new_only, old_only = cells["new_only"], cells["old_only"]
+    gap = (
+        new_only["rate"] / old_only["rate"]
+        if old_only["rate"] and new_only["rate"] is not None
+        else None
+    )
+    gap_txt = f"，相差 {gap:.1f} 倍" if gap else ""
+    swap_take = takeaway(
+        f"新模型拒绝而线上放行的 {fmt_int(new_only['n'])} 人坏率 {fmt_pct(new_only['rate'])}，"
+        f"线上拒绝而新模型放行的 {fmt_int(old_only['n'])} 人坏率仅 {fmt_pct(old_only['rate'])}"
+        f"{gap_txt}。分歧人群应以新戳额模型的判断为准。"
+    )
 
     def cell(key, label=""):
         c = cells[key]
@@ -1597,6 +1663,7 @@ def swap_html(data, window_key) -> str:
         {cell('new_only', '新戳额模型独有拦截')}
         {cell('both_reject')}
       </div>
+      {swap_take}
       <p class="note">样本为全样本 FPD15 成熟且两个模型都有分的配对样本。按分数各拒绝最差的 {swap['reject_pct']}%（{fmt_int(swap['reject_n'])} 人）后交叉分组；
       全体坏率 {fmt_pct(swap['overall_rate'])}，坏率后的 × 为该组相对全体坏率的 lift。
       两模型都拒绝的人群坏率最高，都通过的最低——分歧人群的坏率差距说明谁的判断更准。</p>
@@ -1684,69 +1751,6 @@ def kpi_html(data) -> str:
     """
 
 
-def summary_html(data) -> str:
-    f15 = data["windows"]["15"]
-    f7 = data["windows"]["7"]
-    reject = data["meta"]["reject_pct"]
-    new, old, delta = f15["models"]["new"], f15["models"]["old"], f15["delta"]
-    swap = {c["key"]: c for c in f15["swap"]["cells"]}
-    new_only, old_only = swap["new_only"], swap["old_only"]
-    cut_new, cut_old = cut_for(f15, "new", reject), cut_for(f15, "old", reject)
-    ratio = cut_old["kept_rate"] / cut_new["kept_rate"] if cut_new["kept_rate"] else None
-    ratio_txt = f"约 {ratio:.1f} 倍" if ratio else "明显更低"
-    gap = (
-        new_only["rate"] / old_only["rate"]
-        if old_only["rate"] and new_only["rate"] is not None
-        else None
-    )
-    gap_txt = f"，相差 {gap:.1f} 倍" if gap else ""
-    ref = next(r for r in f15["through"]["rows"] if r["target"] == THROUGH_REF)
-    oot15, oot7 = f15["segments"]["oot"], f7["segments"]["oot"]
-    oot_start = data["meta"]["oot_start"]
-    oot_cut_new, oot_cut_old = oot15["models"]["new"]["cut"], oot15["models"]["old"]["cut"]
-    oot_consistent = oot15["delta"]["diff"] > 0 and oot7["delta"]["diff"] > 0
-    oot_txt = "与 OOT 前方向一致" if oot_consistent else "需关注 OOT 前后差异"
-
-    conv = data.get("conversion")
-    conv_bullet = ""
-    if conv and conv.get("new_deciles"):
-        first_q, last_q = conv["new_deciles"][0], conv["new_deciles"][-1]
-        decile_n = conv["paired_n"] or conv["scored_n"]
-        conv_bullet = f"""
-        <li><b>戳额转化</b>：戳额全量 {fmt_int(conv['n'])} 人，借款申请率 {fmt_pct(conv['apply_rate'])}，
-            成交率 {fmt_pct(conv['disburse_rate'])}，申请到成交 {fmt_pct(conv['apply_to_disburse'])}；
-            在 {fmt_int(decile_n)} 人分档样本中，新戳额模型最低分档申请率 {fmt_pct(first_q['apply_rate'])}、
-            最高分档 {fmt_pct(last_q['apply_rate'])}，转化随分数升高而下降，与坏率方向一致。
-            该指标为描述性口径，新模型尚未上线，绝对水平不代表上线后效果。</li>"""
-
-    return f"""
-    <section class="card conclus" id="conclusion">
-      <h2>结论</h2>
-      <p class="desc">主口径为 OOT 后（测试集）；全样本成熟作为参考。</p>
-      <ul>
-        <li><b>OOT 后区分度</b>（测试集，{escape(oot_start)} 起）：FPD15 成熟 {fmt_int(oot15['n'])} 笔，
-            新戳额模型 AUC {fmt_num(oot15['models']['new']['auc'])} vs 线上 {fmt_num(oot15['models']['old']['auc'])}，
-            提升 {fmt_signed(oot15['delta']['diff'])}（95% CI {fmt_signed(oot15['delta']['ci_low'])} ~ {fmt_signed(oot15['delta']['ci_high'])}）；
-            FPD7 成熟 {fmt_int(oot7['n'])} 笔，AUC {fmt_num(oot7['models']['new']['auc'])} vs {fmt_num(oot7['models']['old']['auc'])}，
-            提升 {fmt_signed(oot7['delta']['diff'])}，{oot_txt}。</li>
-        <li><b>全样本成熟参考</b>（含 OOT）：FPD15 新戳额模型 AUC {fmt_num(new['auc'])}，线上模型 {fmt_num(old['auc'])}，
-            提升 {fmt_signed(delta['diff'])}（{fmt_p(delta['p'])}）；FPD7 口径同样提升 {fmt_signed(f7['delta']['diff'])}，结论不依赖单一标签。</li>
-        <li><b>OOT 后同样风控强度下坏率更低</b>（测试集）：拒绝最差 {reject}% 时，新戳额模型通过人群坏率 {fmt_pct(oot_cut_new['kept_rate'])}，
-            线上模型 {fmt_pct(oot_cut_old['kept_rate'])}；新戳额模型拦下 {fmt_pct(oot_cut_new['capture'], 1)} 的坏账，线上模型 {fmt_pct(oot_cut_old['capture'], 1)}。</li>
-        <li><b>全样本成熟决策收益</b>（参考）：拒绝最差 {reject}% 时，新戳额模型通过人群坏率 {fmt_pct(cut_new['kept_rate'])}，
-            线上模型 {fmt_pct(cut_old['kept_rate'])}（{ratio_txt}）；新戳额模型拦下 {fmt_pct(cut_new['capture'], 1)} 的坏账，线上模型 {fmt_pct(cut_old['capture'], 1)}。</li>
-        <li><b>同样坏率预算下通过更多</b>（全样本成熟）：把通过坏率压在同一水平，新戳额模型能多放客户。以 {ref['target']}% 为例，
-            线上模型最多通过 {fmt_pct(ref['old']['approval'], 1)}（{fmt_int(ref['old']['kept'])} 笔），新戳额模型
-            {fmt_pct(ref['new']['approval'], 1)}（{fmt_int(ref['new']['kept'])} 笔），多 {fmt_int(ref['extra'])} 位客户、
-            {fmt_money(ref['extra_good_amt'])} 好客户本金。</li>
-        <li><b>分歧人群以新戳额模型判断为准</b>（全样本成熟）：新戳额模型拒绝而线上模型放行的 {fmt_int(new_only['n'])} 人坏率
-            {fmt_pct(new_only['rate'])}，线上模型拒绝而新戳额模型放行的 {fmt_int(old_only['n'])} 人坏率仅
-            {fmt_pct(old_only['rate'])}{gap_txt}。</li>{conv_bullet}
-      </ul>
-    </section>
-    """
-
-
 def roc_card(data) -> str:
     panels = []
     for w in WINDOWS:
@@ -1768,9 +1772,12 @@ def roc_card(data) -> str:
     return f"""
     <section class="card" id="roc">
       <h2>ROC 曲线<span class="tag" title="横轴假阳率、纵轴真阳率；对角线为随机模型；全样本成熟成交样本（含 OOT）">全样本成熟 · AUC 比较</span></h2>
-      <p class="desc">曲线越靠左上越好；这里展示全样本成熟成交样本（含 OOT）的参考曲线，OOT 后的主口径见上方「OOT 后表现」卡。
-      新戳额模型在两个标签口径下都明显更靠左上。</p>
+      <p class="desc">曲线越靠左上越好；这里展示全样本成熟成交样本（含 OOT）的参考曲线，OOT 后的主口径见上方「OOT 后表现」卡。</p>
       <div class="grid2">{''.join(panels)}</div>
+      {takeaway(
+          "FPD15 与 FPD7 的 ROC 均整体位于线上模型上方，说明新模型在完整分数排序上占优，"
+          "并非只在某一个分段有效；两个标签口径的结论相互印证。"
+      )}
       <p class="note">ROC 按分数降序逐点计算，等距抽样至 200 个点绘制；表值见上方「核心指标」。</p>
     </section>
     """
@@ -1794,9 +1801,8 @@ def decile_card(data) -> str:
     return f"""
     <section class="card" id="decile">
       <h2>十分位坏率<span class="tag" title="全样本成熟成交样本（含 OOT）；两个模型均按各自的固定十分位切点分档，第 10 档风险最高">全样本成熟 · FPD15</span></h2>
-      <p class="desc">样本为全样本成熟成交样本（含 OOT）。新戳额模型{'从第 1 档到第 10 档单调上升' if mono else '各档基本拉开'}，最高档 {fmt_pct(new_dec[-1]['rate'])}、
-      lift {fmt_num(new_dec[-1]['lift'], 2)}×；线上模型第 1–9 档坏率在 {fmt_pct(old_low)}–{fmt_pct(old_high)} 之间，
-      最高档 {fmt_pct(old_dec[-1]['rate'])}、lift {fmt_num(old_dec[-1]['lift'], 2)}×。</p>
+      <p class="desc">样本为全样本成熟成交样本（含 OOT）。柱状图为各档笔数坏率，第 1 档分数最低、第 10 档最高；
+      lift = 该档坏率 / 全体坏率。</p>
       <div class="chart-wrap">
         <svg id="decileChart" viewBox="0 0 1000 340" role="img" aria-label="FPD15 十分位坏率对比"></svg>
         <div class="tip" id="decileTip"></div>
@@ -1806,6 +1812,13 @@ def decile_card(data) -> str:
         <span><i class="sq old"></i>线上模型</span>
         <span class="muted">横轴：第 1 档 = 分数最低（最安全）· lift = 该档坏率 / 全体坏率</span>
       </div>
+      {takeaway(
+          f"新模型从第 1 档到第 10 档{'单调上升' if mono else '基本拉开'}，最高档坏率 "
+          f"{fmt_pct(new_dec[-1]['rate'])}、lift {fmt_num(new_dec[-1]['lift'], 2)}×；"
+          f"线上模型前 9 档坏率只在 {fmt_pct(old_low)}–{fmt_pct(old_high)} 之间，"
+          f"最高档 {fmt_pct(old_dec[-1]['rate'])}、lift {fmt_num(old_dec[-1]['lift'], 2)}×，"
+          "高低分段的拉开幅度明显小于新模型。"
+      )}
       <div class="subhead">分档明细</div>
       {decile_table(data, '15')}
       <p class="note">两个模型均按各自的固定十分位切点分档：新戳额模型各档上界 {rule_txt}；
@@ -1818,10 +1831,13 @@ def decile_card(data) -> str:
 def cross_table(data, window_key="15") -> str:
     entry = data["windows"][window_key]
     cross = entry["cross"]
-    head = "".join(f"<th>{j} 档</th>" for j in range(1, 6))
+    col_n = [0] * 5
+    col_bad = [0] * 5
+    head = "".join(f"<th>{j} 档</th>" for j in range(1, 6)) + '<th class="tot">合计</th>'
     body = []
     for row in cross["rows"]:
         cells = []
+        row_n = row_bad = 0
         for j, c in enumerate(row["cells"], start=1):
             tip = (
                 f"新戳额 {row['q']} 档 × 线上 {j} 档："
@@ -1831,12 +1847,46 @@ def cross_table(data, window_key="15") -> str:
                 f'<td class="h{c["level"]}" title="{tip}">'
                 f"<b>{fmt_pct(c['rate'])}</b><span>{fmt_int(c['n'])} 笔</span></td>"
             )
+            row_n += c["n"]
+            row_bad += c["bad"]
+            col_n[j - 1] += c["n"]
+            col_bad[j - 1] += c["bad"]
+        row_rate = row_bad / row_n * 100 if row_n else None
+        row_tip = (
+            f"新戳额 {row['q']} 档（线上各档合计）："
+            f"{fmt_int(row_n)} 笔，坏 {fmt_int(row_bad)} 笔，坏率 {fmt_pct(row_rate)}"
+        )
+        cells.append(
+            f'<td class="tot" title="{row_tip}">'
+            f"<b>{fmt_pct(row_rate)}</b><span>{fmt_int(row_n)} 笔</span></td>"
+        )
         body.append(f'<tr><th class="rowhead">{row["q"]} 档</th>{"".join(cells)}</tr>')
+
+    total_cells = []
+    for j in range(5):
+        rate = col_bad[j] / col_n[j] * 100 if col_n[j] else None
+        tip = (
+            f"线上 {j + 1} 档（新戳额各档合计）："
+            f"{fmt_int(col_n[j])} 笔，坏 {fmt_int(col_bad[j])} 笔，坏率 {fmt_pct(rate)}"
+        )
+        total_cells.append(
+            f'<td class="tot" title="{tip}">'
+            f"<b>{fmt_pct(rate)}</b><span>{fmt_int(col_n[j])} 笔</span></td>"
+        )
+    grand_n = sum(col_n)
+    grand_bad = sum(col_bad)
+    grand_rate = grand_bad / grand_n * 100 if grand_n else None
+    total_cells.append(
+        f'<td class="tot all" title="全部样本：{fmt_int(grand_n)} 笔，坏 {fmt_int(grand_bad)} 笔，'
+        f'坏率 {fmt_pct(grand_rate)}"><b>{fmt_pct(grand_rate)}</b>'
+        f"<span>{fmt_int(grand_n)} 笔</span></td>"
+    )
+    body.append(f'<tr class="totalrow"><th class="rowhead">合计</th>{"".join(total_cells)}</tr>')
     return f"""
       <div class="table-wrap">
         <table class="cross">
           <thead>
-            <tr><th class="corner"></th><th colspan="5" class="group">线上模型 · 五分位</th></tr>
+            <tr><th class="corner"></th><th colspan="6" class="group">线上模型 · 五分位</th></tr>
             <tr><th class="rowhead">新戳额模型</th>{head}</tr>
           </thead>
           <tbody>{''.join(body)}</tbody>
@@ -1850,10 +1900,14 @@ def cross_card(data) -> str:
     return f"""
     <section class="card" id="cross">
       <h2>五分位交叉矩阵<span class="tag" title="全样本成熟成交样本（含 OOT）；行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位相邻两档合并；每格为该组合的笔数坏率">全样本成熟 · FPD15</span></h2>
-      <p class="desc">每格是落在该组合的样本的笔数坏率；行、列均由低到高，1 档 = 分数最低（最安全），5 档 = 分数最高。横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差
-      {cross['row_spread_max']:.1f}pp；纵向看（线上档固定、新戳额模型 1→5 档）至少差 {cross['col_spread_min']:.1f}pp
-      ——风险差异主要由新戳额模型的分档解释，线上模型分档带来的额外区分很小。</p>
+      <p class="desc">每格是落在该组合的样本的笔数坏率；行、列均由低到高，1 档 = 分数最低（最安全），5 档 = 分数最高。
+      颜色越深表示坏率越高。最右列、最下行是合计，分别按新戳额模型、线上模型单维汇总的整体坏率。</p>
       {cross_table(data, '15')}
+      {takeaway(
+          f"横向看（新戳额档固定、线上模型 1→5 档）坏率最多只差 {cross['row_spread_max']:.1f}pp；"
+          f"纵向看（线上档固定、新戳额模型 1→5 档）至少差 {cross['col_spread_min']:.1f}pp。"
+          "风险差异主要由新戳额模型的分档解释，线上模型分档带来的额外区分很小。"
+      )}
       <div class="heat-legend">
         <span class="muted">笔数坏率</span>
         <span><i class="sw h1"></i>&lt;1%</span>
@@ -1865,7 +1919,8 @@ def cross_card(data) -> str:
       <p class="note">行 = 新戳额模型五分位，列 = 线上模型五分位，均由各自固定十分位第 1–2、3–4、…、9–10 档合并，
       1 档风险最低。样本为全样本 FPD15 成熟且两个模型都有分的
       {fmt_int(cross['n'])} 笔，每格最少 {fmt_int(cross['min_cell'])} 笔；两模型落在同一档（对角线）的占
-      {cross['diag_share']}%，其余是重排。悬停方格可看该格坏样本数。</p>
+      {cross['diag_share']}%，其余是重排。最右列是各新戳额档跨全部线上档的合计，最下行是各线上档跨全部新戳额档的合计。
+      悬停方格可看该格坏样本数。</p>
     </section>
     """
 
@@ -1956,7 +2011,9 @@ def money_card(data) -> str:
     top = m["deciles"][-1]
     top_amt_share = top["amt"] / m["amt"] * 100 if m["amt"] else 0
     top_loss_share = top["loss_amt"] / m["loss_amt"] * 100 if m["loss_amt"] else 0
-    old_top_loss = old_m["deciles"][-1]["loss_amt"] / old_m["loss_amt"] * 100 if old_m["loss_amt"] else 0
+    top3 = m["deciles"][-3:]
+    top3_amt_share = sum(d["amt"] for d in top3) / m["amt"] * 100 if m["amt"] else 0
+    top3_loss_share = sum(d["loss_amt"] for d in top3) / m["loss_amt"] * 100 if m["loss_amt"] else 0
     panels = ""
     for key in ("new", "old"):
         mm = entry["models"][key]
@@ -1972,10 +2029,8 @@ def money_card(data) -> str:
     return f"""
     <section class="card" id="money">
       <h2>置入与置出<span class="tag" title="全样本 FPD15 成熟成交样本（含 OOT）；置入 = 放款本金 real_amount 之和；置出 = due+N 当天借据快照的未还本金之和">全样本成熟 · FPD15 · 金额</span></h2>
-      <p class="desc">前面所有坏率都是笔数口径，这里换成钱。全样本 FPD15 成熟成交样本上，新戳额模型口径的置入
-      {fmt_int(m['amt'])}、置出 {fmt_int(m['loss_amt'])}，置出率 {fmt_pct(m['amt_rate'])}，
-      比同口径的笔数坏率 {fmt_pct(m['rate'])} {gap_txt}。最高档只占置入的 {top_amt_share:.1f}%，
-      却贡献 {top_loss_share:.1f}% 的置出（线上模型最高档 {old_top_loss:.1f}%）。</p>
+      <p class="desc">前面所有坏率都是笔数口径，这里换成钱。全样本 FPD15 成熟成交样本上，
+      各档置入、置出与置出率如下；柱高为置入，其中未还部分为置出、其余为留存。</p>
       <div class="defs">
         <span><b>置入</b><em>放款本金（real_amount）之和</em></span>
         <span><b>置出</b><em>到期未还本金（due + N 当天借据快照）</em></span>
@@ -1988,6 +2043,13 @@ def money_card(data) -> str:
         <span><i class="sw loss"></i>置出（未还本金）</span>
         <span><i class="sw keep"></i>留存</span>
       </div>
+      {takeaway(
+          f"整体置出率 {fmt_pct(m['amt_rate'])}，比笔数坏率 {fmt_pct(m['rate'])} {gap_txt}。"
+          f"最高档置出率 {fmt_pct(top['amt_rate'])}，第 8–10 档只占置入 {top3_amt_share:.1f}%，"
+          f"却贡献 {top3_loss_share:.1f}% 的置出；最高档单独占置入 {top_amt_share:.1f}%、"
+          f"贡献置出 {top_loss_share:.1f}%，损失金额明显向高分档集中。"
+          "两个模型的最高档人数不同，横向比较应看同一拒绝比例下的金额拦截率。"
+      )}
       <div class="subhead">整体</div>
       {money_overall_table(data)}
       <div class="subhead">分档明细（FPD15）</div>
@@ -2002,11 +2064,19 @@ def capture_card(data) -> str:
     entry = data["windows"]["15"]
     reject = data["meta"]["reject_pct"]
     cut_new, cut_old = cut_for(entry, "new", reject), cut_for(entry, "old", reject)
+    ratio = cut_old["kept_rate"] / cut_new["kept_rate"] if cut_new["kept_rate"] else None
+    ratio_txt = f"约 {ratio:.1f} 倍" if ratio else "明显更低"
+    capture_take = takeaway(
+        f"全样本拒绝最差 {reject}% 时，新模型通过人群坏率 {fmt_pct(cut_new['kept_rate'])}，"
+        f"线上模型 {fmt_pct(cut_old['kept_rate'])}（{ratio_txt}）；"
+        f"按笔数捕获坏账 {fmt_pct(cut_new['capture'], 1)} vs {fmt_pct(cut_old['capture'], 1)}，"
+        f"按金额捕获 {fmt_pct(cut_new['capture_amt'], 1)} vs {fmt_pct(cut_old['capture_amt'], 1)}。"
+        "同样风控强度下，新模型既降低通过人群坏率，也拦下更多损失金额。"
+    )
     return f"""
     <section class="card" id="capture">
       <h2>拦截收益<span class="tag" title="全样本成熟成交样本（含 OOT）；按分数从高到低拒绝，横轴为拒绝比例，纵轴为被拒样本中的坏账占比">全样本成熟 · FPD15</span></h2>
-      <p class="desc">在全样本成熟成交样本上，拒绝同样比例的人，新戳额模型能拦下更多坏账。拒绝 {reject}% 时，新戳额模型捕获
-      {fmt_pct(cut_new['capture'], 1)} 的坏账，线上模型 {fmt_pct(cut_old['capture'], 1)}。</p>
+      <p class="desc">横轴为拒绝比例，纵轴为被拒样本中的坏账占比；曲线越靠左上，同样拒绝比例下拦下的坏账越多。</p>
       <div class="chart-wrap">
         <svg id="captureChart" viewBox="0 0 1000 340" role="img" aria-label="坏账捕获曲线"></svg>
         <div class="tip" id="captureTip"></div>
@@ -2016,6 +2086,7 @@ def capture_card(data) -> str:
         <span><i class="linekey old"></i>线上模型</span>
         <span><i class="linekey"></i>随机拦截</span>
       </div>
+      {capture_take}
 
       <div class="subhead">FPD15 · 通过率情景</div>
       {scenario_table(data, '15')}
@@ -2024,7 +2095,7 @@ def capture_card(data) -> str:
       <p class="note">样本为全样本 FPD15 成熟成交样本（含 OOT）。通过坏率 = 未被拒绝样本的笔数坏率；拦截坏账（笔数）= 被拒坏样本 / 全部坏样本；
       拦截坏账下的「金额」= 被拒样本的坏账损失本金 / 全部坏账损失本金，见「金额口径」卡。
       通过笔数按新戳额模型样本计（线上模型缺失 5 笔，各情景差异在 5 笔以内）。
-      通过率 {100 - data['meta']['reject_pct']}% 为上方「结论」引用的口径。</p>
+      通过率 {100 - data['meta']['reject_pct']}% 为报告引用的基准口径。</p>
     </section>
     """
 
@@ -2075,12 +2146,17 @@ def through_card(data) -> str:
     entry = data["windows"]["15"]
     ref = next(r for r in entry["through"]["rows"] if r["target"] == THROUGH_REF)
     o, n = ref["old"], ref["new"]
+    through_take = takeaway(
+        f"以 {ref['target']}% 坏率预算为例，线上模型最多通过 {fmt_pct(o['approval'], 1)}"
+        f"（{fmt_int(o['kept'])} 笔），新模型 {fmt_pct(n['approval'], 1)}"
+        f"（{fmt_int(n['kept'])} 笔），多 {fmt_int(ref['extra'])} 位客户、"
+        f"{fmt_money(ref['extra_good_amt'])} 好客户本金。所有预算档新模型通过率都更高，"
+        "坏率预算越紧，通过率差距越大。"
+    )
     return f"""
     <section class="card" id="through">
       <h2>通过收益<span class="tag" title="全样本成熟成交样本（含 OOT）；把通过坏率控制在同一水平，各模型能达到的最高通过率">全样本成熟 · FPD15</span></h2>
-      <p class="desc">在全样本成熟成交样本上，把通过坏率压在同一水平，各模型能达到的最高通过率不同。以 {ref['target']}% 以内为例，线上模型只能通过
-      {fmt_pct(o['approval'], 1)}（{fmt_int(o['kept'])} 笔），新戳额模型可以通过 {fmt_pct(n['approval'], 1)}（{fmt_int(n['kept'])} 笔），
-      多 {fmt_int(ref['extra'])} 位客户、{fmt_money(ref['extra_good_amt'])} 好客户本金。</p>
+      <p class="desc">横轴为通过坏率预算，纵轴为该预算下可达到的最高通过率；同一预算下曲线越高，说明能放行的客户越多。</p>
       <div class="chart-wrap">
         <svg id="approvalChart" viewBox="0 0 1000 340" role="img" aria-label="同一坏率预算下的可达通过率"></svg>
         <div class="tip" id="approvalTip"></div>
@@ -2090,6 +2166,7 @@ def through_card(data) -> str:
         <span><i class="linekey old"></i>线上模型</span>
         <span class="muted">纵轴：该坏率下可达到的最高通过率</span>
       </div>
+      {through_take}
 
       <div class="subhead">FPD15 · 同一坏率预算下的通过空间</div>
       {through_table(data, '15')}
@@ -2114,7 +2191,7 @@ def swap_card(data) -> str:
 
 
 def weekly_card(data) -> str:
-    parts = []
+    parts_plain = []
     all_better = True
     for w in WINDOWS:
         entry = data["windows"][str(w)]
@@ -2130,7 +2207,7 @@ def weekly_card(data) -> str:
             weeks_txt = f"{len(rows)} 周"
         else:
             span, weeks_txt = "样本不足", "—"
-        parts.append(f"<span class=\"muted\">{entry['label']}（{weeks_txt}）：{span}</span>")
+        parts_plain.append(f"{entry['label']}（{weeks_txt}）：{span}")
 
     desc_head = (
         "新戳额模型在每一个可评估的周都高于线上模型"
@@ -2140,10 +2217,12 @@ def weekly_card(data) -> str:
     return f"""
     <section class="card" id="weekly">
       <h2>分周稳定性<span class="tag" title="按放款周逐周重算；不是 OOT 的单一切分，OOT 见上方卡">逐周重算 · AUC</span></h2>
-      <p class="desc">{desc_head}。这是按放款周在每一周的成熟样本上逐周重算，和上方「OOT 后表现」的单一切分不同。{'；'.join(parts)}。</p>
+      <p class="desc">按放款周在每一周的成熟样本上逐周重算，和上方「OOT 后表现」的单一切分不同；
+      横轴为放款周，纵轴为 AUC。</p>
       <div class="grid2">
         {''.join(weekly_panel(data, w) for w in WINDOWS)}
       </div>
+      {takeaway(f"{desc_head}。{'；'.join(parts_plain)}。")}
       {weekly_table(data)}
     </section>
     """
@@ -2356,9 +2435,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .desc { color: var(--ink-2); font-size: 12.5px; margin: 0 0 6px; }
   .muted { color: var(--muted); font-weight: 400; font-size: 11.5px; }
-  .conclus ul { margin: 6px 0 4px; padding-left: 20px; color: var(--ink-2); font-size: 13px; }
-  .conclus li { margin: 5px 0; }
-  .conclus b { color: var(--ink); font-weight: 600; }
+  .takeaway {
+    display: flex; gap: 10px; align-items: flex-start;
+    margin: 9px 0 6px; padding: 8px 12px;
+    border: 1px solid var(--ring); border-left: 3px solid var(--c1);
+    border-radius: 8px; background: var(--page);
+    color: var(--ink-2); font-size: 12.5px; line-height: 1.65;
+  }
+  .takeaway-label {
+    flex: none; color: var(--ink); font-size: 11px; font-weight: 600;
+    letter-spacing: .08em; padding-top: 2px;
+  }
+  .takeaway b { color: var(--ink); font-weight: 600; }
+  .takeaway .muted { line-height: inherit; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
   .panel { min-width: 0; }
   .chart-wrap { position: relative; margin: 3px 0 2px; }
@@ -2433,6 +2522,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   table.cross td:hover { outline: 2px solid var(--ink-2); outline-offset: -2px; }
   table.cross td b { display: block; font-size: 15px; font-weight: 600; line-height: 1.3; }
   table.cross td span { display: block; font-size: 10.5px; opacity: .72; }
+  table.cross th.tot { color: var(--ink-2); font-weight: 600; }
+  table.cross td.tot {
+    background: var(--page);
+    box-shadow: inset 0 0 0 1px var(--grid);
+  }
+  table.cross td.tot.all { background: var(--surface); }
+  table.cross tr.totalrow th.rowhead { color: var(--ink-2); font-weight: 600; }
   table.cross td.h1 { background: rgba(192,57,43,0.06); }
   table.cross td.h2 { background: rgba(192,57,43,0.15); }
   table.cross td.h3 { background: rgba(192,57,43,0.29); }
@@ -2480,12 +2576,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     display: grid; grid-template-columns: 118px 1fr 1fr;
     gap: 8px; margin: 8px 0 4px;
   }
-  .swap .colhead, .swap .rowhead { color: var(--muted); font-size: 11.5px; display: flex; align-items: center; }
+  .swap .colhead, .swap .rowhead { color: var(--muted); font-size: 11.5px; display: flex; align-items: center; min-width: 0; }
   .swap .colhead { justify-content: center; text-align: center; }
   .swap .rowhead { justify-content: flex-end; text-align: right; padding-right: 6px; }
   .swap .cell {
     border: 1px solid var(--grid); border-radius: 10px;
-    padding: 10px 12px; background: var(--surface);
+    padding: 10px 12px; background: var(--surface); min-width: 0;
   }
   .swap .cell.accent { border-left: 3px solid var(--ink-2); }
   .swap .cell em {
@@ -2552,7 +2648,6 @@ __CAPTURE_CARD__
 __THROUGH_CARD__
 __SWAP_CARD__
 __LIMIT_CARD__
-__SUMMARY__
 __FOOTER__
 </main>
 <script>
@@ -3527,6 +3622,9 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
     </header>
     """
     f15m = data["windows"]["15"]["models"]
+    f7m = data["windows"]["7"]["models"]
+    f15_delta = data["windows"]["15"]["delta"]
+    f7_delta = data["windows"]["7"]["delta"]
     metrics_card = f"""
     <section class="card" id="metrics">
       <h2>核心指标<span class="tag" title="AUC / Gini / KS 均在全样本成熟成交样本上计算（含 OOT 时段）；OOT 后主口径见上卡">全样本成熟 · 参考</span></h2>
@@ -3534,6 +3632,12 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
       ΔAUC 另取两个模型都有分的配对样本。新戳额模型 AUC {fmt_num(f15m['new']['auc'])}、KS {fmt_num(f15m['new']['ks'])}，
       线上模型 AUC {fmt_num(f15m['old']['auc'])}、KS {fmt_num(f15m['old']['ks'])}。</p>
       {metrics_table(data)}
+      {takeaway(
+          f"全样本成熟参考：FPD15 AUC {fmt_num(f15m['new']['auc'])} vs {fmt_num(f15m['old']['auc'])}，"
+          f"提升 {fmt_signed(f15_delta['diff'])}（{fmt_p(f15_delta['p'])}）；"
+          f"FPD7 AUC {fmt_num(f7m['new']['auc'])} vs {fmt_num(f7m['old']['auc'])}，"
+          f"提升 {fmt_signed(f7_delta['diff'])}。两个标签口径方向一致，结论不依赖单一标签。"
+      )}
     </section>
     """
     toc_entries = [
@@ -3554,7 +3658,6 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
     ]
     if limit:
         toc_entries.append(("limit", "戳额生产打分全量"))
-    toc_entries.append(("conclusion", "结论"))
     toc_links = "".join(
         f'<li><a href="#{anchor}">{escape(title)}</a></li>'
         for anchor, title in toc_entries
@@ -3570,7 +3673,6 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
     html = html.replace("__KPIS__", kpi_html(data))
     html = html.replace("__CONVERSION_CARD__", conversion_card(limit, data))
     html = html.replace("__TOC__", toc)
-    html = html.replace("__SUMMARY__", summary_html(data))
     html = html.replace("__METRICS_CARD__", metrics_card)
     html = html.replace("__OOT_CARD__", oot_card(data))
     html = html.replace("__LIMIT_CARD__", limit_card(limit))
