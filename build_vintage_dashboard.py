@@ -39,6 +39,7 @@ REQUIRED_FILES = (
 OPTIONAL_FILES = (
     "vintage_08_weekly_auc.csv",
     "vintage_09_week_user_type.csv",
+    "vintage_10_auc_month_user_type.csv",
 )
 
 
@@ -223,6 +224,19 @@ def build_data(raw):
             "bad": to_int(row["bad_cnt"]),
             "rate": to_float(row["bad_rate_pct"]),
             "amtRate": to_float(row["bad_rate_amt_pct"]),
+        }
+
+    monthly_auc = {}
+    for row in raw.get("vintage_10_auc_month_user_type.csv") or []:
+        monthly_auc.setdefault(row["month_key"], {})[row["user_type"]] = {
+            "month": row["month_key"],
+            "userType": row["user_type"],
+            "obs": to_int(row["obs_cnt"]),
+            "bad": to_int(row["bad_cnt"]),
+            "rate": to_float(row["bad_rate_pct"]),
+            "auc": to_float(row["auc"]),
+            "gini": to_float(row["gini"]),
+            "ks": to_float(row["ks"]),
         }
 
     def psi_value(week, prior_weeks):
@@ -577,6 +591,7 @@ def build_data(raw):
         "psiByWeek": psi_by_week,
         "weeklyAuc": weekly_auc,
         "aucChart": auc_chart,
+        "monthlyAuc": monthly_auc,
         "weekUser": week_user,
         "mixChart": mix_chart,
         "mixEffect": mix_effect,
@@ -1554,11 +1569,23 @@ __FPD_CARD__
 __WEEK_CARD__
 __SCORE_CARD__
 __STABILITY_CARD__
+<section class="card" id="monthlyCard" hidden>
+  <h2>月度排序力 · 新老客<span class="tag" title="月度值 = 当月全部 FPD15 成熟样本的 pooled AUC">模型监控</span></h2>
+  <p class="desc">按放款月统计 FPD15 成熟样本的 AUC / Gini / KS；月度值为当月全部样本的 pooled 值，不是周度 AUC 的平均。</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>月份</th><th>客群</th><th>成熟样本</th><th>坏样本</th><th>坏率</th><th>AUC</th><th>Gini</th><th>KS</th></tr></thead>
+      <tbody id="monthlyAucBody"></tbody>
+    </table>
+  </div>
+  <p class="note">客群口径：New 首借 / Old 复借 / ALL 合计。最近月份可能尚未完全成熟，请结合成熟样本与坏样本量判断。</p>
+</section>
 __MIX_CARD__
 __RANK_CARD__
 __QUALITY_CARD__
 __FOOTER__
 </main>
+<script id="mbr-summary" type="application/json">__MBR_JSON__</script>
 <script>
 const DATA = __DATA_JSON__;
 const NS = 'http://www.w3.org/2000/svg';
@@ -2257,10 +2284,96 @@ makeBarChart('rankChart', 'rankTip', {
   yMax: 12, yTicks: [0, 3, 6, 9, 12],
   color: 'var(--c1)', xLabel: '复借期数', yLabel: '笔数坏率'
 });
+
+function renderMonthlyAuc() {
+  const card = document.getElementById('monthlyCard');
+  const body = document.getElementById('monthlyAucBody');
+  if (!card || !body) return;
+  const monthly = DATA.monthlyAuc || {};
+  const months = Object.keys(monthly).sort().reverse();
+  if (!months.length) { card.hidden = true; return; }
+  card.hidden = false;
+  body.textContent = '';
+  months.forEach(month => {
+    ['ALL', 'New', 'Old'].forEach(userType => {
+      const row = monthly[month][userType];
+      if (!row) return;
+      const tr = document.createElement('tr');
+      const cells = [
+        month,
+        userType,
+        row.obs == null ? '—' : fmtInt(row.obs),
+        row.bad == null ? '—' : fmtInt(row.bad),
+        row.rate == null ? '—' : fmtRate(row.rate),
+        row.auc == null ? '—' : row.auc.toFixed(4),
+        row.gini == null ? '—' : row.gini.toFixed(4),
+        row.ks == null ? '—' : row.ks.toFixed(4),
+      ];
+      cells.forEach(text => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+  });
+}
+renderMonthlyAuc();
 </script>
 </body>
 </html>
 """
+
+
+def build_mbr_summary(data, generated_iso):
+    """MBR PPT 取数用的稳定 JSON：月度新老客 AUC + 最近 12 周整体 AUC + 头部 KPI。"""
+    metrics = []
+    for month in sorted(data["monthlyAuc"]):
+        for user_type in ("ALL", "New", "Old"):
+            row = data["monthlyAuc"][month].get(user_type)
+            if not row:
+                continue
+            metrics.append({
+                "userType": user_type,
+                "granularity": "month",
+                "period": month,
+                "auc": row["auc"],
+                "gini": row["gini"],
+                "ks": row["ks"],
+                "n": row["obs"],
+                "bad": row["bad"],
+                "rate": row["rate"],
+            })
+    for point in data["aucChart"]["points"][-12:]:
+        metrics.append({
+            "userType": "ALL",
+            "granularity": "week",
+            "period": point["week"],
+            "auc": point["auc"],
+            "gini": point["gini"],
+            "ks": point["ks"],
+            "n": point["obs"],
+            "bad": point["bad"],
+            "rate": point["rate"],
+            "maturity": point["maturity"],
+            "partial": point["partial"],
+        })
+
+    latest15 = data["latest"]["windows"].get(15) or {}
+    return {
+        "source": "wagego",
+        "generatedAt": generated_iso,
+        "metrics": metrics,
+        "headline": {
+            "fpd15Week": data["latest"]["week"],
+            "fpd15Maturity": data["latest"]["fpd15Maturity"],
+            "fpd15": latest15,
+            "new15": data["new15"],
+            "old15": data["old15"],
+            "lift": data["lift"],
+            "fpd30Maturity": data["fpd30Maturity"],
+        },
+    }
 
 
 def render_html(data, generated_at, input_name, generated_iso):
@@ -2270,11 +2383,13 @@ def render_html(data, generated_at, input_name, generated_iso):
         "scoreChart": data["scoreChart"],
         "rankChart": data["rankChart"],
         "aucChart": data["aucChart"],
+        "monthlyAuc": data["monthlyAuc"],
         "mixChart": data["mixChart"],
         "psiByWeek": data["psiByWeek"],
         "generatedAt": generated_iso,
     }
     data_json = json.dumps(chart_data, ensure_ascii=False).replace("</", "<\\/")
+    mbr_json = json.dumps(build_mbr_summary(data, generated_iso), ensure_ascii=False).replace("</", "<\\/")
     html = HTML_TEMPLATE
     replacements = {
         "__HEADER__": header_html(data),
@@ -2288,6 +2403,7 @@ def render_html(data, generated_at, input_name, generated_iso):
         "__QUALITY_CARD__": quality_card_html(data),
         "__FOOTER__": footer_html(data, generated_at, input_name),
         "__DATA_JSON__": data_json,
+        "__MBR_JSON__": mbr_json,
     }
     for key, value in replacements.items():
         html = html.replace(key, value)

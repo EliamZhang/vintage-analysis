@@ -45,6 +45,7 @@ QUERY_SPECS = (
     {"id": "7", "file": "vintage_07_application_rank", "title": "老客复借期数（FPD15）"},
     {"id": "8", "file": "vintage_08_weekly_auc", "title": "周度排序力（AUC/Gini/KS，FPD15）"},
     {"id": "9", "file": "vintage_09_week_user_type", "title": "放款周 × 新老客（FPD15 笔数/金额）"},
+    {"id": "10", "file": "vintage_10_auc_month_user_type", "title": "月度排序力（AUC/Gini/KS）× 新老客（FPD15）"},
 )
 
 

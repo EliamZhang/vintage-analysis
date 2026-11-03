@@ -12,6 +12,7 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 --   6) 块 5-6 模型分五分位：FPD15 成熟样本内统一切分，切点固定后套到新老客和放款周
 --   7) 块 7 按 application_rank 拆复借期数：1st / 2nd / 3rd / 4th+
 --   8) 块 8-9 周度模型监控：排序力（AUC/Gini/KS）与周度新老客拆分
+--   9) 块 10 月度排序力：按放款月 × 新老客（New / Old / ALL），供 MBR 大盘取数
 
 
 -- ============================================================
@@ -545,4 +546,111 @@ SELECT
 FROM base
 GROUP BY week_start, user_type
 ORDER BY week_start, user_type
+;
+
+-- ============================================================
+-- 块 10：月度排序力（FPD15）× 新老客
+--   月度口径 = 放款日所在自然月；AUC / Gini / KS 算法与块 8 一致
+--   输出 user_type = New / Old / ALL 三组，供 MBR 大盘直接取数
+-- ============================================================
+WITH base AS (
+    SELECT
+         DATE_FORMAT(TO_DATE(t.disburse_time), 'yyyy-MM') AS month_key
+        ,t.user_type                                               AS user_type
+        ,t.y_fpd15_ovd                                             AS label
+        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626          AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    WHERE t.y_fpd15_obs = 1
+      AND t.disburse_time IS NOT NULL
+),
+scored AS (
+    SELECT month_key, user_type, label, score
+    FROM base
+    WHERE score IS NOT NULL
+      AND month_key IS NOT NULL
+    UNION ALL
+    SELECT month_key, 'ALL' AS user_type, label, score
+    FROM base
+    WHERE score IS NOT NULL
+      AND month_key IS NOT NULL
+),
+ranked AS (
+    SELECT
+         month_key
+        ,user_type
+        ,label
+        ,RANK() OVER (PARTITION BY month_key, user_type ORDER BY score)        AS r_min
+        ,COUNT(*) OVER (PARTITION BY month_key, user_type, score)              AS tie_cnt
+    FROM scored
+),
+rank_avg AS (
+    SELECT
+         month_key
+        ,user_type
+        ,label
+        ,r_min + (tie_cnt - 1) / 2.0                                           AS avg_rank
+    FROM ranked
+),
+auc AS (
+    SELECT
+         month_key
+        ,user_type
+        ,COUNT(*)                                                              AS obs_cnt
+        ,SUM(label)                                                            AS bad_cnt
+        ,SUM(CASE WHEN label = 1 THEN avg_rank ELSE 0 END)                     AS bad_rank_sum
+    FROM rank_avg
+    GROUP BY month_key, user_type
+),
+score_grp AS (
+    SELECT
+         month_key
+        ,user_type
+        ,score
+        ,COUNT(*)                                                              AS obs_cnt
+        ,SUM(label)                                                            AS bad_cnt
+    FROM scored
+    GROUP BY month_key, user_type, score
+),
+cum AS (
+    SELECT
+         month_key
+        ,user_type
+        ,score
+        ,SUM(bad_cnt) OVER (
+            PARTITION BY month_key, user_type ORDER BY score
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )                                                                      AS cum_bad
+        ,SUM(obs_cnt - bad_cnt) OVER (
+            PARTITION BY month_key, user_type ORDER BY score
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )                                                                      AS cum_good
+        ,SUM(bad_cnt) OVER (PARTITION BY month_key, user_type)                 AS tot_bad
+        ,SUM(obs_cnt - bad_cnt) OVER (PARTITION BY month_key, user_type)       AS tot_good
+    FROM score_grp
+),
+ks AS (
+    SELECT
+         month_key
+        ,user_type
+        ,MAX(ABS(CAST(cum_bad AS DOUBLE) / NULLIF(tot_bad, 0)
+                 - CAST(cum_good AS DOUBLE) / NULLIF(tot_good, 0)))            AS ks
+    FROM cum
+    GROUP BY month_key, user_type
+)
+SELECT
+     a.month_key
+    ,a.user_type
+    ,a.obs_cnt
+    ,a.bad_cnt
+    ,ROUND(CAST(a.bad_cnt AS DOUBLE) / a.obs_cnt * 100, 2)                     AS bad_rate_pct
+    ,ROUND((a.bad_rank_sum - CAST(a.bad_cnt AS DOUBLE) * (a.bad_cnt + 1) / 2)
+           / NULLIF(CAST(a.bad_cnt AS DOUBLE) * (a.obs_cnt - a.bad_cnt), 0), 4) AS auc
+    ,ROUND(2 * (a.bad_rank_sum - CAST(a.bad_cnt AS DOUBLE) * (a.bad_cnt + 1) / 2)
+           / NULLIF(CAST(a.bad_cnt AS DOUBLE) * (a.obs_cnt - a.bad_cnt), 0) - 1, 4) AS gini
+    ,ROUND(k.ks, 4)                                                            AS ks
+FROM auc a
+LEFT JOIN ks k
+  ON a.month_key = k.month_key
+ AND a.user_type = k.user_type
+ORDER BY a.month_key, a.user_type
 ;
