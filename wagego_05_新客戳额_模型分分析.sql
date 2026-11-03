@@ -46,7 +46,7 @@ FROM (
     FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log r
     WHERE r.model_code = 'aus_wagego_new_risk_3rd_v1_0'
       AND r.scene_id IN (
-          SELECT application_id
+          SELECT flow_id
           FROM model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score
       )
 ) t

@@ -594,12 +594,15 @@ def load_limit_data(
     label_csv: Path | None = None,
 ) -> dict:
     """戳额生产打分全量样本的分数分布、档位迁移与戳额后转化。"""
+    header = pd.read_csv(limit_csv, encoding="utf-8-sig", nrows=0)
+    # 新分表使用 flow_id，旧导出使用 application_id
+    id_col = "flow_id" if "flow_id" in header.columns else "application_id"
     limit = pd.read_csv(
         limit_csv,
         encoding="utf-8-sig",
-        usecols=["user_id", "application_id", "sample_datetime", NEW_SCORE],
-    )
-    limit["flow_id"] = limit["application_id"].astype(str).str.strip()
+        usecols=["user_id", id_col, "sample_datetime", NEW_SCORE],
+    ).rename(columns={id_col: "flow_id"})
+    limit["flow_id"] = limit["flow_id"].astype(str).str.strip()
     limit["sample_datetime"] = pd.to_datetime(limit["sample_datetime"], errors="coerce")
     limit["score"] = pd.to_numeric(limit[NEW_SCORE], errors="coerce")
 
