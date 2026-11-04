@@ -89,8 +89,18 @@ TAG_COUNT = (
     '<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span>'
 )
 TAG_OVERALL = '<span class="tag" title="该模块固定按全量口径展示，不随客群切换">整体口径</span>'
+SAMPLE_TAG_HTML = (
+    '<span class="tag sample-tag" data-sample-tag '
+    'title="当前客群对应的发标成交样本：放款成功且对应窗口成熟">'
+    '样本：整体发标成交样本</span>'
+)
+TAG_QUALITY_SAMPLE = (
+    '<span class="tag sample-tag" title="整体 FPD15 成熟发标成交样本">'
+    '样本：整体发标成交样本</span>'
+)
 TAG_CREDIT = (
-    '<span class="tag" title="每个用户全历史首次戳额样本；分数取戳额时点线上模型分">全量戳额</span>'
+    '<span class="tag" title="每个用户全历史首次戳额样本；分数取戳额时点线上模型分">'
+    '样本：新客戳额样本</span>'
 )
 
 
@@ -889,9 +899,9 @@ def fpd_card_html(data):
     full_last = full_weeks[-1]["week"] if full_weeks else "—"
     scope = scope_meta_html(
         f"放款周（周一）{full_first} ~ {full_last}；按观察窗口 FPD3–FPD30 汇总，不按时间滚动。",
-        "放款样本；各窗口独立取成熟 cohort（已放款、观察日有借据快照、due+N &lt; obs_dt），"
-        "未成熟不计入分母；FPD30 成熟度不足仅作参考。除标注“金额”外为笔数口径；"
-        "金额坏率仅总览表，分母为成熟样本放款本金。样本随顶部客群切换。",
+        "借款申请（有效）→ 放款成功且有观察日借据快照 → 各窗口 due+N &lt; obs_dt 才纳入。"
+        "新客 = 从未放款或首笔放款成功前（含）的申请，老客 = 其后申请（user_type）。"
+        "金额分母为成熟放款本金。",
     )
     blocks = []
     for seg_key, seg_name, seg_color in SEGMENT_META:
@@ -934,7 +944,7 @@ def fpd_card_html(data):
         )
     return f"""
 <section class="card">
-  <h2>整体与分客群：FPD 曲线{TAG_COUNT}</h2>
+  <h2>整体与分客群：FPD 曲线{SAMPLE_TAG_HTML}{TAG_COUNT}</h2>
   {scope}
   <p class="desc">横轴为观察窗口，纵轴为笔数坏率（坏样本笔数 / 成熟样本笔数）；FPD30 为空心点。整体视图对比三客群；新客 / 老客视图为所选客群（实线）对比整体（虚线）。金额坏率见总览表。</p>
   <div class="chart-wrap">
@@ -1036,9 +1046,9 @@ def week_card_html(data):
     last_week = chart_weeks[-1]["week"] if chart_weeks else "—"
     scope = scope_meta_html(
         f"放款周（周一）{first_week} ~ {last_week}；{early_text}；最新周可能未完整。",
-        "每个放款周的全部放款样本（随顶部客群切换）；FPD15 为确认指标，FPD7 / FPD3 为早期信号；"
-        "各窗口独立按成熟度纳入，成熟度 &lt;70% 不展示、70–90% 标 *、未完整周标 †；"
-        "金额口径的分子为坏样本 due+N 未还本金。FPD14 列仅整体视图展示。",
+        "借款申请（有效）→ 放款成功且有观察日借据快照 → 按放款周归属，"
+        "各窗口 due+N &lt; obs_dt 才纳入。新客 = 从未放款或首笔放款成功前（含）的申请，"
+        "老客 = 其后申请（user_type）。金额分子为坏样本 due+N 未还本金。",
     )
     blocks = []
     for seg_key, seg_name, seg_color in SEGMENT_META:
@@ -1082,7 +1092,7 @@ def week_card_html(data):
         )
     return f"""
 <section class="card">
-  <h2>按放款周：FPD15 与早期信号{TAG_COUNT}</h2>
+  <h2>按放款周：FPD15 与早期信号{SAMPLE_TAG_HTML}{TAG_COUNT}</h2>
   {scope}
   <p class="desc">默认笔数口径：FPD15 是确认指标，FPD7 / FPD3 是早期信号；切换到金额口径可同时看 FPD3 / FPD7 / FPD15 的未还本金坏率。空心点表示成熟度不足或周未完整；阴影为 FPD15 笔数坏率的 95% 置信区间；浅灰柱为当周放款量。图表与表格随顶部客群切换。</p>
   <div class="chart-head">
@@ -1341,9 +1351,11 @@ def credit_dist_card_html(data):
     week_text = f"{weeks[0]} ~ {weeks[-1]}" if weeks else "—"
     scope = scope_meta_html(
         f"戳额周（周一）{week_text}；样本覆盖全历史，不设起止时间窗，随数据同步滚动。",
-        "每个用户全历史首次戳额申请（额度申请表优先、风控事件兜底）；分数取戳额时点"
-        "线上模型日志最新一条；负分或无日志按缺分处理，分布仅统计有分用户。"
-        "该卡片仅在新客视图展示。",
+        "额度申请表（isactive=1、biz_type=400）优先，风控事件表"
+        "（is_active=1、biz_id=10000）兜底 → 每个 user_id 取全历史最早 credit_time 一条 → "
+        "用戳额 flow_id 关联模型日志（model_code=aus_wagego_new_risk_3rd_v1_0）取最新分 → "
+        "负分 / 无日志算缺分，分档只算有分用户。此样本不按 user_type 过滤，"
+        "“新客”由每个用户的首次戳额定义。",
     )
     low_text = (
         f"{'、'.join(week[5:] for week in view['lowWeeks'])} 有分样本少于 "
@@ -1400,9 +1412,9 @@ def score_card_html(data):
     heat_range = f"{heat_weeks[0]} ~ {heat_weeks[-1]}" if heat_weeks else "—"
     scope = scope_meta_html(
         f"放款周（周一）{full_first} ~ {full_last}；分档汇总为全期，分档×周表为 {heat_range}。",
-        f"FPD15 成熟且有模型分的放款样本（整体覆盖 {data['coverage']['pct']:.2f}%）；"
-        "按新客风险 1.0 固定阈值分 5 档，缺分不纳入分档；周表每档样本 ≥50 的周才纳入"
-        "（末周保留），成熟度不足的周灰显或标 *；样本随顶部客群切换。",
+        f"借款申请 → 放款成功且 FPD15 成熟（due+15 &lt; obs_dt）→ 模型分非空"
+        f"（整体覆盖 {data['coverage']['pct']:.2f}%）→ 按固定阈值分 5 档，缺分不纳入。"
+        "周表每档样本 ≥50 的周才纳入（末周保留）。",
     )
     blocks = []
     for seg_key, seg_name, seg_color in SEGMENT_META:
@@ -1489,7 +1501,7 @@ def score_card_html(data):
         )
     return f"""
 <section class="card">
-  <h2>模型分分档{TAG_COUNT}</h2>
+  <h2>模型分分档{SAMPLE_TAG_HTML}{TAG_COUNT}</h2>
   {scope}
   <p class="desc">1档最低分 → 5档最高分（按新客风险 1.0 固定阈值切分）；整体视图对比三客群，新客 / 老客视图为所选客群（实线）对比整体（虚线）。</p>
   <div class="chart-wrap">
@@ -1511,9 +1523,8 @@ def stability_card_html(data):
     )
     scope = scope_meta_html(
         f"放款周（周一）{point_range}；按周计算排序力；PSI 仅使用确认周（放款周完整且 FPD15 成熟度 ≥90%）。",
-        "FPD15 成熟且有模型分的放款样本；AUC / Gini / KS 按周内分数排名计算，并列分数取平均秩；"
-        "周成熟样本 &lt;200 的周不纳入；成熟度 70–90% 标 *、低于 70% 灰显；"
-        "表格随顶部客群切换。",
+        "FPD15 成熟放款 + 模型分非空 → 按周内分数排名计算 AUC / Gini / KS"
+        "（并列取平均秩）→ 周成熟样本 &lt;200 剔除；客群按 user_type 过滤。",
     )
     blocks = []
     for seg_key, seg_name, seg_color in SEGMENT_META:
@@ -1599,7 +1610,7 @@ def stability_card_html(data):
         )
     return f"""
 <section class="card">
-  <h2>周度排序力<span class="tag" title="AUC = P(坏样本分数高于好样本) + 0.5 × P(并列)；Gini = 2 × AUC − 1">模型监控</span></h2>
+  <h2>周度排序力{SAMPLE_TAG_HTML}<span class="tag" title="AUC = P(坏样本分数高于好样本) + 0.5 × P(并列)；Gini = 2 × AUC − 1">模型监控</span></h2>
   {scope}
   <p class="desc">按放款周看模型分对 FPD15 的排序能力；AUC 和 KS 越高越好。灰柱为当周 FPD15 成熟样本量。图表与表格随顶部客群切换。</p>
   <div class="chart-wrap">
@@ -1633,12 +1644,12 @@ def quality_card_html(data):
     )
     scope = scope_meta_html(
         f"放款周（周一）{earliest} ~ {latest}；汇总共同 cohort、模型分覆盖与周样本质量。",
-        "FPD15→FPD30 共同 cohort 为两窗口均成熟的同一批放款；模型分覆盖基于 FPD15 成熟放款；"
-        "周样本按 FPD3 样本量检查早期排除、末周完整性与成熟度。",
+        "共同 cohort = FPD15 与 FPD30 均成熟（y_fpd15_obs=1 且 y_fpd30_obs=1）的同一批放款；"
+        "模型分覆盖 = FPD15 成熟放款中有分占比；周样本按 FPD3 样本量检查 &lt;50 周排除、末周完整性。",
     )
     return f"""
 <section class="card">
-  <h2>数据质量与口径{TAG_OVERALL}</h2>
+  <h2>数据质量与口径{TAG_QUALITY_SAMPLE}{TAG_OVERALL}</h2>
   {scope}
   <div class="quality">
     <div>
@@ -1793,6 +1804,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     font-size: 10.5px; font-weight: 500; vertical-align: 2px;
     cursor: help;
   }
+  .card h2 .sample-tag {
+    border-color: var(--axis); background: var(--grid); color: var(--ink);
+  }
   .desc { color: var(--ink-2); font-size: 12.5px; margin: 0 0 6px; }
   .scope-meta {
     display: flex; flex-wrap: wrap; gap: 5px 18px;
@@ -1929,6 +1943,11 @@ const fmtRate = v => (v == null ? '—' : v.toFixed(2) + '%');
 const fmtInt = n => (n == null ? '—' : n.toLocaleString('en-US'));
 
 const state = { segment: 'ALL', weekMode: 'count' };
+const sampleTagBySegment = {
+  ALL: '样本：整体发标成交样本',
+  New: '样本：新客发标成交样本',
+  Old: '样本：老客发标成交样本'
+};
 const segData = () => DATA.segments[state.segment];
 const isAllSeg = () => state.segment === 'ALL';
 
@@ -2460,6 +2479,9 @@ function applySegment(seg) {
   });
   document.querySelectorAll('[data-seg-panel]').forEach(panel => {
     panel.hidden = panel.dataset.segPanel !== seg;
+  });
+  document.querySelectorAll('[data-sample-tag]').forEach(tag => {
+    tag.textContent = sampleTagBySegment[seg] || '';
   });
   const hint = document.getElementById('scopeHint');
   if (hint) hint.textContent = segData().scopeHint;
