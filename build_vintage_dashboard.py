@@ -23,8 +23,8 @@ PROJECT_DIR = Path(__file__).resolve().parent
 DEFAULT_INPUT = PROJECT_DIR / "vintage_data.zip"
 DEFAULT_OUTPUT = PROJECT_DIR / "vintage_监控看板.html"
 
-WINDOWS = (3, 7, 14, 15, 30)
-WINDOW_LABELS = {3: "FPD3", 7: "FPD7", 14: "FPD14", 15: "FPD15", 30: "FPD30"}
+WINDOWS = (1, 3, 7, 14, 15, 30)
+WINDOW_LABELS = {1: "FPD1", 3: "FPD3", 7: "FPD7", 14: "FPD14", 15: "FPD15", 30: "FPD30"}
 # 新客风险 1.0 固定分箱上限；第 5 箱为 > 最后一个阈值
 SCORE_BIN_UPPER = (0.062086, 0.091284, 0.128392, 0.188973)
 # 线上模型戳额分布固定 10 档上限（旧模型固定十等分切点；相邻两档合并即上面的 5 档）
@@ -52,7 +52,12 @@ OPTIONAL_FILES = (
     "vintage_08_weekly_auc.csv",
     "vintage_11a_credit_score_coverage.csv",
     "vintage_11b_credit_score_dist.csv",
+    "vintage_12_new_user_funnel.csv",
 )
+
+
+def available_windows(windows):
+    return [window for window in WINDOWS if window in windows]
 
 
 def to_int(value):
@@ -172,6 +177,8 @@ def build_week_chart(chart_weeks):
     chart = {
         "labels": [],
         "weeks": [],
+        "fpd1": [],
+        "fpd1Amt": [],
         "fpd3": [],
         "fpd3Amt": [],
         "fpd7": [],
@@ -182,11 +189,32 @@ def build_week_chart(chart_weeks):
         "fpd15Amt": [],
     }
     for item in chart_weeks:
+        fpd1_row = item["windows"].get(1)
         fpd3_row = item["windows"].get(3)
         fpd7_row = item["windows"].get(7)
         fpd15_row = item["windows"].get(15)
         chart["labels"].append(item["week"][5:])
         chart["weeks"].append(item["week"])
+        if fpd1_row:
+            chart["fpd1"].append(
+                {
+                    "rate": fpd1_row["rate"],
+                    "obs": fpd1_row["obs"],
+                    "partial": item["incomplete"],
+                }
+            )
+            chart["fpd1Amt"].append(
+                {
+                    "rate": fpd1_row["amtRate"],
+                    "obs": fpd1_row["obs"],
+                    "partial": item["incomplete"],
+                }
+                if fpd1_row["amtRate"] is not None
+                else None
+            )
+        else:
+            chart["fpd1"].append(None)
+            chart["fpd1Amt"].append(None)
         if fpd3_row:
             chart["fpd3"].append(
                 {
@@ -459,10 +487,81 @@ def build_auc_chart(weekly_auc, weeks_by):
     return auc_chart
 
 
+def build_new_user_funnel(raw):
+    rows = raw.get("vintage_12_new_user_funnel.csv")
+    if not rows:
+        return None
+    weeks = []
+    for row in rows:
+        weeks.append(
+            {
+                "week": row["week_start"],
+                "creditUsers": to_int(row.get("credit_users")),
+                "limitDetailUsers": to_int(row.get("limit_detail_users")),
+                "limitUsers": to_int(row.get("limit_users")),
+                "applyUsers": to_int(row.get("apply_users")),
+                "passUsers": to_int(row.get("pass_users")),
+                "dealUsers": to_int(row.get("deal_users")),
+                "applyCnt": to_int(row.get("apply_cnt")),
+                "passCnt": to_int(row.get("pass_cnt")),
+                "dealCnt": to_int(row.get("deal_cnt")),
+                "limitPassRate": to_float(row.get("limit_pass_rate_pct")),
+                "applyRate": to_float(row.get("apply_rate_pct")),
+                "passRate": to_float(row.get("audit_pass_rate_pct")),
+                "dealRate": to_float(row.get("deal_rate_pct")),
+                "passRateCnt": to_float(row.get("audit_pass_rate_cnt_pct")),
+                "dealRateCnt": to_float(row.get("deal_rate_cnt_pct")),
+                "creditDealRate": to_float(row.get("credit_deal_rate_pct")),
+                "cohortDays": to_int(row.get("cohort_days")),
+            }
+        )
+    weeks.sort(key=lambda item: item["week"])
+    included = [item for item in weeks if (item["creditUsers"] or 0) >= CREDIT_WEEK_MIN_OBS]
+    excluded = [item for item in weeks if (item["creditUsers"] or 0) < CREDIT_WEEK_MIN_OBS]
+    if not included:
+        return None
+
+    def total(key):
+        return sum(item[key] or 0 for item in included)
+
+    def rate(numerator, denominator):
+        return round(numerator / denominator * 100, 2) if denominator else None
+
+    totals = {
+        "creditUsers": total("creditUsers"),
+        "limitDetailUsers": total("limitDetailUsers"),
+        "limitUsers": total("limitUsers"),
+        "applyUsers": total("applyUsers"),
+        "passUsers": total("passUsers"),
+        "dealUsers": total("dealUsers"),
+        "applyCnt": total("applyCnt"),
+        "passCnt": total("passCnt"),
+        "dealCnt": total("dealCnt"),
+    }
+    totals.update(
+        {
+            "limitPassRate": rate(totals["limitUsers"], totals["limitDetailUsers"]),
+            "applyRate": rate(totals["applyUsers"], totals["creditUsers"]),
+            "passRate": rate(totals["passUsers"], totals["applyUsers"]),
+            "dealRate": rate(totals["dealUsers"], totals["applyUsers"]),
+            "passRateCnt": rate(totals["passCnt"], totals["applyCnt"]),
+            "dealRateCnt": rate(totals["dealCnt"], totals["passCnt"]),
+            "creditDealRate": rate(totals["dealUsers"], totals["creditUsers"]),
+        }
+    )
+    return {
+        "weeks": included,
+        "totals": totals,
+        "excluded": excluded,
+        "firstWeek": included[0]["week"],
+        "lastWeek": included[-1]["week"],
+    }
+
+
 def build_window_list(windows, keep_delta=False):
     items = []
     previous = None
-    for window in WINDOWS:
+    for window in available_windows(windows):
         row = windows[window]
         delta = row.get("delta") if keep_delta else None
         if delta is None:
@@ -497,6 +596,13 @@ def build_data(raw):
             "rate": to_float(row["bad_rate_pct"]),
             "amtRate": to_float(row["bad_rate_amt_pct"]),
         }
+
+    # FPD1 是后加窗口；旧 zip 缺少时自动跳过，避免看板无法生成。
+    data_windows = [
+        window
+        for window in WINDOWS
+        if window in overall_by and all(window in user.get(seg, {}) for seg in ("New", "Old"))
+    ]
 
     week_rows_by_seg = {"ALL": {}, "New": {}, "Old": {}}
     for row in raw["vintage_04_week.csv"]:
@@ -624,7 +730,7 @@ def build_data(raw):
 
     def curve_series(name, key, color, source):
         points = []
-        for window in WINDOWS:
+        for window in data_windows:
             row = source[window]
             points.append(
                 {
@@ -638,7 +744,7 @@ def build_data(raw):
         return {"name": name, "key": key, "color": color, "points": points}
 
     fpd_curve = {
-        "labels": [WINDOW_LABELS[window] for window in WINDOWS],
+        "labels": [WINDOW_LABELS[window] for window in data_windows],
         "series": [
             curve_series("整体", "ALL", "var(--ink-2)", overall_by),
             curve_series("新客", "New", "var(--c1)", user["New"]),
@@ -794,6 +900,7 @@ def build_data(raw):
     return {
         "overall": overall,
         "overallBy": overall_by,
+        "windows": data_windows,
         "user": user,
         "weeks": weeks,
         "weeksBy": weeks_by,
@@ -828,6 +935,7 @@ def build_data(raw):
         "fpd30Maturity": fpd30_maturity,
         "segments": segments,
         "creditDist": build_credit_dist(raw),
+        "funnel": build_new_user_funnel(raw),
     }
 
 
@@ -946,7 +1054,7 @@ def fpd_card_html(data):
 <section class="card">
   <h2>整体与分客群：FPD 曲线{SAMPLE_TAG_HTML}{TAG_COUNT}</h2>
   {scope}
-  <p class="desc">横轴为观察窗口，纵轴为笔数坏率（坏样本笔数 / 成熟样本笔数）；FPD30 为空心点。整体视图对比三客群；新客 / 老客视图为所选客群（实线）对比整体（虚线）。金额坏率见总览表。</p>
+  <p class="desc">横轴为观察窗口，纵轴为笔数坏率（坏样本笔数 / 成熟样本笔数）；FPD1 为最早预警信号，FPD30 为空心点。整体视图对比三客群；新客 / 老客视图为所选客群（实线）对比整体（虚线）。金额坏率见总览表。</p>
   <div class="chart-wrap">
     <svg id="fpdCurve" viewBox="0 0 1040 300" role="img" aria-label="整体、新客、老客在各 FPD 窗口的笔数坏率"></svg>
     <div class="tip" id="fpdTip"></div>
@@ -961,10 +1069,10 @@ def rate_cell(week, window):
     if not row:
         return '<td class="num dim">—</td>'
     maturity = row["maturity"]
-    if window == 3:
+    if window in (1, 3):
         if week["incomplete"]:
             return (
-                f'<td class="num soft" title="放款周未完整；FPD3 样本 {fmt_int(row["obs"])}">'
+                f'<td class="num soft" title="放款周未完整；{WINDOW_LABELS[window]} 样本 {fmt_int(row["obs"])}">'
                 f"{sup(fmt_rate(row['rate']), '†')}</td>"
             )
         return f'<td class="num">{fmt_rate(row["rate"])}</td>'
@@ -999,7 +1107,9 @@ def amount_cell(week):
 
 def week_table(view, include_fpd14=True):
     rows = []
-    windows = (3, 7, 14, 15) if include_fpd14 else (3, 7, 15)
+    base_windows = (3, 7, 14, 15) if include_fpd14 else (3, 7, 15)
+    has_fpd1 = any(1 in week["windows"] for week in view["chartWeeks"])
+    windows = ((1,) if has_fpd1 else ()) + base_windows
     for week in view["chartWeeks"]:
         fpd15 = week["windows"].get(15)
         sample = fmt_int(fpd15["obs"]) if fpd15 else "—"
@@ -1019,11 +1129,7 @@ def week_table(view, include_fpd14=True):
             f"<td class='{maturity_class}'>{maturity}</td>"
             f"{''.join(cells)}</tr>"
         )
-    window_heads = (
-        "<th>FPD3</th><th>FPD7</th><th>FPD14</th><th>FPD15</th>"
-        if include_fpd14
-        else "<th>FPD3</th><th>FPD7</th><th>FPD15</th>"
-    )
+    window_heads = "".join(f"<th>{WINDOW_LABELS[window]}</th>" for window in windows)
     return f"""
 <div class="table-wrap">
 <table>
@@ -1042,6 +1148,7 @@ def week_card_html(data):
         else "无早期小样本周"
     )
     chart_weeks = data["chartWeeks"]
+    has_fpd1 = any(1 in week["windows"] for week in chart_weeks)
     first_week = chart_weeks[0]["week"] if chart_weeks else "—"
     last_week = chart_weeks[-1]["week"] if chart_weeks else "—"
     scope = scope_meta_html(
@@ -1090,11 +1197,22 @@ def week_card_html(data):
         blocks.append(
             seg_panel(seg_key, week_table(view, include_fpd14=seg_key == "ALL") + f'<p class="note">{note}</p>')
         )
+    fpd1_count_legend = (
+        '<span><i class="dash" style="border-top-color:var(--c2)"></i>FPD1 早期信号</span>'
+        if has_fpd1
+        else ""
+    )
+    fpd1_amount_legend = (
+        '<span><i class="dash" style="border-top-color:var(--c2)"></i>FPD1 金额坏率</span>'
+        if has_fpd1
+        else ""
+    )
+    fpd1_text = "、FPD1" if has_fpd1 else ""
     return f"""
 <section class="card">
   <h2>按放款周：FPD15 与早期信号{SAMPLE_TAG_HTML}{TAG_COUNT}</h2>
   {scope}
-  <p class="desc">默认笔数口径：FPD15 是确认指标，FPD7 / FPD3 是早期信号；切换到金额口径可同时看 FPD3 / FPD7 / FPD15 的未还本金坏率。空心点表示成熟度不足或周未完整；阴影为 FPD15 笔数坏率的 95% 置信区间；浅灰柱为当周放款量。图表与表格随顶部客群切换。</p>
+  <p class="desc">默认笔数口径：FPD15 是确认指标，FPD7 / FPD3{fpd1_text} 是早期信号；切换到金额口径可同时看 FPD3 / FPD7{fpd1_text} / FPD15 的未还本金坏率。空心点表示成熟度不足或周未完整；阴影为 FPD15 笔数坏率的 95% 置信区间；浅灰柱为当周放款量。图表与表格随顶部客群切换。</p>
   <div class="chart-head">
     <div class="seg" role="group" aria-label="周度图口径">
       <button type="button" class="on" data-week-mode="count" aria-pressed="true">笔数</button>
@@ -1102,7 +1220,7 @@ def week_card_html(data):
     </div>
   </div>
   <div class="chart-wrap">
-    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15、FPD7 与 FPD3 笔数及金额坏率，含 FPD15 置信区间、放款量和金额口径切换"></svg>
+    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15、FPD7、FPD3{fpd1_text} 笔数及金额坏率，含 FPD15 置信区间、放款量和金额口径切换"></svg>
     <div class="tip" id="weekTip"></div>
   </div>
   <div class="legend week-legend-count">
@@ -1110,12 +1228,14 @@ def week_card_html(data):
     <span><i class="band" style="background:var(--c1)"></i>FPD15 95% CI</span>
     <span><i class="dash" style="border-top-color:var(--c3)"></i>FPD7 早期信号</span>
     <span><i class="dash"></i>FPD3 早期信号</span>
+    {fpd1_count_legend}
     <span><i class="bar" style="background:var(--grid)"></i>放款量（FPD3 样本）</span>
   </div>
   <div class="legend week-legend-amount" hidden>
     <span><i style="background:var(--c1)"></i>FPD15 金额坏率</span>
     <span><i class="dash" style="border-top-color:var(--c3)"></i>FPD7 金额坏率</span>
     <span><i class="dash"></i>FPD3 金额坏率</span>
+    {fpd1_amount_legend}
     <span><i class="bar" style="background:var(--grid)"></i>放款量（FPD3 样本）</span>
   </div>
   {''.join(blocks)}
@@ -1339,6 +1459,88 @@ def credit_dist_table(view, bins):
   <tbody>{''.join(rows)}</tbody>
 </table>
 </div>
+"""
+
+
+def funnel_card_html(data):
+    funnel = data.get("funnel")
+    if not funnel:
+        return ""
+    totals = funnel["totals"]
+    excluded_text = (
+        "、".join(
+            f"{item['week']}（{fmt_int(item['creditUsers'])} 人）"
+            for item in funnel["excluded"]
+        )
+        if funnel["excluded"]
+        else ""
+    )
+
+    def rate_text(value, partial=False):
+        return sup(fmt_rate(value), "*") if partial else fmt_rate(value)
+
+    rows = []
+    for item in funnel["weeks"]:
+        partial = item["cohortDays"] is not None and item["cohortDays"] < 30
+        cls = "num soft" if partial else "num"
+        pass_tip = ""
+        if item["passRateCnt"] is not None:
+            pass_tip = f"；笔数口径 {fmt_rate(item['passRateCnt'])}"
+        deal_tip = ""
+        if item["dealRateCnt"] is not None:
+            deal_tip = f"；笔数口径 {fmt_rate(item['dealRateCnt'])}"
+        rows.append(
+            f"<tr><td>{item['week']}</td>"
+            f"<td class='num'>{fmt_int(item['creditUsers'])}</td>"
+            f"<td class='{cls}'>{rate_text(item['limitPassRate'], partial)}</td>"
+            f"<td class='{cls}'>{rate_text(item['applyRate'], partial)}</td>"
+            f"<td class='{cls}' title='用户级：审核通过用户 / 有借款申请用户{pass_tip}'>"
+            f"{rate_text(item['passRate'], partial)}</td>"
+            f"<td class='{cls}' title='用户级：放款成功用户 / 有借款申请用户{deal_tip}'>"
+            f"{rate_text(item['dealRate'], partial)}</td>"
+            f"<td class='{cls}'>{rate_text(item['creditDealRate'], partial)}</td>"
+            f"<td class='{cls}'>{fmt_int(item['cohortDays'])}</td></tr>"
+        )
+
+    kpis = [
+        ("戳额人数", fmt_int(totals["creditUsers"]), "新客出额样本用户数"),
+        ("出额审批通过率", fmt_rate(totals["limitPassRate"]), "有额用户 / 可匹配出额明细用户"),
+        ("借款申请率", fmt_rate(totals["applyRate"]), "戳额后有借款申请的用户 / 戳额用户"),
+        ("借款审核通过率", fmt_rate(totals["passRate"]), "审核通过用户 / 有借款申请用户"),
+        ("成交率", fmt_rate(totals["dealRate"]), "放款成功用户 / 有借款申请用户"),
+        ("出额→成交率", fmt_rate(totals["creditDealRate"]), "放款成功用户 / 戳额用户"),
+    ]
+    kpi_html = "".join(
+        f'<div class="kpi" title="{escape(tip)}"><span>{escape(label)}</span>'
+        f"<b>{value}</b></div>"
+        for label, value, tip in kpis
+    )
+    scope = scope_meta_html(
+        f"戳额周（周一）{funnel['firstWeek']} ~ {funnel['lastWeek']}；"
+        f"最新周距同步日不足 30 天时标 *，仅参考。",
+        "出额样本 = 新客戳额生产打分全量用户；出额结果取出额转化明细，"
+        "借款申请取戳额日之后的 Y 标签申请记录；用户级去重。"
+        f"样本少于 {CREDIT_WEEK_MIN_OBS} 人的戳额周已排除"
+        + (f"（{excluded_text}）" if excluded_text else "")
+        + "。",
+    )
+    return f"""
+<section class="card">
+  <h2>新客出额转化漏斗<span class="tag" title="固定展示新客出额样本，不随顶部客群切换">固定口径</span><span class="tag" title="出额审批通过率、借款申请审核通过率与成交率；均为用户级口径">业务指标</span></h2>
+  {scope}
+  <p class="desc">从戳额申请到借款申请的转化漏斗；出额审批通过率看出额环节，借款审核通过率与成交率看借款环节。</p>
+  <div class="kpis">{kpi_html}</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>戳额周</th><th>戳额人数</th><th>出额审批通过率</th><th>借款申请率</th>
+      <th>借款审核通过率</th><th>成交率</th><th>出额→成交率</th><th>观察天数</th></tr></thead>
+      <tbody>{''.join(rows)}</tbody>
+    </table>
+  </div>
+  <p class="note">出额审批通过率 = 有额用户 / 可匹配出额明细用户；借款审核通过率 = 审核通过用户 / 有借款申请用户；
+  成交率 = 放款成功用户 / 有借款申请用户；出额→成交率 = 放款成功用户 / 戳额用户。
+  审核通过含审核通过、放款成功与放款失败；审核中与信息变更不计入通过。星号 * 表示戳额周距同步日不足 30 天，转化仍在累积。</p>
+</section>
 """
 
 
@@ -1692,6 +1894,14 @@ def footer_html(data, generated_at, input_name):
             "10 档按线上模型固定十等分切点，5 档为相邻两档合并；PSI 以全量分布为基线；"
             "该卡片仅在“新客”视图展示。</li>"
         )
+    if data.get("funnel"):
+        extras.append(
+            "<li>新客出额转化漏斗：出额样本为戳额生产打分全量用户；"
+            "出额审批通过率取出额转化明细表（edw_ewa.dwb_user_fst_conv_dtl），"
+            "借款审核通过率与成交率取 Y 标签主表中戳额日之后的借款申请；"
+            "均为用户级去重，审核通过含审核通过、放款成功与放款失败。"
+            "戳额周样本少于 50 人的周已排除，最新周距同步日不足 30 天时标 *。</li>"
+        )
     bin_text = " / ".join(f"≤{value:.6f}" for value in SCORE_BIN_UPPER)
     bin_text += f" / &gt;{SCORE_BIN_UPPER[-1]:.6f}"
     return f"""
@@ -1808,6 +2018,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     border-color: var(--axis); background: var(--grid); color: var(--ink);
   }
   .desc { color: var(--ink-2); font-size: 12.5px; margin: 0 0 6px; }
+  .kpis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px; margin: 8px 0 10px;
+  }
+  .kpi {
+    background: var(--page); border: 1px solid var(--grid);
+    border-radius: 8px; padding: 8px 10px;
+  }
+  .kpi span { display: block; color: var(--muted); font-size: 10.5px; }
+  .kpi b {
+    display: block; font-size: 18px; line-height: 1.35;
+    font-variant-numeric: tabular-nums;
+  }
   .scope-meta {
     display: flex; flex-wrap: wrap; gap: 5px 18px;
     margin: 6px 0 7px; padding: 7px 10px;
@@ -1930,6 +2153,7 @@ __HEADER__
 __SCOPE_BAR__
 __FPD_CARD__
 __WEEK_CARD__
+__FUNNEL_CARD__
 __SCORE_CARD__
 __CREDIT_DIST_CARD__
 __STABILITY_CARD__
@@ -2156,15 +2380,21 @@ function renderFpd() {
       width: reference ? 1.8 : 2
     };
   });
-  const fpdSelectedAbove = !isAllSeg() && fpdSeries[0].points[3].rate >= fpdSeries[1].points[3].rate;
+  const fpd15Index = DATA.fpdLabels.indexOf('FPD15');
+  const fpd30Index = DATA.fpdLabels.indexOf('FPD30');
+  const fpdSelectedAbove = !isAllSeg() && fpd15Index >= 0 && fpdSeries[0].points[fpd15Index].rate >= fpdSeries[1].points[fpd15Index].rate;
+  const fpdMaxRate = Math.max(...fpdSeries.flatMap(series => series.points.map(point => point && point.rate != null ? point.rate : 0)));
+  const fpdYMax = Math.max(25, Math.ceil(fpdMaxRate / 5) * 5);
+  const fpdYTicks = [];
+  for (let value = 0; value <= fpdYMax; value += 5) fpdYTicks.push(value);
   makeLineChart('fpdCurve', 'fpdTip', {
     width: 1040, height: 300, margin: { t: 30, r: 130, b: 46, l: 56 },
     labels: DATA.fpdLabels,
     series: fpdSeries,
-    yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '观察窗口', yLabel: '笔数坏率',
+    yMax: fpdYMax, yTicks: fpdYTicks, xLabel: '观察窗口', yLabel: '笔数坏率',
     directLabels: fpdSeries.map((series, index) => ({
-      series: index, index: 3,
-      text: `${series.name} ${fmtRate(series.points[3].rate)}`,
+      series: index, index: fpd15Index,
+      text: `${series.name} ${fmtRate(series.points[fpd15Index].rate)}`,
       dx: 0,
       dy: isAllSeg() ? (index === 1 ? -12 : 18) : (index === 0 ? (fpdSelectedAbove ? -14 : 20) : (fpdSelectedAbove ? 20 : -14)),
       anchor: 'middle'
@@ -2174,8 +2404,8 @@ function renderFpd() {
         const point = series.points[index];
         return `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b> · n=${fmtInt(point.obs)}</span>`;
       }).join('<br>');
-      const age = index === 4
-        ? `<br><span>30 天成熟：${fpdSeries.map(series => `${series.name} ${Math.round(series.points[4].maturity * 100)}%`).join(' · ')}</span>`
+      const age = index === fpd30Index
+        ? `<br><span>30 天成熟：${fpdSeries.map(series => `${series.name} ${Math.round(series.points[fpd30Index].maturity * 100)}%`).join(' · ')}</span>`
         : '';
       return `<b>${DATA.fpdLabels[index]} · 笔数坏率</b><br>${rows}${age}`;
     }
@@ -2200,7 +2430,17 @@ function renderWeekChart(mode) {
     { name: 'FPD7 金额', key: 'fpd7Amt', color: 'var(--c3)', points: chart.fpd7Amt, dash: '5 4', width: 1.8 },
     { name: 'FPD15 金额', key: 'fpd15Amt', color: 'var(--c1)', points: chart.fpd15Amt, width: 2 }
   ];
+  if (chart.fpd1 && chart.fpd1.some(point => point)) {
+    countSeries.push({ name: 'FPD1', key: 'fpd1', color: 'var(--c2)', points: chart.fpd1, dash: '2 3', width: 1.4 });
+  }
+  if (chart.fpd1Amt && chart.fpd1Amt.some(point => point)) {
+    amountSeries.push({ name: 'FPD1 金额', key: 'fpd1Amt', color: 'var(--c2)', points: chart.fpd1Amt, dash: '2 3', width: 1.4 });
+  }
   const series = amount ? amountSeries : countSeries;
+  const weekMaxRate = Math.max(...series.flatMap(item => (item.points || []).map(point => point && point.rate != null ? point.rate : 0)));
+  const weekYMax = Math.max(25, Math.ceil(weekMaxRate / 5) * 5);
+  const weekYTicks = [];
+  for (let value = 0; value <= weekYMax; value += 5) weekYTicks.push(value);
   const last15 = lastPointIndex(chart.fpd15);
   const last7 = lastPointIndex(chart.fpd7);
   const last3 = lastPointIndex(chart.fpd3);
@@ -2246,7 +2486,7 @@ function renderWeekChart(mode) {
     series,
     volume: { values: chart.fpd3.map(point => point ? point.obs : null) },
     ciSeries: amount ? null : 2,
-    yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）', yLabel: amount ? '金额坏率' : '笔数坏率',
+    yMax: weekYMax, yTicks: weekYTicks, xLabel: '放款周（2026）', yLabel: amount ? '金额坏率' : '笔数坏率',
     directLabels,
     tooltip: index => {
       const fpd3 = chart.fpd3[index];
@@ -2254,9 +2494,11 @@ function renderWeekChart(mode) {
       const fpd15 = chart.fpd15[index];
       if (amount) {
         const parts = [`<b>${chart.weeks[index]} · 金额坏率</b>`];
+        const amt1 = chart.fpd1Amt[index];
         const amt3 = chart.fpd3Amt[index];
         const amt7 = chart.fpd7Amt[index];
         const amt15 = chart.fpd15Amt[index];
+        if (amt1) parts.push(`<span><i style="background:var(--c2)"></i>FPD1 金额 <b>${fmtRate(amt1.rate)}</b> · n=${fmtInt(amt1.obs)}${amt1.partial ? ' · 周未完整' : ''}</span>`);
         parts.push(amt3
           ? `<span><i style="background:var(--muted)"></i>FPD3 金额 <b>${fmtRate(amt3.rate)}</b> · n=${fmtInt(amt3.obs)}${amt3.partial ? ' · 周未完整' : ''}</span>`
           : '<span>FPD3 金额无数据</span>');
@@ -2270,6 +2512,8 @@ function renderWeekChart(mode) {
         return parts.join('<br>');
       }
       const parts = [`<b>${chart.weeks[index]} · 笔数坏率</b>`];
+      const fpd1 = chart.fpd1[index];
+      if (fpd1) parts.push(`<span><i style="background:var(--c2)"></i>FPD1 <b>${fmtRate(fpd1.rate)}</b> · n=${fmtInt(fpd1.obs)}${fpd1.partial ? ' · 周未完整' : ''}</span>`);
       if (fpd3) parts.push(`<span><i style="background:var(--muted)"></i>FPD3 <b>${fmtRate(fpd3.rate)}</b> · n=${fmtInt(fpd3.obs)}${fpd3.partial ? ' · 周未完整' : ''}</span>`);
       if (fpd7) parts.push(`<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(fpd7.rate)}</b> · n=${fmtInt(fpd7.obs)} · ${Math.round(fpd7.maturity * 100)}% 成熟${fpd7.partial ? '*' : ''}</span>`);
       else {
@@ -2521,7 +2765,7 @@ def render_html(data, generated_at, input_name, generated_iso):
                     "partial": window == 30,
                     "maturity": view["fpd30Maturity"] if window == 30 else None,
                 }
-                for window in WINDOWS
+                for window in data["windows"]
             ],
         }
         score_curves[seg_key] = {
@@ -2541,7 +2785,7 @@ def render_html(data, generated_at, input_name, generated_iso):
         }
 
     chart_data = {
-        "fpdLabels": [WINDOW_LABELS[window] for window in WINDOWS],
+        "fpdLabels": [WINDOW_LABELS[window] for window in data["windows"]],
         "fpdCurves": fpd_curves,
         "scoreCurves": score_curves,
         "segments": segments,
@@ -2554,6 +2798,7 @@ def render_html(data, generated_at, input_name, generated_iso):
         "__SCOPE_BAR__": scope_bar_html(data),
         "__FPD_CARD__": fpd_card_html(data),
         "__WEEK_CARD__": week_card_html(data),
+        "__FUNNEL_CARD__": funnel_card_html(data),
         "__SCORE_CARD__": score_card_html(data),
         "__CREDIT_DIST_CARD__": credit_dist_card_html(data),
         "__STABILITY_CARD__": stability_card_html(data),

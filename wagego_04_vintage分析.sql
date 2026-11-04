@@ -9,6 +9,7 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 --   4) 金额坏率 = 坏样本 due+N 时点未还本金 / 全部成熟放款本金（real_amount）
 --      FPD14 的余额取 due+14 当天借据快照（与主表 FPD 金额字段同机制）
 --   5) 块 3 按 user_type 拆分；块 4 按放款周（周一开始）拆 vintage 路径，并输出 ALL / New / Old 三组
+--      块 1/3/4 均包含 FPD1、FPD3、FPD7、FPD14、FPD15、FPD30；FPD1 作为最早预警信号
 --   6) 块 5-6 模型分固定 5 箱：按新客风险 1.0 阈值切分，套到新老客和放款周
 --   7) 块 7 按 application_rank 拆复借期数：1st / 2nd / 3rd / 4th+
 --   8) 块 8-9 周度模型监控：排序力（AUC/Gini/KS）与周度新老客拆分；块 8 同样输出 ALL / New / Old
@@ -16,12 +17,23 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 --  10) 块 11 新客戳额全量样本的线上模型分分布（全历史、不设时间窗）
 --      样本口径同 wagego_02 的新客戳额样本：每个用户全历史第一次戳额申请
 --      分数取戳额时点线上模型日志；11a 覆盖、11b 固定 10 档 × 戳额周（周一开始）
+--  11) 块 12 新客出额样本转化漏斗（按戳额周）：出额审批通过率、借款申请审核通过率、成交率
+--      出额样本 = 戳额生产打分全量用户；标签取 Y 标签主表，出额结果取出额转化明细表
 
 
 -- ============================================================
 -- 块 1：各窗口成熟样本、坏样本、笔数坏率、金额坏率
 -- ============================================================
 WITH win AS (
+    SELECT
+         1 AS window_days
+        ,COUNT(*)                                                       AS obs_cnt
+        ,SUM(t.y_fpd1_ovd)                                              AS bad_cnt
+        ,SUM(t.real_amount)                                             AS total_amt
+        ,SUM(CASE WHEN t.y_fpd1_ovd = 1 THEN t.estimate_principal_remaining_fpd1 ELSE 0 END) AS bad_amt
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    WHERE t.y_fpd1_obs = 1
+    UNION ALL
     SELECT
          3 AS window_days
         ,COUNT(*)                                                       AS obs_cnt
@@ -140,6 +152,15 @@ FROM cohort
 -- ============================================================
 WITH base AS (
     SELECT
+         1 AS window_days
+        ,t.user_type
+        ,t.y_fpd1_ovd                                                    AS label
+        ,t.real_amount
+        ,t.estimate_principal_remaining_fpd1                             AS amt
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    WHERE t.y_fpd1_obs = 1
+    UNION ALL
+    SELECT
          3 AS window_days
         ,t.user_type
         ,t.y_fpd3_ovd                                                    AS label
@@ -214,6 +235,17 @@ ORDER BY window_days, user_type
 WITH base AS (
     SELECT
          DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
+        ,t.user_type
+        ,1 AS window_days
+        ,t.y_fpd1_ovd                                                    AS label
+        ,t.real_amount
+        ,t.estimate_principal_remaining_fpd1                             AS amt
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    WHERE t.disburse_time IS NOT NULL
+      AND t.y_fpd1_obs = 1
+    UNION ALL
+    SELECT
+         DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd')
         ,t.user_type
         ,3 AS window_days
         ,t.y_fpd3_ovd                                                    AS label
@@ -953,4 +985,98 @@ SELECT
 FROM all_agg a
 CROSS JOIN all_tot t
 ORDER BY week_start, q
+;
+
+
+-- ============================================================
+-- 块 12：新客出额样本转化漏斗（按戳额周）
+--   出额样本：model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score
+--           每个用户一行，sample_datetime = 戳额申请时间
+--   出额审批通过率 = 有额用户 / 出额明细可匹配用户
+--           出额结果取 edw_ewa.dwb_user_fst_conv_dtl 的首次有额时间/额度；
+--           若该表用户主键不是 user_id，请按实际字段调整 join
+--   借款申请审核通过率 = 审核通过用户 / 有借款申请用户
+--           审核通过 = AUDIT_APPROVED / DISBURSE_SUCCESS / DISBURSE_FAILED
+--   成交率 = 放款成功用户 / 有借款申请用户
+--   只取戳额日之后的借款申请；用户级去重，避免多次申请抬高分母
+-- ============================================================
+WITH credit AS (
+    SELECT
+         user_id
+        ,MIN(sample_datetime) AS sample_datetime
+    FROM model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score
+    GROUP BY user_id
+),
+credit_w AS (
+    SELECT
+         user_id
+        ,TO_DATE(sample_datetime)                                      AS credit_date
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(sample_datetime)), 'yyyy-MM-dd') AS week_start
+    FROM credit
+),
+limit_user AS (
+    SELECT
+         c.user_id
+        ,1                                                             AS has_limit_detail
+        ,MAX(CASE WHEN l.fst_has_limit_time IS NOT NULL
+                   AND TO_DATE(l.fst_has_limit_time) >= c.credit_date
+                  THEN 1 ELSE 0 END)                                   AS has_limit
+    FROM credit_w c
+    JOIN edw_ewa.dwb_user_fst_conv_dtl l
+      ON l.user_id = c.user_id
+    GROUP BY c.user_id
+),
+app_user AS (
+    SELECT
+         a.user_id
+        ,COUNT(*)                                                      AS apply_cnt
+        ,SUM(CASE WHEN a.apply_status IN ('AUDIT_APPROVED', 'DISBURSE_SUCCESS', 'DISBURSE_FAILED')
+                  THEN 1 ELSE 0 END)                                   AS pass_cnt
+        ,SUM(CASE WHEN a.apply_status = 'DISBURSE_SUCCESS' THEN 1 ELSE 0 END) AS deal_cnt
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label a
+    JOIN credit_w c
+      ON a.user_id = c.user_id
+     AND TO_DATE(a.apply_time) >= c.credit_date
+    GROUP BY a.user_id
+),
+agg AS (
+    SELECT
+         c.week_start
+        ,COUNT(*)                                                      AS credit_users
+        ,SUM(COALESCE(l.has_limit_detail, 0))                          AS limit_detail_users
+        ,SUM(COALESCE(l.has_limit, 0))                                 AS limit_users
+        ,SUM(CASE WHEN a.user_id IS NOT NULL THEN 1 ELSE 0 END)        AS apply_users
+        ,SUM(CASE WHEN COALESCE(a.pass_cnt, 0) > 0 THEN 1 ELSE 0 END)  AS pass_users
+        ,SUM(CASE WHEN COALESCE(a.deal_cnt, 0) > 0 THEN 1 ELSE 0 END)  AS deal_users
+        ,SUM(COALESCE(a.apply_cnt, 0))                                 AS apply_cnt
+        ,SUM(COALESCE(a.pass_cnt, 0))                                  AS pass_cnt
+        ,SUM(COALESCE(a.deal_cnt, 0))                                  AS deal_cnt
+    FROM credit_w c
+    LEFT JOIN limit_user l
+      ON l.user_id = c.user_id
+    LEFT JOIN app_user a
+      ON a.user_id = c.user_id
+    GROUP BY c.week_start
+)
+SELECT
+     week_start
+    ,credit_users
+    ,limit_detail_users
+    ,limit_users
+    ,apply_users
+    ,pass_users
+    ,deal_users
+    ,apply_cnt
+    ,pass_cnt
+    ,deal_cnt
+    ,ROUND(CAST(limit_users AS DOUBLE) / NULLIF(limit_detail_users, 0) * 100, 2) AS limit_pass_rate_pct
+    ,ROUND(CAST(apply_users AS DOUBLE) / NULLIF(credit_users, 0) * 100, 2)       AS apply_rate_pct
+    ,ROUND(CAST(pass_users AS DOUBLE) / NULLIF(apply_users, 0) * 100, 2)         AS audit_pass_rate_pct
+    ,ROUND(CAST(deal_users AS DOUBLE) / NULLIF(apply_users, 0) * 100, 2)         AS deal_rate_pct
+    ,ROUND(CAST(pass_cnt AS DOUBLE) / NULLIF(apply_cnt, 0) * 100, 2)             AS audit_pass_rate_cnt_pct
+    ,ROUND(CAST(deal_cnt AS DOUBLE) / NULLIF(pass_cnt, 0) * 100, 2)              AS deal_rate_cnt_pct
+    ,ROUND(CAST(deal_users AS DOUBLE) / NULLIF(credit_users, 0) * 100, 2)        AS credit_deal_rate_pct
+    ,DATEDIFF(CURRENT_DATE(), DATE_ADD(TO_DATE(week_start), 7))      AS cohort_days
+FROM agg
+ORDER BY week_start
 ;

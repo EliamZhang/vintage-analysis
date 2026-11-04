@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""同步 WageGo 风险监控看板数据：执行 wagego_04_vintage分析.sql 的 13 个查询块。
+"""同步 WageGo 风险监控看板数据：执行 wagego_04_vintage分析.sql 的 14 个查询块。
 
 产出：同步数据/vintage_01~11.csv、vintage_data.zip。
 只服务监控看板；新客戳额模型分分析的表同步见 sync_new_user_credit_analysis.py。
@@ -48,6 +48,7 @@ QUERY_SPECS = (
     {"id": "10", "file": "vintage_10_auc_month_user_type", "title": "月度排序力（AUC/Gini/KS）× 新老客（FPD15）"},
     {"id": "11a", "file": "vintage_11a_credit_score_coverage", "title": "新客戳额全量样本模型分覆盖（全历史）"},
     {"id": "11b", "file": "vintage_11b_credit_score_dist", "title": "新客戳额全量样本模型分固定 10 档分布 × 戳额周"},
+    {"id": "12", "file": "vintage_12_new_user_funnel", "title": "新客出额样本转化漏斗（出额审批通过率/借款审核通过率/成交率）× 戳额周"},
 )
 
 
