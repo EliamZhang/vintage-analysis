@@ -1040,6 +1040,18 @@ def build_data(sample: pd.DataFrame, reject_pct: int, oot_start: str) -> dict:
 
         data["windows"][str(w)] = entry
 
+    pair_scores = sample.dropna(subset=["new_score", "old_score"])
+    if len(pair_scores) > 2:
+        xs = pair_scores["new_score"].to_numpy(float)
+        ys = pair_scores["old_score"].to_numpy(float)
+        data["corr"] = {
+            "n": int(len(pair_scores)),
+            "pearson": round(float(np.corrcoef(xs, ys)[0, 1]), 3),
+            "spearman": round(float(pd.Series(xs).corr(pd.Series(ys), method="spearman")), 3),
+        }
+    else:
+        data["corr"] = None
+
     return data
 
 
@@ -1801,6 +1813,15 @@ def kpi_html(data) -> str:
     cut_new, cut_old = new["cut"], old["cut"]
     new_all, old_all, delta_all = f15["models"]["new"], f15["models"]["old"], f15["delta"]
     pre = f15["segments"]["pre_oot"]["delta"]
+    corr = data.get("corr")
+    corr_kpi = ""
+    if corr:
+        corr_kpi = f"""
+      <div class="kpi" title="两个模型在首笔成交样本上的分数相关性；Pearson 衡量线性相关，Spearman 衡量排序一致性">
+        <span class="label">两个模型的相关系数</span>
+        <b>{fmt_num(corr['pearson'])}</b>
+        <span class="sub">Pearson · Spearman {fmt_num(corr['spearman'])} · 配对 {fmt_int(corr['n'])} 人</span>
+      </div>"""
     return f"""
     <div class="kpis">
       <div class="kpi">
@@ -1823,6 +1844,7 @@ def kpi_html(data) -> str:
         <b>{fmt_pct(cut_new['kept_rate'])} <span class="vs">vs</span> {fmt_pct(cut_old['kept_rate'])}</b>
         <span class="sub">OOT FPD15 成熟 · 笔数坏率</span>
       </div>
+      {corr_kpi}
     </div>
     <p class="kpi-ref"><b>参考 · 全样本成熟（含 OOT）</b>：FPD15 新 {fmt_num(new_all['auc'])} / 旧 {fmt_num(old_all['auc'])} / Δ {fmt_signed(delta_all['diff'])}；
     FPD7 Δ {fmt_signed(f7['delta']['diff'])}。OOT 前 FPD15 Δ {fmt_signed(pre['diff'])} → OOT 后 {fmt_signed(delta['diff'])}，方向一致。</p>
@@ -2536,7 +2558,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     white-space: nowrap;
   }
   .kpis {
-    display: grid; grid-template-columns: repeat(4, 1fr);
+    display: grid; grid-template-columns: repeat(5, 1fr);
     gap: 12px; margin: 20px 0 6px;
   }
   .conv-kpis {
