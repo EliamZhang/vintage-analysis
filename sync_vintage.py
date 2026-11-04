@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""同步 Vintage 监控看板数据：执行 wagego_04_vintage分析.sql 的 10 个查询块。
+"""同步 Vintage 监控看板数据：执行 wagego_04_vintage分析.sql 的 13 个查询块。
 
-产出：同步数据/vintage_01~09.csv、vintage_data.zip。
+产出：同步数据/vintage_01~11.csv、vintage_data.zip。
 只服务监控看板；新客戳额模型分分析的表同步见 sync_new_user_credit_analysis.py。
 """
 
@@ -38,14 +38,16 @@ QUERY_SPECS = (
     {"id": "1", "file": "vintage_01_fpd_overall", "title": "各窗口成熟样本、坏样本、笔数坏率、金额坏率"},
     {"id": "2", "file": "vintage_02_fpd15_vs_fpd30", "title": "共同 cohort 上 FPD15 vs FPD30"},
     {"id": "3", "file": "vintage_03_user_type", "title": "新老客拆分（每个 FPD 窗口 × user_type）"},
-    {"id": "4", "file": "vintage_04_week", "title": "按放款周的 vintage 路径"},
+    {"id": "4", "file": "vintage_04_week", "title": "按放款周的 vintage 路径 × 新老客"},
     {"id": "5a", "file": "vintage_05a_score_coverage", "title": "模型分覆盖（FPD15 成熟样本）"},
     {"id": "5b", "file": "vintage_05b_score_quintile", "title": "模型分固定 5 箱 × 新老客"},
-    {"id": "6", "file": "vintage_06_score_quintile_week", "title": "模型分固定 5 箱 × 放款周"},
+    {"id": "6", "file": "vintage_06_score_quintile_week", "title": "模型分固定 5 箱 × 放款周 × 新老客"},
     {"id": "7", "file": "vintage_07_application_rank", "title": "老客复借期数（FPD15）"},
-    {"id": "8", "file": "vintage_08_weekly_auc", "title": "周度排序力（AUC/Gini/KS，FPD15）"},
+    {"id": "8", "file": "vintage_08_weekly_auc", "title": "周度排序力（AUC/Gini/KS，FPD15）× 新老客"},
     {"id": "9", "file": "vintage_09_week_user_type", "title": "放款周 × 新老客（FPD15 笔数/金额）"},
     {"id": "10", "file": "vintage_10_auc_month_user_type", "title": "月度排序力（AUC/Gini/KS）× 新老客（FPD15）"},
+    {"id": "11a", "file": "vintage_11a_credit_score_coverage", "title": "新客戳额全量样本模型分覆盖（全历史）"},
+    {"id": "11b", "file": "vintage_11b_credit_score_dist", "title": "新客戳额全量样本模型分固定 10 档分布 × 戳额周"},
 )
 
 

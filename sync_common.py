@@ -2,7 +2,7 @@
 """同步脚本共用层：路径、SQL 文件解析、Hive 查询执行、CSV 落盘与打包。
 
 两个同步入口各自负责一条链路的 SQL 文件与输出清单，共用这里的执行与落盘逻辑：
-    sync_vintage.py                   监控看板的 8 个 vintage 聚合查询
+    sync_vintage.py                   监控看板的 13 个 vintage 聚合查询
     sync_new_user_credit_analysis.py  新客戳额模型分分析的底表
 查询语句只写在对应的 .sql 文件里，本模块和入口脚本都不拼接业务 SQL。
 数据库连接由外部 hive_config.query_to_df(sql) 提供，本模块不负责建连。

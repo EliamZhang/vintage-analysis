@@ -42,6 +42,25 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  .scope-bar {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 10px 14px; margin: 18px 0 0;
+  }
+  .scope-label { color: var(--muted); font-size: 11.5px; }
+  .scope-btns {
+    display: inline-flex; border: 1px solid var(--ring);
+    border-radius: 999px; overflow: hidden; background: var(--surface);
+  }
+  .scope-btn {
+    appearance: none; border: 0; background: transparent;
+    color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 600;
+    padding: 7px 20px; cursor: pointer;
+  }
+  .scope-btn + .scope-btn { border-left: 1px solid var(--ring); }
+  .scope-btn:hover { background: var(--page); }
+  .scope-btn.on { background: var(--seg-color); color: #fff; }
+  .scope-hint { color: var(--ink-2); font-size: 12px; }
   body {
     margin: 0;
     padding: 36px 20px 52px;
@@ -60,55 +79,6 @@
   }
   h1 { font-size: 30px; line-height: 1.25; margin: 0 0 5px; }
   .sub { color: var(--ink-2); margin: 0; font-size: 14px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
-  .chip {
-    border: 1px solid var(--ring); background: var(--surface);
-    border-radius: 999px; padding: 5px 10px; font-size: 11.5px; color: var(--ink-2);
-    white-space: nowrap;
-  }
-  .kpis {
-    display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 12px; margin: 20px 0 14px;
-  }
-  .kpi {
-    background: var(--surface); border: 1px solid var(--ring);
-    border-radius: 12px; padding: 13px 15px;
-  }
-  .kpi .label { display: block; color: var(--muted); font-size: 11.5px; }
-  .kpi b {
-    display: block; font-size: 27px; line-height: 1.2;
-    margin: 4px 0 1px; font-variant-numeric: tabular-nums;
-  }
-  .kpi b.split { font-size: 21px; }
-  .kpi .sub { display: block; color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
-  .monitor-wrap { margin: 0 0 14px; }
-  .monitor {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 12px;
-  }
-  .m-item {
-    display: flex; flex-direction: column; gap: 2px;
-    background: var(--surface); border: 1px solid var(--ring);
-    border-radius: 12px; padding: 11px 13px;
-  }
-  .m-label { color: var(--muted); font-size: 11.5px; }
-  .m-value {
-    font-size: 19px; font-weight: 650; line-height: 1.25;
-    font-variant-numeric: tabular-nums;
-  }
-  .m-value small { color: var(--muted); font-size: 11px; font-weight: 500; margin-left: 4px; }
-  .m-sub { color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
-  .m-status {
-    align-self: flex-start; margin-top: 3px;
-    border-radius: 999px; padding: 1px 8px;
-    font-size: 10.5px; font-weight: 600;
-    border: 1px solid var(--ring); color: var(--ink-2);
-  }
-  .m-status.ok { color: var(--ok); border-color: var(--ok); }
-  .m-status.watch { color: var(--warn); border-color: var(--warn); }
-  .m-status.alert { color: var(--bad); border-color: var(--bad); }
-  .m-status.na { color: var(--muted); }
-  .m-note { margin: 6px 2px 0; }
   .card {
     background: var(--surface); border: 1px solid var(--ring);
     border-radius: 12px; padding: 16px 18px 11px; margin: 13px 0;
@@ -122,6 +92,19 @@
     cursor: help;
   }
   .desc { color: var(--ink-2); font-size: 12.5px; margin: 0 0 6px; }
+  .scope-meta {
+    display: flex; flex-wrap: wrap; gap: 5px 18px;
+    margin: 6px 0 7px; padding: 7px 10px;
+    background: var(--page); border: 1px solid var(--grid);
+    border-left: 3px solid var(--axis); border-radius: 7px;
+    color: var(--ink-2); font-size: 11.5px; line-height: 1.55;
+  }
+  .scope-meta .scope-item { display: flex; gap: 7px; flex: 1 1 460px; min-width: 0; }
+  .scope-meta b {
+    flex: none; align-self: flex-start; color: var(--ink); font-weight: 600;
+    font-size: 11px; line-height: 1.6; white-space: nowrap;
+    border-right: 1px solid var(--axis); padding-right: 7px;
+  }
   .chart-wrap { position: relative; margin: 3px 0 2px; }
   .chart-wrap svg { display: block; width: 100%; height: auto; }
   .legend {
@@ -199,7 +182,6 @@
     gap: 18px; align-items: start;
   }
   .split > div { min-width: 0; }
-  .rank-split { grid-template-columns: 1.05fr .95fr; }
   .quality {
     display: grid; grid-template-columns: repeat(3, 1fr);
     gap: 12px; margin-top: 8px;
@@ -218,17 +200,11 @@
   ul.notes { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 12px; }
   ul.notes li { margin: 4px 0; }
   @media (max-width: 900px) {
-    .hero { flex-direction: column; align-items: flex-start; }
-    .chips { justify-content: flex-start; }
-    .kpis { grid-template-columns: repeat(2, 1fr); }
-    .monitor { grid-template-columns: repeat(2, 1fr); }
     .split { grid-template-columns: 1fr; }
     .quality { grid-template-columns: 1fr; }
   }
   @media (max-width: 560px) {
     h1 { font-size: 24px; }
-    .kpis { grid-template-columns: 1fr; }
-    .monitor { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -239,67 +215,65 @@
   <div class="hero-copy">
     <p class="eyebrow">WAGEGO · RISK MONITORING</p>
     <h1>Vintage 监控看板</h1>
-    <p class="sub">按放款周看首期逾期率（FPD），并用模型分分档和复借期数拆分；除标注“金额”外，坏率均为笔数口径。</p>
+    <p class="sub">按放款周看首期逾期率（FPD），并按模型分分档拆分；新客视图另看全量戳额样本的模型分分布。除标注“金额”外，坏率均为笔数口径。</p>
   </div>
-  <div class="chips"><span class="chip">坏率口径 · 笔数</span><span class="chip">放款周 2026-08-24 ~ 2026-10-26</span><span class="chip">FPD15 最新可用周 2026-10-05（74% 成熟）</span><span class="chip">分数覆盖 99.99%</span></div>
 </header>
 
 
-<section class="kpis">
-  <div class="kpi">
-    <span class="label">整体 FPD15 · 坏率（笔数）</span>
-    <b>7.82%</b>
-    <span class="sub">n=17,435 · 坏率（金额）6.84%</span>
-  </div>
-  <div class="kpi">
-    <span class="label">最新可用周（未确认）· 坏率（笔数）</span>
-    <b>7.27%</b>
-    <span class="sub">2026-10-05 · 74% 成熟 · 仅参考 · 较前周 +0.46pp</span>
-  </div>
-  <div class="kpi">
-    <span class="label">新客 / 老客 FPD15 · 坏率（笔数）</span>
-    <b class="split">10.04% / 5.08%</b>
-    <span class="sub">gap +4.96pp · n=9,626 / 7,809 · 金额 8.87% / 4.54%</span>
-  </div>
-  <div class="kpi">
-    <span class="label">模型 5档 / 1档 · 坏率（笔数）</span>
-    <b>4.96x</b>
-    <span class="sub">5档 20.10% · 1档 4.05% · 覆盖 99.99%</span>
-  </div>
+<section class="scope-bar" aria-label="客群切换">
+  <span class="scope-label">客群</span>
+  <div class="scope-btns" role="group" aria-label="切换整体、新客、老客"><button type="button" class="scope-btn on" data-segment="ALL" aria-pressed="true" style="--seg-color:var(--ink-2)">整体</button><button type="button" class="scope-btn" data-segment="New" aria-pressed="false" style="--seg-color:var(--c1)">新客</button><button type="button" class="scope-btn" data-segment="Old" aria-pressed="false" style="--seg-color:var(--c2)">老客</button></div>
+  <span class="scope-hint" id="scopeHint">全部客群 · FPD15 成熟样本 17,435 笔</span>
 </section>
 
-<section class="monitor-wrap" aria-label="监控状态">
-  <div class="monitor" id="monitorStrip"></div>
-  <p class="note m-note">监控口径：确认周 = 放款周完整且 FPD15 成熟度 ≥90%；基线 = 其前最多 4 个确认周（样本 ≥500）均值；状态按 ±1σ / ±2σ 提示（σ 下限 0.5pp），只用于发现异常波动，不替代业务阈值。放款量为当周 FPD3 成熟样本数；新鲜度按生成时间计算。</p>
-</section>
 
 <section class="card">
   <h2>整体与分客群：FPD 曲线<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span></h2>
-  <p class="desc">横轴为观察窗口，纵轴为笔数坏率（坏样本笔数 / 成熟样本笔数）；FPD30 为空心点。金额坏率见下方总览表。</p>
+  
+<div class="scope-meta">
+  <span class="scope-item"><b>时间口径</b><span>放款周（周一）2026-07-20 ~ 2026-10-26；按观察窗口 FPD3–FPD30 汇总，不按时间滚动。</span></span>
+  <span class="scope-item"><b>样本口径</b><span>放款样本；各窗口独立取成熟 cohort（已放款、观察日有借据快照、due+N &lt; obs_dt），未成熟不计入分母；FPD30 成熟度不足仅作参考。除标注“金额”外为笔数口径；金额坏率仅总览表，分母为成熟样本放款本金。样本随顶部客群切换。</span></span>
+</div>
+
+  <p class="desc">横轴为观察窗口，纵轴为笔数坏率（坏样本笔数 / 成熟样本笔数）；FPD30 为空心点。整体视图对比三客群；新客 / 老客视图为所选客群（实线）对比整体（虚线）。金额坏率见总览表。</p>
   <div class="chart-wrap">
     <svg id="fpdCurve" viewBox="0 0 1040 300" role="img" aria-label="整体、新客、老客在各 FPD 窗口的笔数坏率"></svg>
     <div class="tip" id="fpdTip"></div>
   </div>
-  <div class="legend">
-    <span><i style="background:var(--ink-2)"></i>整体</span>
-    <span><i style="background:var(--c1)"></i>新客</span>
-    <span><i style="background:var(--c2)"></i>老客</span>
-  </div>
-  
+  <div data-seg-panel="ALL"><div class="legend"><span><i style="background:var(--ink-2)"></i>整体</span><span><i style="background:var(--c1)"></i>新客</span><span><i style="background:var(--c2)"></i>老客</span></div>
 <div class="table-wrap">
 <table>
   <thead><tr><th>观察窗口</th><th>成熟样本（笔）</th><th>坏样本（笔）</th><th>坏率（笔数·y_fpdN_ovd）</th><th>坏率（金额·未还本金）</th><th>较上一窗口（笔数）</th></tr></thead>
   <tbody><tr><td>FPD3</td><td class='num'>30,184</td><td class='num'>4,137</td><td class='num'>13.71%</td><td class='num'>12.25%</td><td class='num'>—</td></tr><tr><td>FPD7</td><td class='num'>24,077</td><td class='num'>2,634</td><td class='num'>10.94%</td><td class='num'>9.63%</td><td class='num'>−2.77pp</td></tr><tr><td>FPD14</td><td class='num'>17,798</td><td class='num'>1,480</td><td class='num'>8.32%</td><td class='num'>7.34%</td><td class='num'>−2.62pp</td></tr><tr><td>FPD15</td><td class='num'>17,435</td><td class='num'>1,363</td><td class='num'>7.82%</td><td class='num'>6.84%</td><td class='num'>−0.50pp</td></tr><tr><td>FPD30</td><td class='num'>7,291</td><td class='num'>481</td><td class='num'>6.60%</td><td class='num'>5.72%</td><td class='num'>−1.22pp</td></tr></tbody>
 </table>
 </div>
-
-  <p class="note">笔数口径：FPD15 整体 7.82%，新客 10.04% / 老客 5.08%。FPD30 为空心点：整体成熟样本仅为 FPD15 的 42%（新 47% / 老 35%），只作参考；共同 cohort 上 FPD15 笔数坏率 8.92% → FPD30 6.60%。</p>
+<p class="note">笔数口径：FPD15 整体 7.82%，新客 10.04% / 老客 5.08%。FPD30 为空心点：整体成熟样本仅为 FPD15 的 42%（新 47% / 老 35%），只作参考；共同 cohort 上 FPD15 笔数坏率 8.92% → FPD30 6.60%。</p></div><div data-seg-panel="New" hidden><div class="legend"><span><i style="background:var(--c1)"></i>新客</span><span><i class="dash" style="border-top-color:var(--ink-2)"></i>整体（参考）</span></div>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>观察窗口</th><th>成熟样本（笔）</th><th>坏样本（笔）</th><th>坏率（笔数·y_fpdN_ovd）</th><th>坏率（金额·未还本金）</th><th>较上一窗口（笔数）</th></tr></thead>
+  <tbody><tr><td>FPD3</td><td class='num'>14,232</td><td class='num'>2,360</td><td class='num'>16.58%</td><td class='num'>14.95%</td><td class='num'>—</td></tr><tr><td>FPD7</td><td class='num'>12,163</td><td class='num'>1,684</td><td class='num'>13.85%</td><td class='num'>12.36%</td><td class='num'>−2.73pp</td></tr><tr><td>FPD14</td><td class='num'>9,767</td><td class='num'>1,035</td><td class='num'>10.60%</td><td class='num'>—</td><td class='num'>−3.25pp</td></tr><tr><td>FPD15</td><td class='num'>9,626</td><td class='num'>966</td><td class='num'>10.04%</td><td class='num'>8.87%</td><td class='num'>−0.56pp</td></tr><tr><td>FPD30</td><td class='num'>4,539</td><td class='num'>375</td><td class='num'>8.26%</td><td class='num'>7.27%</td><td class='num'>−1.78pp</td></tr></tbody>
+</table>
+</div>
+<p class="note">新客 FPD15 10.04%，整体 7.82%（gap +2.22pp）。FPD30 为空心点：新客成熟样本仅为 FPD15 的 47%，只作参考；FPD14 金额坏率仅整体口径同步。共同 cohort（整体）上 FPD15 笔数坏率 8.92% → FPD30 6.60%。</p></div><div data-seg-panel="Old" hidden><div class="legend"><span><i style="background:var(--c2)"></i>老客</span><span><i class="dash" style="border-top-color:var(--ink-2)"></i>整体（参考）</span></div>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>观察窗口</th><th>成熟样本（笔）</th><th>坏样本（笔）</th><th>坏率（笔数·y_fpdN_ovd）</th><th>坏率（金额·未还本金）</th><th>较上一窗口（笔数）</th></tr></thead>
+  <tbody><tr><td>FPD3</td><td class='num'>15,952</td><td class='num'>1,777</td><td class='num'>11.14%</td><td class='num'>10.09%</td><td class='num'>—</td></tr><tr><td>FPD7</td><td class='num'>11,914</td><td class='num'>950</td><td class='num'>7.97%</td><td class='num'>7.10%</td><td class='num'>−3.17pp</td></tr><tr><td>FPD14</td><td class='num'>8,031</td><td class='num'>445</td><td class='num'>5.54%</td><td class='num'>—</td><td class='num'>−2.43pp</td></tr><tr><td>FPD15</td><td class='num'>7,809</td><td class='num'>397</td><td class='num'>5.08%</td><td class='num'>4.54%</td><td class='num'>−0.46pp</td></tr><tr><td>FPD30</td><td class='num'>2,752</td><td class='num'>106</td><td class='num'>3.85%</td><td class='num'>3.28%</td><td class='num'>−1.23pp</td></tr></tbody>
+</table>
+</div>
+<p class="note">老客 FPD15 5.08%，整体 7.82%（gap −2.74pp）。FPD30 为空心点：老客成熟样本仅为 FPD15 的 35%，只作参考；FPD14 金额坏率仅整体口径同步。共同 cohort（整体）上 FPD15 笔数坏率 8.92% → FPD30 6.60%。</p></div>
 </section>
 
 
 <section class="card">
   <h2>按放款周：FPD15 与早期信号<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span></h2>
-  <p class="desc">默认笔数口径：FPD15 是确认指标，FPD7 / FPD3 是早期信号；切换到金额口径可看 FPD15 未还本金坏率。空心点表示成熟度不足或周未完整；阴影为 FPD15 笔数坏率的 95% 置信区间；浅灰柱为当周放款量。</p>
+  
+<div class="scope-meta">
+  <span class="scope-item"><b>时间口径</b><span>放款周（周一）2026-08-24 ~ 2026-10-26；2026-07-20~2026-08-17 的 4 周样本仅 6–12 笔，已排除；最新周可能未完整。</span></span>
+  <span class="scope-item"><b>样本口径</b><span>每个放款周的全部放款样本（随顶部客群切换）；FPD15 为确认指标，FPD7 / FPD3 为早期信号；各窗口独立按成熟度纳入，成熟度 &lt;70% 不展示、70–90% 标 *、未完整周标 †；金额口径的分子为坏样本 due+N 未还本金。FPD14 列仅整体视图展示。</span></span>
+</div>
+
+  <p class="desc">默认笔数口径：FPD15 是确认指标，FPD7 / FPD3 是早期信号；切换到金额口径可同时看 FPD3 / FPD7 / FPD15 的未还本金坏率。空心点表示成熟度不足或周未完整；阴影为 FPD15 笔数坏率的 95% 置信区间；浅灰柱为当周放款量。图表与表格随顶部客群切换。</p>
   <div class="chart-head">
     <div class="seg" role="group" aria-label="周度图口径">
       <button type="button" class="on" data-week-mode="count" aria-pressed="true">笔数</button>
@@ -307,46 +281,61 @@
     </div>
   </div>
   <div class="chart-wrap">
-    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15、FPD7 与 FPD3 坏率，含 FPD15 置信区间、放款量和金额口径切换"></svg>
+    <svg id="weekChart" viewBox="0 0 1040 300" role="img" aria-label="各放款周的 FPD15、FPD7 与 FPD3 笔数及金额坏率，含 FPD15 置信区间、放款量和金额口径切换"></svg>
     <div class="tip" id="weekTip"></div>
   </div>
-  <div class="legend" id="weekLegendCount">
+  <div class="legend week-legend-count">
     <span><i style="background:var(--c1)"></i>FPD15</span>
     <span><i class="band" style="background:var(--c1)"></i>FPD15 95% CI</span>
     <span><i class="dash" style="border-top-color:var(--c3)"></i>FPD7 早期信号</span>
     <span><i class="dash"></i>FPD3 早期信号</span>
     <span><i class="bar" style="background:var(--grid)"></i>放款量（FPD3 样本）</span>
   </div>
-  <div class="legend" id="weekLegendAmount" hidden>
+  <div class="legend week-legend-amount" hidden>
     <span><i style="background:var(--c1)"></i>FPD15 金额坏率</span>
+    <span><i class="dash" style="border-top-color:var(--c3)"></i>FPD7 金额坏率</span>
+    <span><i class="dash"></i>FPD3 金额坏率</span>
     <span><i class="bar" style="background:var(--grid)"></i>放款量（FPD3 样本）</span>
   </div>
-  
+  <div data-seg-panel="ALL">
 <div class="table-wrap">
 <table>
   <thead><tr><th>放款周</th><th>FPD15 成熟样本</th><th>FPD15 成熟度</th><th>FPD3</th><th>FPD7</th><th>FPD14</th><th>FPD15</th><th>FPD15 金额</th><th>FPD30</th></tr></thead>
-  <tbody><tr><td>2026-08-24</td><td class='num'>95</td><td class='num'>100%</td><td class="num">13.68%</td><td class="num">11.58%</td><td class="num">9.47%</td><td class="num">9.47%</td><td class="num">8.36%</td><td class="num">5.26%</td></tr><tr><td>2026-08-31</td><td class='num'>694</td><td class='num'>100%</td><td class="num">16.71%</td><td class="num">13.83%</td><td class="num">11.24%</td><td class="num">11.10%</td><td class="num">9.88%</td><td class="num">9.09%</td></tr><tr><td>2026-09-07</td><td class='num'>1,501</td><td class='num'>100%</td><td class="num">14.52%</td><td class="num">12.06%</td><td class="num">9.06%</td><td class="num">8.66%</td><td class="num">7.46%</td><td class="num">6.69%</td></tr><tr><td>2026-09-14</td><td class='num'>2,264</td><td class='num'>100%</td><td class="num">14.52%</td><td class="num">11.87%</td><td class="num">8.91%</td><td class="num">8.13%</td><td class="num">6.98%</td><td class="num">6.20%</td></tr><tr><td>2026-09-21</td><td class='num'>3,350</td><td class='num'>100%</td><td class="num">14.24%</td><td class="num">11.80%</td><td class="num">8.84%</td><td class="num">8.15%</td><td class="num">7.22%</td><td class="num dim" title="成熟度 70%，低于 70%，不展示">—</td></tr><tr><td>2026-09-28</td><td class='num'>4,685</td><td class='num'>99%</td><td class="num">13.39%</td><td class="num">10.43%</td><td class="num">7.26%</td><td class="num">6.81%</td><td class="num">6.02%</td><td class="num dim" title="成熟度 9%，低于 70%，不展示">—</td></tr><tr><td>2026-10-05</td><td class='num'>4,140</td><td class='num soft'>74%</td><td class="num">12.33%</td><td class="num">9.89%</td><td class="num soft" title="成熟度 75%，仅参考">7.73%<sup>*</sup></td><td class="num soft" title="成熟度 74%，仅参考">7.27%<sup>*</sup></td><td class="num soft" title="成熟度 74%，仅参考">6.41%<sup>*</sup></td><td class="num dim">—</td></tr><tr><td>2026-10-12</td><td class='num'>670</td><td class='num dim'>11%</td><td class="num">13.46%</td><td class="num soft" title="成熟度 76%，仅参考">10.61%<sup>*</sup></td><td class="num dim" title="成熟度 16%，低于 70%，不展示">—</td><td class="num dim" title="成熟度 11%，低于 70%，不展示">—</td><td class="num dim" title="成熟度 11%，低于 70%，不展示">—</td><td class="num dim">—</td></tr><tr><td>2026-10-19</td><td class='num'>—</td><td class='num'>—</td><td class="num">14.16%</td><td class="num dim" title="成熟度 21%，低于 70%，不展示">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr><tr><td>2026-10-26</td><td class='num'>—</td><td class='num'>—</td><td class="num soft" title="放款周未完整；FPD3 样本 632">15.35%<sup>†</sup></td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr></tbody>
+  <tbody><tr><td>2026-08-24</td><td class='num'>95</td><td class='num'>100%</td><td class="num">13.68%</td><td class="num">11.58%</td><td class="num">9.47%</td><td class="num">9.47%</td><td class="num">8.36%</td><td class="num">5.26%</td></tr><tr><td>2026-08-31</td><td class='num'>694</td><td class='num'>100%</td><td class="num">16.71%</td><td class="num">13.83%</td><td class="num">11.24%</td><td class="num">11.10%</td><td class="num">9.88%</td><td class="num">9.09%</td></tr><tr><td>2026-09-07</td><td class='num'>1,501</td><td class='num'>100%</td><td class="num">14.52%</td><td class="num">12.06%</td><td class="num">9.06%</td><td class="num">8.66%</td><td class="num">7.46%</td><td class="num">6.69%</td></tr><tr><td>2026-09-14</td><td class='num'>2,264</td><td class='num'>100%</td><td class="num">14.52%</td><td class="num">11.87%</td><td class="num">8.91%</td><td class="num">8.13%</td><td class="num">6.98%</td><td class="num">6.20%</td></tr><tr><td>2026-09-21</td><td class='num'>3,350</td><td class='num'>100%</td><td class="num">14.24%</td><td class="num">11.80%</td><td class="num">8.84%</td><td class="num">8.15%</td><td class="num">7.22%</td><td class="num dim" title="成熟度 70%，低于 70%，不展示">—</td></tr><tr><td>2026-09-28</td><td class='num'>4,685</td><td class='num'>99%</td><td class="num">13.39%</td><td class="num">10.43%</td><td class="num">7.26%</td><td class="num">6.81%</td><td class="num">6.02%</td><td class="num dim" title="成熟度 9%，低于 70%，不展示">—</td></tr><tr><td>2026-10-05</td><td class='num'>4,140</td><td class='num soft'>74%</td><td class="num">12.33%</td><td class="num">9.89%</td><td class="num soft" title="成熟度 75%，仅参考">7.73%<sup>*</sup></td><td class="num soft" title="成熟度 74%，仅参考">7.27%<sup>*</sup></td><td class="num soft" title="成熟度 74%，仅参考">6.41%<sup>*</sup></td><td class="num dim">—</td></tr><tr><td>2026-10-12</td><td class='num'>670</td><td class='num dim'>11%</td><td class="num">13.46%</td><td class="num soft" title="成熟度 76%，仅参考">10.61%<sup>*</sup></td><td class="num dim">—</td><td class="num dim" title="成熟度 11%，低于 70%，不展示">—</td><td class="num dim" title="成熟度 11%，低于 70%，不展示">—</td><td class="num dim">—</td></tr><tr><td>2026-10-19</td><td class='num'>—</td><td class='num'>—</td><td class="num">14.16%</td><td class="num dim" title="成熟度 21%，低于 70%，不展示">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr><tr><td>2026-10-26</td><td class='num'>—</td><td class='num'>—</td><td class="num soft" title="放款周未完整；FPD3 样本 632">15.35%<sup>†</sup></td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr></tbody>
 </table>
 </div>
-
-  <p class="note">除标注“金额”外，坏率均为笔数口径；金额坏率 = 坏样本未还本金 / 全部成熟样本放款本金。成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示（FPD30 采用 90% 阈值）。≥90% 成熟的最后一周：FPD15 2026-09-28（6.81%）；2026-10-05 为 74% 成熟（7.27%*）。2026-10-12 的 FPD15 9.40%（11% 成熟）未纳入；2026-10-26 周 FPD3 15.35%†（FPD3 样本 632 vs 前周 4,971），仅参考。2026-07-20~2026-08-17 的 4 周样本仅 6–12 笔，已排除。</p>
+<p class="note">整体口径。除标注“金额”外，坏率均为笔数口径；金额坏率 = 坏样本未还本金 / 全部成熟样本放款本金。成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示（FPD30 采用 90% 阈值）。≥90% 成熟的最后一周：FPD15 2026-09-28（6.81%）；2026-10-05 为 74% 成熟（7.27%*）。2026-10-12 的 FPD15 9.40%（11% 成熟）未纳入；2026-10-26 周 FPD3 15.35%†（FPD3 样本 632 vs 前周 4,971），仅参考。2026-07-20~2026-08-17 的 4 周样本仅 6–12 笔，已排除。</p></div><div data-seg-panel="New" hidden>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>放款周</th><th>FPD15 成熟样本</th><th>FPD15 成熟度</th><th>FPD3</th><th>FPD7</th><th>FPD15</th><th>FPD15 金额</th><th>FPD30</th></tr></thead>
+  <tbody><tr><td>2026-08-24</td><td class='num'>85</td><td class='num'>100%</td><td class="num">12.94%</td><td class="num">11.76%</td><td class="num">9.41%</td><td class="num">8.40%</td><td class="num">5.88%</td></tr><tr><td>2026-08-31</td><td class='num'>601</td><td class='num'>100%</td><td class="num">17.14%</td><td class="num">14.31%</td><td class="num">11.81%</td><td class="num">10.44%</td><td class="num">9.50%</td></tr><tr><td>2026-09-07</td><td class='num'>1,010</td><td class='num'>100%</td><td class="num">16.83%</td><td class="num">14.26%</td><td class="num">10.50%</td><td class="num">9.23%</td><td class="num">8.35%</td></tr><tr><td>2026-09-14</td><td class='num'>1,271</td><td class='num'>100%</td><td class="num">16.84%</td><td class="num">14.16%</td><td class="num">9.91%</td><td class="num">8.68%</td><td class="num">7.41%</td></tr><tr><td>2026-09-21</td><td class='num'>1,793</td><td class='num'>100%</td><td class="num">18.02%</td><td class="num">15.41%</td><td class="num">10.82%</td><td class="num">9.54%</td><td class="num soft" title="成熟度 74%，仅参考">8.01%<sup>*</sup></td></tr><tr><td>2026-09-28</td><td class='num'>2,472</td><td class='num'>99%</td><td class="num">15.76%</td><td class="num">13.05%</td><td class="num">8.78%</td><td class="num">7.88%</td><td class="num dim" title="成熟度 11%，低于 70%，不展示">—</td></tr><tr><td>2026-10-05</td><td class='num'>2,014</td><td class='num soft'>83%</td><td class="num">15.82%</td><td class="num">12.93%</td><td class="num soft" title="成熟度 83%，仅参考">9.83%<sup>*</sup></td><td class="num soft" title="成熟度 83%，仅参考">8.60%<sup>*</sup></td><td class="num dim">—</td></tr><tr><td>2026-10-12</td><td class='num'>361</td><td class='num dim'>15%</td><td class="num">17.12%</td><td class="num soft" title="成熟度 84%，仅参考">13.79%<sup>*</sup></td><td class="num dim" title="成熟度 15%，低于 70%，不展示">—</td><td class="num dim" title="成熟度 15%，低于 70%，不展示">—</td><td class="num dim">—</td></tr><tr><td>2026-10-19</td><td class='num'>—</td><td class='num'>—</td><td class="num">16.59%</td><td class="num dim" title="成熟度 27%，低于 70%，不展示">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr><tr><td>2026-10-26</td><td class='num'>—</td><td class='num'>—</td><td class="num soft" title="放款周未完整；FPD3 样本 306">14.38%<sup>†</sup></td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr></tbody>
+</table>
+</div>
+<p class="note">新客口径。除标注“金额”外，坏率均为笔数口径；金额坏率 = 坏样本未还本金 / 全部成熟样本放款本金。成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示（FPD30 采用 90% 阈值）。≥90% 成熟的最后一周：FPD15 2026-09-28（8.78%）；2026-10-05 为 83% 成熟（9.83%*）。2026-10-12 的 FPD15 11.91%（15% 成熟）未纳入；2026-10-26 周 FPD3 14.38%†（FPD3 样本 306 vs 前周 1,839），仅参考。2026-07-20~2026-08-17 的 4 周样本仅 6–12 笔，已排除。新客 / 老客视图不展示 FPD14 列：分客群 FPD14 周度值未同步。</p></div><div data-seg-panel="Old" hidden>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>放款周</th><th>FPD15 成熟样本</th><th>FPD15 成熟度</th><th>FPD3</th><th>FPD7</th><th>FPD15</th><th>FPD15 金额</th><th>FPD30</th></tr></thead>
+  <tbody><tr><td>2026-08-24</td><td class='num'>10</td><td class='num'>100%</td><td class="num">20.00%</td><td class="num">10.00%</td><td class="num">10.00%</td><td class="num">8.11%</td><td class="num">0.00%</td></tr><tr><td>2026-08-31</td><td class='num'>93</td><td class='num'>100%</td><td class="num">13.98%</td><td class="num">10.75%</td><td class="num">6.45%</td><td class="num">6.02%</td><td class="num">6.45%</td></tr><tr><td>2026-09-07</td><td class='num'>491</td><td class='num'>100%</td><td class="num">9.78%</td><td class="num">7.54%</td><td class="num">4.89%</td><td class="num">3.97%</td><td class="num">3.27%</td></tr><tr><td>2026-09-14</td><td class='num'>993</td><td class='num'>100%</td><td class="num">11.56%</td><td class="num">8.94%</td><td class="num">5.84%</td><td class="num">4.91%</td><td class="num">4.68%</td></tr><tr><td>2026-09-21</td><td class='num'>1,557</td><td class='num'>99%</td><td class="num">9.90%</td><td class="num">7.67%</td><td class="num">5.07%</td><td class="num">4.84%</td><td class="num dim" title="成熟度 65%，低于 70%，不展示">—</td></tr><tr><td>2026-09-28</td><td class='num'>2,213</td><td class='num'>99%</td><td class="num">10.75%</td><td class="num">7.49%</td><td class="num">4.61%</td><td class="num">4.15%</td><td class="num dim" title="成熟度 7%，低于 70%，不展示">—</td></tr><tr><td>2026-10-05</td><td class='num'>2,126</td><td class='num dim'>67%</td><td class="num">9.66%</td><td class="num">7.56%</td><td class="num dim" title="成熟度 67%，低于 70%，不展示">—</td><td class="num dim" title="成熟度 67%，低于 70%，不展示">—</td><td class="num dim">—</td></tr><tr><td>2026-10-12</td><td class='num'>309</td><td class='num dim'>8%</td><td class="num">11.23%</td><td class="num soft" title="成熟度 72%，仅参考">8.35%<sup>*</sup></td><td class="num dim" title="成熟度 8%，低于 70%，不展示">—</td><td class="num dim" title="成熟度 8%，低于 70%，不展示">—</td><td class="num dim">—</td></tr><tr><td>2026-10-19</td><td class='num'>—</td><td class='num'>—</td><td class="num">12.74%</td><td class="num dim" title="成熟度 18%，低于 70%，不展示">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr><tr><td>2026-10-26</td><td class='num'>—</td><td class='num'>—</td><td class="num soft" title="放款周未完整；FPD3 样本 326">16.26%<sup>†</sup></td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr></tbody>
+</table>
+</div>
+<p class="note">老客口径。除标注“金额”外，坏率均为笔数口径；金额坏率 = 坏样本未还本金 / 全部成熟样本放款本金。成熟度 = 该窗口成熟样本 / 当周 FPD3 样本。星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示（FPD30 采用 90% 阈值）。≥90% 成熟的最后一周：FPD15 2026-09-28（4.61%）；2026-09-28 为 99% 成熟（4.61%）。2026-10-05 的 FPD15 4.84%（67% 成熟）未纳入；2026-10-26 周 FPD3 16.26%†（FPD3 样本 326 vs 前周 3,132），仅参考。2026-07-20~2026-08-17 的 4 周样本仅 6–12 笔，已排除。新客 / 老客视图不展示 FPD14 列：分客群 FPD14 周度值未同步。</p></div>
 </section>
 
 
 <section class="card">
   <h2>模型分分档<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span></h2>
-  <p class="desc">1档最低分 → 5档最高分（按新客风险 1.0 固定阈值切分）；整体、新客、老客的 FPD15 笔数坏率（y_fpd15_ovd / y_fpd15_obs）。</p>
+  
+<div class="scope-meta">
+  <span class="scope-item"><b>时间口径</b><span>放款周（周一）2026-07-20 ~ 2026-10-26；分档汇总为全期，分档×周表为 2026-09-07 ~ 2026-10-12。</span></span>
+  <span class="scope-item"><b>样本口径</b><span>FPD15 成熟且有模型分的放款样本（整体覆盖 99.99%）；按新客风险 1.0 固定阈值分 5 档，缺分不纳入分档；周表每档样本 ≥50 的周才纳入（末周保留），成熟度不足的周灰显或标 *；样本随顶部客群切换。</span></span>
+</div>
+
+  <p class="desc">1档最低分 → 5档最高分（按新客风险 1.0 固定阈值切分）；整体视图对比三客群，新客 / 老客视图为所选客群（实线）对比整体（虚线）。</p>
   <div class="chart-wrap">
     <svg id="scoreChart" viewBox="0 0 1040 300" role="img" aria-label="模型分分档的整体、新客、老客 FPD15 笔数坏率"></svg>
     <div class="tip" id="scoreTip"></div>
   </div>
-  <div class="legend">
-    <span><i style="background:var(--ink-2)"></i>整体</span>
-    <span><i style="background:var(--c1)"></i>新客</span>
-    <span><i style="background:var(--c2)"></i>老客</span>
-  </div>
-  <div class="split">
-    
+  <div data-seg-panel="ALL"><div class="legend"><span><i style="background:var(--ink-2)"></i>整体</span><span><i style="background:var(--c1)"></i>新客</span><span><i style="background:var(--c2)"></i>老客</span></div><div class="split">
 <div class="table-wrap">
 <div class="subhead">分档汇总</div>
 <table class="compact">
@@ -355,7 +344,6 @@
 </table>
 </div>
 
-    
 <div class="table-wrap">
 <div class="subhead">分档 × 放款周（FPD15 笔数坏率）· 末三行为排序与漂移检查</div>
 <table class="compact">
@@ -363,89 +351,93 @@
   <tbody><tr><td>1档</td><td class="num">4.94%</td><td class="num">3.54%</td><td class="num">4.74%</td><td class="num">3.70%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">3.02%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 11%，仅参考">3.68%</td></tr><tr><td>2档</td><td class="num">6.58%</td><td class="num">8.02%</td><td class="num">6.84%</td><td class="num">6.20%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">6.23%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 11%，仅参考">8.25%</td></tr><tr><td>3档</td><td class="num">10.65%</td><td class="num">8.66%</td><td class="num">9.27%</td><td class="num">7.68%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">9.30%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 11%，仅参考">11.28%</td></tr><tr><td>4档</td><td class="num">9.94%</td><td class="num">9.33%</td><td class="num">11.23%</td><td class="num">9.45%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">10.12%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 11%，仅参考">16.28%</td></tr><tr><td>5档</td><td class="num">21.05%</td><td class="num">27.08%</td><td class="num">19.75%</td><td class="num">16.44%</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">16.67%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 11%，仅参考">15.63%</td></tr><tr><td>5档/1档</td><td class="num">4.26x</td><td class="num">7.65x</td><td class="num">4.17x</td><td class="num">4.44x</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">5.52x<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 11%，仅参考">4.25x</td></tr><tr><td>排序</td><td class="num">非单调</td><td class="num">单调</td><td class="num">单调</td><td class="num">单调</td><td class="num soft" title="FPD15 成熟度 74%，仅参考">单调<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 11%，仅参考">非单调</td></tr><tr><td>PSI（5档）</td><td class="num dim">—</td><td class="num" title="5档 PSI；<0.10 稳定，0.10–0.25 关注，≥0.25 预警">0.00</td><td class="num" title="5档 PSI；<0.10 稳定，0.10–0.25 关注，≥0.25 预警">0.00</td><td class="num" title="5档 PSI；<0.10 稳定，0.10–0.25 关注，≥0.25 预警">0.00</td><td class="num dim">—</td><td class="num dim">—</td></tr></tbody>
 </table>
 </div>
+</div><p class="note">坏率均为 FPD15 笔数口径。1档最低分，5档最高分；固定阈值下各档样本占比不等（1档 24%、5档 5%）。整体 5档/1档 = 4.96x，新客 4.95x，老客 4.41x。整体、新客、老客均基本单调。覆盖 99.99%（17,434/17,435，整体口径），缺分 1。分档×周表从 09-07 起，更早周每档样本不足，未纳入；10-05 标 *（70–90% 成熟）；10-12（11% 成熟） 灰显，仅参考。1档分数下限 -1.0，疑似缺分哨兵；分档按原查询结果展示，未单独剔除。分档×周表末三行为周度 5档/1档 倍数、排序单调性和 5 档 PSI。倍数明显低于全期或出现非单调时关注；PSI 基线为前最多 4 个确认周，仅对确认周计算（放款周完整且 FPD15 成熟度 ≥90%）；<0.10 稳定，0.10–0.25 关注，≥0.25 预警（5 档粒度为近似）。</p></div><div data-seg-panel="New" hidden><div class="legend"><span><i style="background:var(--c1)"></i>新客</span><span><i class="dash" style="border-top-color:var(--ink-2)"></i>整体（参考）</span></div><div class="split">
+<div class="table-wrap">
+<div class="subhead">分档汇总</div>
+<table class="compact">
+  <thead><tr><th>分档</th><th>分数区间</th><th>新客（笔数）</th><th>整体（笔数）</th><th>新客 − 整体</th></tr></thead>
+  <tbody><tr><td>1档</td><td class='range'>≤ 0.062086</td><td class='num'><b>5.11%</b><span class='n'>n=2,369</span></td><td class='num'><b>4.05%</b><span class='n'>n=4,252</span></td><td class='num'>+1.06pp</td></tr><tr><td>2档</td><td class='range'>0.062086–0.091284</td><td class='num'><b>8.63%</b><span class='n'>n=2,886</span></td><td class='num'><b>6.80%</b><span class='n'>n=5,220</span></td><td class='num'>+1.83pp</td></tr><tr><td>3档</td><td class='range'>0.091284–0.128392</td><td class='num'><b>11.85%</b><span class='n'>n=2,903</span></td><td class='num'><b>9.00%</b><span class='n'>n=5,154</span></td><td class='num'>+2.85pp</td></tr><tr><td>4档</td><td class='range'>0.128392–0.188973</td><td class='num'><b>13.00%</b><span class='n'>n=969</span></td><td class='num'><b>10.44%</b><span class='n'>n=1,992</span></td><td class='num'>+2.56pp</td></tr><tr><td>5档</td><td class='range'>> 0.188973</td><td class='num'><b>25.30%</b><span class='n'>n=498</span></td><td class='num'><b>20.10%</b><span class='n'>n=816</span></td><td class='num'>+5.20pp</td></tr></tbody>
+</table>
+</div>
 
-  </div>
-  <p class="note">坏率均为 FPD15 笔数口径。1档最低分，5档最高分；固定阈值下各档样本占比不等（1档 24%、5档 5%）。整体 5档/1档 = 4.96x，新客 4.95x，老客 4.41x。整体、新客、老客均基本单调。覆盖 99.99%（17,434/17,435），缺分 1。分档×周表从 09-07 起，更早周每档样本不足，未纳入；10-05 标 *（70–90% 成熟）；10-12（11% 成熟） 灰显，仅参考。1档分数下限 -1.0，疑似缺分哨兵；分档按原查询结果展示，未单独剔除。分档×周表末三行为周度 5档/1档 倍数、排序单调性和 5 档 PSI。倍数明显低于全期或出现非单调时关注；PSI 基线为前最多 4 个确认周，仅对确认周计算（放款周完整且 FPD15 成熟度 ≥90%）；<0.10 稳定，0.10–0.25 关注，≥0.25 预警（5 档粒度为近似）。</p>
+<div class="table-wrap">
+<div class="subhead">分档 × 放款周（FPD15 笔数坏率）· 末三行为排序与漂移检查</div>
+<table class="compact">
+  <thead><tr><th>分档</th><th>09-07</th><th>09-14</th><th>09-21</th><th>09-28</th><th>10-05</th><th>10-12</th></tr></thead>
+  <tbody><tr><td>1档</td><td class="num">6.79%</td><td class="num">4.14%</td><td class="num">6.11%</td><td class="num">4.58%</td><td class="num soft" title="FPD15 成熟度 83%，仅参考">3.90%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 15%，仅参考">6.52%</td></tr><tr><td>2档</td><td class="num">7.64%</td><td class="num">11.20%</td><td class="num">8.96%</td><td class="num">7.34%</td><td class="num soft" title="FPD15 成熟度 83%，仅参考">8.39%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 15%，仅参考">8.74%</td></tr><tr><td>3档</td><td class="num">12.61%</td><td class="num">10.10%</td><td class="num">13.22%</td><td class="num">11.10%</td><td class="num soft" title="FPD15 成熟度 83%，仅参考">12.24%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 15%，仅参考">14.02%</td></tr><tr><td>4档</td><td class="num">11.61%</td><td class="num">9.45%</td><td class="num">15.00%</td><td class="num">10.48%</td><td class="num soft" title="FPD15 成熟度 83%，仅参考">15.89%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 15%，仅参考">19.51%</td></tr><tr><td>5档</td><td class="num">25.00%</td><td class="num">29.85%</td><td class="num">24.18%</td><td class="num">21.71%</td><td class="num soft" title="FPD15 成熟度 83%，仅参考">20.79%<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 15%，仅参考">27.78%</td></tr><tr><td>5档/1档</td><td class="num">3.68x</td><td class="num">7.21x</td><td class="num">3.96x</td><td class="num">4.74x</td><td class="num soft" title="FPD15 成熟度 83%，仅参考">5.33x<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 15%，仅参考">4.26x</td></tr><tr><td>排序</td><td class="num">非单调</td><td class="num">非单调</td><td class="num">单调</td><td class="num">非单调</td><td class="num soft" title="FPD15 成熟度 83%，仅参考">单调<sup>*</sup></td><td class="num dim" title="FPD15 成熟度 15%，仅参考">单调</td></tr><tr><td>PSI（5档）</td><td class="num dim">—</td><td class="num" title="5档 PSI；<0.10 稳定，0.10–0.25 关注，≥0.25 预警">0.01</td><td class="num" title="5档 PSI；<0.10 稳定，0.10–0.25 关注，≥0.25 预警">0.01</td><td class="num" title="5档 PSI；<0.10 稳定，0.10–0.25 关注，≥0.25 预警">0.00</td><td class="num dim">—</td><td class="num dim">—</td></tr></tbody>
+</table>
+</div>
+</div><p class="note">坏率均为 FPD15 笔数口径。1档最低分，5档最高分；固定阈值下各档样本占比不等（1档 25%、5档 5%）。新客 5档/1档 = 4.95x（整体 4.96x）。新客分档基本单调。覆盖 99.99%（17,434/17,435，整体口径），缺分 1。分档×周表从 09-07 起，更早周每档样本不足，未纳入；10-05 标 *（70–90% 成熟）；10-12（15% 成熟） 灰显，仅参考。1档分数下限 -1.0，疑似缺分哨兵；分档按原查询结果展示，未单独剔除。分档×周表末三行为周度 5档/1档 倍数、排序单调性和 5 档 PSI。倍数明显低于全期或出现非单调时关注；PSI 基线为前最多 4 个确认周，仅对确认周计算（放款周完整且 FPD15 成熟度 ≥90%）；<0.10 稳定，0.10–0.25 关注，≥0.25 预警（5 档粒度为近似）。</p></div><div data-seg-panel="Old" hidden><div class="legend"><span><i style="background:var(--c2)"></i>老客</span><span><i class="dash" style="border-top-color:var(--ink-2)"></i>整体（参考）</span></div><div class="split">
+<div class="table-wrap">
+<div class="subhead">分档汇总</div>
+<table class="compact">
+  <thead><tr><th>分档</th><th>分数区间</th><th>老客（笔数）</th><th>整体（笔数）</th><th>老客 − 整体</th></tr></thead>
+  <tbody><tr><td>1档</td><td class='range'>≤ 0.062086</td><td class='num'><b>2.71%</b><span class='n'>n=1,883</span></td><td class='num'><b>4.05%</b><span class='n'>n=4,252</span></td><td class='num'>−1.34pp</td></tr><tr><td>2档</td><td class='range'>0.062086–0.091284</td><td class='num'><b>4.54%</b><span class='n'>n=2,334</span></td><td class='num'><b>6.80%</b><span class='n'>n=5,220</span></td><td class='num'>−2.26pp</td></tr><tr><td>3档</td><td class='range'>0.091284–0.128392</td><td class='num'><b>5.33%</b><span class='n'>n=2,251</span></td><td class='num'><b>9.00%</b><span class='n'>n=5,154</span></td><td class='num'>−3.67pp</td></tr><tr><td>4档</td><td class='range'>0.128392–0.188973</td><td class='num'><b>8.02%</b><span class='n'>n=1,023</span></td><td class='num'><b>10.44%</b><span class='n'>n=1,992</span></td><td class='num'>−2.42pp</td></tr><tr><td>5档</td><td class='range'>> 0.188973</td><td class='num'><b>11.95%</b><span class='n'>n=318</span></td><td class='num'><b>20.10%</b><span class='n'>n=816</span></td><td class='num'>−8.15pp</td></tr></tbody>
+</table>
+</div>
+
+<div class="table-wrap">
+<div class="subhead">分档 × 放款周（FPD15 笔数坏率）· 末三行为排序与漂移检查</div>
+<table class="compact">
+  <thead><tr><th>分档</th><th>09-21</th><th>09-28</th><th>10-05</th><th>10-12</th></tr></thead>
+  <tbody><tr><td>1档</td><td class="num">3.01%</td><td class="num">2.75%</td><td class="num dim" title="FPD15 成熟度 67%，仅参考">2.17%</td><td class="num dim" title="FPD15 成熟度 8%，仅参考">0.00%</td></tr><tr><td>2档</td><td class="num">4.33%</td><td class="num">4.86%</td><td class="num dim" title="FPD15 成熟度 67%，仅参考">4.19%</td><td class="num dim" title="FPD15 成熟度 8%，仅参考">7.69%</td></tr><tr><td>3档</td><td class="num">4.49%</td><td class="num">3.89%</td><td class="num dim" title="FPD15 成熟度 67%，仅参考">6.37%</td><td class="num dim" title="FPD15 成熟度 8%，仅参考">7.95%</td></tr><tr><td>4档</td><td class="num">8.41%</td><td class="num">8.46%</td><td class="num dim" title="FPD15 成熟度 67%，仅参考">5.71%</td><td class="num dim" title="FPD15 成熟度 8%，仅参考">13.33%</td></tr><tr><td>5档</td><td class="num">14.08%</td><td class="num">8.89%</td><td class="num dim" title="FPD15 成熟度 67%，仅参考">12.09%</td><td class="num dim" title="FPD15 成熟度 8%，仅参考">0.00%</td></tr><tr><td>5档/1档</td><td class="num">4.68x</td><td class="num">3.23x</td><td class="num dim" title="FPD15 成熟度 67%，仅参考">5.57x</td><td class="num dim" title="FPD15 成熟度 8%，仅参考">—</td></tr><tr><td>排序</td><td class="num">单调</td><td class="num">非单调</td><td class="num dim" title="FPD15 成熟度 67%，仅参考">非单调</td><td class="num dim" title="FPD15 成熟度 8%，仅参考">非单调</td></tr><tr><td>PSI（5档）</td><td class="num dim">—</td><td class="num" title="5档 PSI；<0.10 稳定，0.10–0.25 关注，≥0.25 预警">0.01</td><td class="num dim">—</td><td class="num dim">—</td></tr></tbody>
+</table>
+</div>
+</div><p class="note">坏率均为 FPD15 笔数口径。1档最低分，5档最高分；固定阈值下各档样本占比不等（1档 24%、5档 4%）。老客 5档/1档 = 4.41x（整体 4.96x）。老客分档基本单调。覆盖 99.99%（17,434/17,435，整体口径），缺分 1。分档×周表从 09-21 起，更早周每档样本不足，未纳入；10-05（67% 成熟）、10-12（8% 成熟） 灰显，仅参考。1档分数下限 -1.0，疑似缺分哨兵；分档按原查询结果展示，未单独剔除。分档×周表末三行为周度 5档/1档 倍数、排序单调性和 5 档 PSI。倍数明显低于全期或出现非单调时关注；PSI 基线为前最多 4 个确认周，仅对确认周计算（放款周完整且 FPD15 成熟度 ≥90%）；<0.10 稳定，0.10–0.25 关注，≥0.25 预警（5 档粒度为近似）。</p></div>
 </section>
+
 
 
 <section class="card">
   <h2>周度排序力<span class="tag" title="AUC = P(坏样本分数高于好样本) + 0.5 × P(并列)；Gini = 2 × AUC − 1">模型监控</span></h2>
-  <p class="desc">按放款周看模型分对 FPD15 的排序能力；AUC 和 KS 越高越好。灰柱为当周 FPD15 成熟样本量。</p>
+  
+<div class="scope-meta">
+  <span class="scope-item"><b>时间口径</b><span>放款周（周一）2026-08-31 ~ 2026-10-12；按周计算排序力；PSI 仅使用确认周（放款周完整且 FPD15 成熟度 ≥90%）。</span></span>
+  <span class="scope-item"><b>样本口径</b><span>FPD15 成熟且有模型分的放款样本；AUC / Gini / KS 按周内分数排名计算，并列分数取平均秩；周成熟样本 &lt;200 的周不纳入；成熟度 70–90% 标 *、低于 70% 灰显；表格随顶部客群切换。</span></span>
+</div>
+
+  <p class="desc">按放款周看模型分对 FPD15 的排序能力；AUC 和 KS 越高越好。灰柱为当周 FPD15 成熟样本量。图表与表格随顶部客群切换。</p>
   <div class="chart-wrap">
     <svg id="aucChart" viewBox="0 0 1040 280" role="img" aria-label="周度 AUC 与 KS"></svg>
     <div class="tip" id="aucTip"></div>
   </div>
-  <div class="legend">
-    <span><i style="background:var(--c1)"></i>AUC</span>
-    <span><i class="dash" style="border-top-color:var(--c3)"></i>KS</span>
-    <span><i class="bar" style="background:var(--grid)"></i>FPD15 成熟样本</span>
-  </div>
-  <div class="table-wrap">
-  <table class="compact">
-    <thead><tr><th>放款周</th><th>成熟样本</th><th>AUC</th><th>Gini</th><th>KS</th><th>FPD15 坏率</th><th>成熟度</th></tr></thead>
-    <tbody><tr><td>2026-08-31</td><td class='num'>694</td><td class='num'>0.637</td><td class='num'>0.273</td><td class='num'>0.208</td><td class='num'>11.10%</td><td class='num'>100%</td></tr><tr><td>2026-09-07</td><td class='num'>1,501</td><td class='num'>0.623</td><td class='num'>0.246</td><td class='num'>0.201</td><td class='num'>8.66%</td><td class='num'>100%</td></tr><tr><td>2026-09-14</td><td class='num'>2,264</td><td class='num'>0.627</td><td class='num'>0.254</td><td class='num'>0.203</td><td class='num'>8.13%</td><td class='num'>100%</td></tr><tr><td>2026-09-21</td><td class='num'>3,350</td><td class='num'>0.622</td><td class='num'>0.244</td><td class='num'>0.189</td><td class='num'>8.15%</td><td class='num'>100%</td></tr><tr><td>2026-09-28</td><td class='num'>4,684</td><td class='num'>0.618</td><td class='num'>0.237</td><td class='num'>0.180</td><td class='num'>6.81%</td><td class='num'>99%</td></tr><tr><td>2026-10-05</td><td class='num'>4,140</td><td class='num soft'>0.641<sup>*</sup></td><td class='num soft'>0.282<sup>*</sup></td><td class='num soft'>0.219<sup>*</sup></td><td class='num'>7.27%</td><td class='num soft'>74%</td></tr><tr><td>2026-10-12</td><td class='num'>670</td><td class='num dim'>0.641</td><td class='num dim'>0.282</td><td class='num dim'>0.255</td><td class='num'>9.40%</td><td class='num dim'>11%</td></tr></tbody>
-  </table>
-  </div>
-  <p class="note">AUC / Gini / KS 基于 FPD15 成熟样本，按周内分数排名计算，AUC 对并列分数取平均秩；周样本少于 200 的周不纳入。星号 * 表示 70–90% 成熟，仅参考。最新确认周 2026-09-28 AUC 0.618（前 4 周均值 0.627），Gini 0.237，KS 0.180。最近一周 PSI 0.00（2026-09-28）。AUC 连续走低或 KS 明显收缩时，优先检查模型分分布和入催客群变化。</p>
-</section>
-
-<section class="card" id="monthlyCard" hidden>
-  <h2>月度排序力 · 新老客<span class="tag" title="月度值 = 当月全部 FPD15 成熟样本的 pooled AUC">模型监控</span></h2>
-  <p class="desc">按放款月统计 FPD15 成熟样本的 AUC / Gini / KS；月度值为当月全部样本的 pooled 值，不是周度 AUC 的平均。</p>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>月份</th><th>客群</th><th>成熟样本</th><th>坏样本</th><th>坏率</th><th>AUC</th><th>Gini</th><th>KS</th></tr></thead>
-      <tbody id="monthlyAucBody"></tbody>
-    </table>
-  </div>
-  <p class="note">客群口径：New 首借 / Old 复借 / ALL 合计。最近月份可能尚未完全成熟，请结合成熟样本与坏样本量判断。</p>
-</section>
-
-<section class="card">
-  <h2>周度新老客与结构<span class="tag" title="坏率 = y_fpd15_ovd 之和 / y_fpd15_obs 之和">FPD15</span></h2>
-  <p class="desc">新客 / 老客的 FPD15 坏率（笔数）与金额坏率；结构拆分用于区分“客群本身变坏”和“新老客占比变化”。</p>
-  <div class="chart-wrap">
-    <svg id="mixChart" viewBox="0 0 1040 280" role="img" aria-label="新客与老客的周度 FPD15 笔数坏率"></svg>
-    <div class="tip" id="mixTip"></div>
-  </div>
-  <div class="legend">
-    <span><i style="background:var(--c1)"></i>新客</span>
-    <span><i style="background:var(--c2)"></i>老客</span>
-  </div>
-  <div class="table-wrap">
-  <table class="compact">
-    <thead><tr><th>放款周</th><th>新客</th><th>老客</th><th>新客占比</th><th>成熟度</th></tr></thead>
-    <tbody><tr><td>2026-08-24</td><td class='num'><b>9.41%</b><span class='n'>n=85 · 金额 8.40%</span></td><td class='num'><b>10.00%</b><span class='n'>n=10 · 金额 8.11%</span></td><td class='num'>89%</td><td class='num'>100%</td></tr><tr><td>2026-08-31</td><td class='num'><b>11.81%</b><span class='n'>n=601 · 金额 10.44%</span></td><td class='num'><b>6.45%</b><span class='n'>n=93 · 金额 6.02%</span></td><td class='num'>87%</td><td class='num'>100%</td></tr><tr><td>2026-09-07</td><td class='num'><b>10.50%</b><span class='n'>n=1,010 · 金额 9.23%</span></td><td class='num'><b>4.89%</b><span class='n'>n=491 · 金额 3.97%</span></td><td class='num'>67%</td><td class='num'>100%</td></tr><tr><td>2026-09-14</td><td class='num'><b>9.91%</b><span class='n'>n=1,271 · 金额 8.68%</span></td><td class='num'><b>5.84%</b><span class='n'>n=993 · 金额 4.91%</span></td><td class='num'>56%</td><td class='num'>100%</td></tr><tr><td>2026-09-21</td><td class='num'><b>10.82%</b><span class='n'>n=1,793 · 金额 9.54%</span></td><td class='num'><b>5.07%</b><span class='n'>n=1,557 · 金额 4.84%</span></td><td class='num'>54%</td><td class='num'>100%</td></tr><tr><td>2026-09-28</td><td class='num'><b>8.78%</b><span class='n'>n=2,472 · 金额 7.88%</span></td><td class='num'><b>4.61%</b><span class='n'>n=2,213 · 金额 4.15%</span></td><td class='num'>53%</td><td class='num'>99%</td></tr><tr><td>2026-10-05</td><td class='num'><b>9.83%<sup>*</sup></b><span class='n'>n=2,014 · 金额 8.60%</span></td><td class='num'><b>4.84%<sup>*</sup></b><span class='n'>n=2,126 · 金额 4.45%</span></td><td class='num'>49%</td><td class='num soft'>74%</td></tr></tbody>
-  </table>
-  </div>
-  <p class="note">坏率为 FPD15 笔数口径，金额坏率列在样本下方。最新确认周 2026-09-28 较前 4 周：整体 FPD15 −1.69pp = 组内 −1.32pp + 结构 −0.38pp；新客占比 53%（基线 60%）。</p>
-</section>
-
-
-<section class="card">
-  <h2>复借期数<span class="tag" title="坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和">笔数坏率</span></h2>
-  <p class="desc">纵轴为 FPD15 笔数坏率；首借风险最高，复借 4 次以上最低。</p>
-  <div class="split rank-split">
-    <div class="chart-wrap">
-      <svg id="rankChart" viewBox="0 0 520 300" role="img" aria-label="首借与复借期数的 FPD15 笔数坏率"></svg>
-      <div class="tip" id="rankTip"></div>
-    </div>
-    <div>
+  <div class="legend" id="aucLegend"></div>
+  <div data-seg-panel="ALL">
 <div class="table-wrap">
 <table class="compact">
-  <thead><tr><th>复借期数</th><th>客群</th><th>样本（笔）</th><th>坏样本（笔）</th><th>FPD15 坏率（笔数）</th></tr></thead>
-  <tbody><tr><td>1st</td><td>New</td><td class='num'>9,626</td><td class='num'>966</td><td class='num'>10.04%</td></tr><tr><td>2nd</td><td>Old</td><td class='num'>4,184</td><td class='num'>241</td><td class='num'>5.76%</td></tr><tr><td>3rd</td><td>Old</td><td class='num'>1,880</td><td class='num'>97</td><td class='num'>5.16%</td></tr><tr><td>4th+</td><td>Old</td><td class='num'>1,745</td><td class='num'>59</td><td class='num'>3.38%</td></tr></tbody>
+  <thead><tr><th>放款周</th><th>成熟样本</th><th>AUC</th><th>Gini</th><th>KS</th><th>FPD15 坏率</th><th>成熟度</th></tr></thead>
+  <tbody><tr><td>2026-08-31</td><td class='num'>694</td><td class='num'>0.637</td><td class='num'>0.273</td><td class='num'>0.208</td><td class='num'>11.10%</td><td class='num'>100%</td></tr><tr><td>2026-09-07</td><td class='num'>1,501</td><td class='num'>0.623</td><td class='num'>0.246</td><td class='num'>0.201</td><td class='num'>8.66%</td><td class='num'>100%</td></tr><tr><td>2026-09-14</td><td class='num'>2,264</td><td class='num'>0.627</td><td class='num'>0.254</td><td class='num'>0.203</td><td class='num'>8.13%</td><td class='num'>100%</td></tr><tr><td>2026-09-21</td><td class='num'>3,350</td><td class='num'>0.622</td><td class='num'>0.244</td><td class='num'>0.189</td><td class='num'>8.15%</td><td class='num'>100%</td></tr><tr><td>2026-09-28</td><td class='num'>4,684</td><td class='num'>0.618</td><td class='num'>0.237</td><td class='num'>0.180</td><td class='num'>6.81%</td><td class='num'>99%</td></tr><tr><td>2026-10-05</td><td class='num'>4,140</td><td class='num soft'>0.641<sup>*</sup></td><td class='num soft'>0.282<sup>*</sup></td><td class='num soft'>0.219<sup>*</sup></td><td class='num'>7.27%</td><td class='num soft'>74%</td></tr><tr><td>2026-10-12</td><td class='num'>670</td><td class='num dim'>0.641</td><td class='num dim'>0.282</td><td class='num dim'>0.255</td><td class='num'>9.40%</td><td class='num dim'>11%</td></tr></tbody>
 </table>
 </div>
+<p class="note">AUC / Gini / KS 基于 FPD15 成熟样本，按周内分数排名计算，AUC 对并列分数取平均秩；周样本少于 200 的周不纳入。星号 * 表示 70–90% 成熟，仅参考。最新确认周 2026-09-28 AUC 0.618（前 4 周均值 0.627），Gini 0.237，KS 0.180。最近一周 PSI 0.00（2026-09-28）。AUC 连续走低或 KS 明显收缩时，优先检查模型分分布和入催客群变化。</p>
+</div><div data-seg-panel="New" hidden>
+<div class="table-wrap">
+<table class="compact">
+  <thead><tr><th>放款周</th><th>成熟样本</th><th>AUC</th><th>Gini</th><th>KS</th><th>FPD15 坏率</th><th>成熟度</th></tr></thead>
+  <tbody><tr><td>2026-08-31</td><td class='num'>601</td><td class='num'>0.647</td><td class='num'>0.294</td><td class='num'>0.220</td><td class='num'>11.81%</td><td class='num'>100%</td></tr><tr><td>2026-09-07</td><td class='num'>1,010</td><td class='num'>0.611</td><td class='num'>0.223</td><td class='num'>0.183</td><td class='num'>10.50%</td><td class='num'>100%</td></tr><tr><td>2026-09-14</td><td class='num'>1,271</td><td class='num'>0.620</td><td class='num'>0.239</td><td class='num'>0.188</td><td class='num'>9.91%</td><td class='num'>100%</td></tr><tr><td>2026-09-21</td><td class='num'>1,793</td><td class='num'>0.631</td><td class='num'>0.262</td><td class='num'>0.202</td><td class='num'>10.82%</td><td class='num'>100%</td></tr><tr><td>2026-09-28</td><td class='num'>2,471</td><td class='num'>0.635</td><td class='num'>0.269</td><td class='num'>0.216</td><td class='num'>8.78%</td><td class='num'>99%</td></tr><tr><td>2026-10-05</td><td class='num'>2,014</td><td class='num soft'>0.648<sup>*</sup></td><td class='num soft'>0.297<sup>*</sup></td><td class='num soft'>0.232<sup>*</sup></td><td class='num'>9.83%</td><td class='num soft'>83%</td></tr><tr><td>2026-10-12</td><td class='num'>361</td><td class='num dim'>0.636</td><td class='num dim'>0.272</td><td class='num dim'>0.280</td><td class='num'>11.91%</td><td class='num dim'>15%</td></tr></tbody>
+</table>
 </div>
-  </div>
-  <p class="note">坏率为 FPD15 笔数口径。首借 = New；2nd 起为 Old；4th+ 含 4 次及以上。老客中 2nd 最高（5.76%），4th+ 最低（3.38%）；复借越多坏率越低。</p>
+<p class="note">AUC / Gini / KS 基于新客FPD15 成熟样本，按周内分数排名计算，AUC 对并列分数取平均秩；周样本少于 200 的周不纳入。星号 * 表示 70–90% 成熟，仅参考。最新确认周 2026-09-28 AUC 0.635（前 4 周均值 0.627），Gini 0.269，KS 0.216。最近一周 PSI 0.00（2026-09-28）。AUC 连续走低或 KS 明显收缩时，优先检查模型分分布和入催客群变化。</p>
+</div><div data-seg-panel="Old" hidden>
+<div class="table-wrap">
+<table class="compact">
+  <thead><tr><th>放款周</th><th>成熟样本</th><th>AUC</th><th>Gini</th><th>KS</th><th>FPD15 坏率</th><th>成熟度</th></tr></thead>
+  <tbody><tr><td>2026-09-07</td><td class='num'>491</td><td class='num'>0.674</td><td class='num'>0.347</td><td class='num'>0.423</td><td class='num'>4.89%</td><td class='num'>100%</td></tr><tr><td>2026-09-14</td><td class='num'>993</td><td class='num'>0.650</td><td class='num'>0.300</td><td class='num'>0.262</td><td class='num'>5.84%</td><td class='num'>100%</td></tr><tr><td>2026-09-21</td><td class='num'>1,557</td><td class='num'>0.624</td><td class='num'>0.248</td><td class='num'>0.221</td><td class='num'>5.07%</td><td class='num'>99%</td></tr><tr><td>2026-09-28</td><td class='num'>2,213</td><td class='num'>0.590</td><td class='num'>0.181</td><td class='num'>0.173</td><td class='num'>4.61%</td><td class='num'>99%</td></tr><tr><td>2026-10-05</td><td class='num'>2,126</td><td class='num dim'>0.635</td><td class='num dim'>0.270</td><td class='num dim'>0.213</td><td class='num'>4.84%</td><td class='num dim'>67%</td></tr><tr><td>2026-10-12</td><td class='num'>309</td><td class='num dim'>0.656</td><td class='num dim'>0.312</td><td class='num dim'>0.391</td><td class='num'>6.47%</td><td class='num dim'>8%</td></tr></tbody>
+</table>
+</div>
+<p class="note">AUC / Gini / KS 基于老客FPD15 成熟样本，按周内分数排名计算，AUC 对并列分数取平均秩；周样本少于 200 的周不纳入。星号 * 表示 70–90% 成熟，仅参考。最新确认周 2026-09-28 AUC 0.590（前 3 周均值 0.649），Gini 0.181，KS 0.173。最近一周 PSI 0.01（2026-09-28）。AUC 连续走低或 KS 明显收缩时，优先检查模型分分布和入催客群变化。</p>
+</div>
 </section>
 
 
 <section class="card">
-  <h2>数据质量与口径</h2>
+  <h2>数据质量与口径<span class="tag" title="该模块固定按全量口径展示，不随客群切换">整体口径</span></h2>
+  
+<div class="scope-meta">
+  <span class="scope-item"><b>时间口径</b><span>放款周（周一）2026-08-24 ~ 2026-10-26；汇总共同 cohort、模型分覆盖与周样本质量。</span></span>
+  <span class="scope-item"><b>样本口径</b><span>FPD15→FPD30 共同 cohort 为两窗口均成熟的同一批放款；模型分覆盖基于 FPD15 成熟放款；周样本按 FPD3 样本量检查早期排除、末周完整性与成熟度。</span></span>
+</div>
+
   <div class="quality">
     <div>
       <span class="q-label">FPD15 → FPD30（共同 cohort · 笔数）</span>
@@ -471,23 +463,27 @@
 <footer class="foot">
   <ul class="notes">
     <li>笔数坏率（看板默认口径）：y_fpdN_ovd 之和 / y_fpdN_obs 之和。FPD-X：首期应还日 due + X 天前未还清首期；成熟样本为 y_fpdN_obs = 1（is_deal = 1、观察日有借据快照且 due + X &lt; obs_dt），未成熟不判坏（即使已结清）。FPD14 由 stg_debt_snp 首期实还日补算，成熟条件同口径。</li>
-    <li>金额坏率（仅总览表与 KPI 子行）：estimate_principal_remaining_fpdN 之和 / 全部成熟样本放款本金；余额取 due+X 当天借据快照（FPD14 同机制），当天无快照的不计入分子。</li>
+    <li>金额坏率（仅总览表）：estimate_principal_remaining_fpdN 之和 / 全部成熟样本放款本金；余额取 due+X 当天借据快照（FPD14 同机制），当天无快照的不计入分子。</li>
     <li>成熟度：该窗口成熟样本 / 当周 FPD3 样本；星号 * 表示 70–90% 成熟，仅参考；† 表示放款周未完整；— 表示成熟度低于 70%，不展示；FPD30 采用 90% 阈值。</li>
-    <li>监控状态与周度图：确认周 = 放款周完整且 FPD15 成熟度 ≥90%；基线 = 其前最多 4 个确认周（样本 ≥500）均值；±1σ / ±2σ 仅作波动提示。周度阴影为 FPD15 的 Wilson 95% 置信区间；浅灰柱为当周 FPD3 成熟样本数（放款量代理）。周度图可在笔数 / 金额口径间切换。</li>
-    <li>周度排序力与漂移：AUC 按周内分数排名计算，并列分数取平均秩；Gini = 2×AUC−1；KS 按分数分组累计好坏分布计算；周样本少于 200 的周不纳入。PSI 按 5 档份额计算，基线为前最多 4 个确认周；&lt;0.10 稳定，0.10–0.25 关注，≥0.25 预警（5 档粒度为近似）。</li><li>周度新老客：按放款周 × user_type 拆分 FPD15；结构拆分为组内变化（最新权重）+ 新老客占比变化（基线坏率），两者相加等于整体变化。</li>
-    <li>新老客：user_type 按首笔放款；复借期数 application_rank，1st = 首借，2nd 起为 Old，4th+ 含 4 次及以上。</li>
+    <li>周度图：阴影为 FPD15 的 Wilson 95% 置信区间；浅灰柱为当周 FPD3 成熟样本数（放款量代理）。周度图可在笔数 / 金额口径间切换。</li>
+    <li>周度排序力与漂移：AUC 按周内分数排名计算，并列分数取平均秩；Gini = 2×AUC−1；KS 按分数分组累计好坏分布计算；周样本少于 200 的周不纳入。PSI 按 5 档份额计算，基线为前最多 4 个确认周；&lt;0.10 稳定，0.10–0.25 关注，≥0.25 预警（5 档粒度为近似）。</li>
+    <li>新老客：user_type 按首笔放款。分客群 FPD14 周度值与金额坏率未单独同步，新客 / 老客视图不展示 FPD14 金额与周度列。</li>
+    <li>客群切换：顶部“整体 / 新客 / 老客”按钮联动 FPD 曲线、周度表、分档表与排序力表；新客 / 老客视图以所选客群实线对比整体虚线。数据质量卡固定为整体口径。</li>
     <li>模型分：按新客风险 1.0 固定阈值切 5 档（≤0.062086 / ≤0.091284 / ≤0.128392 / ≤0.188973 / &gt;0.188973），1档最低分、5档最高分；分数越高越坏。固定阈值下各档样本占比不等。</li>
-    <li>数据源：vintage_data.zip（11 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：2026-11-03 20:45 China Standard Time。</li>
+    <li>数据源：同步数据（8 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：2026-11-04 10:02 China Standard Time。</li>
   </ul>
 </footer>
 
 </main>
 <script>
-const DATA = {"fpdCurve": {"labels": ["FPD3", "FPD7", "FPD14", "FPD15", "FPD30"], "series": [{"name": "整体", "key": "ALL", "color": "var(--ink-2)", "points": [{"rate": 13.71, "obs": 30184, "bad": 4137, "partial": false, "maturity": null}, {"rate": 10.94, "obs": 24077, "bad": 2634, "partial": false, "maturity": null}, {"rate": 8.32, "obs": 17798, "bad": 1480, "partial": false, "maturity": null}, {"rate": 7.82, "obs": 17435, "bad": 1363, "partial": false, "maturity": null}, {"rate": 6.6, "obs": 7291, "bad": 481, "partial": true, "maturity": 0.41818181818181815}]}, {"name": "新客", "key": "New", "color": "var(--c1)", "points": [{"rate": 16.58, "obs": 14232, "bad": 2360, "partial": false, "maturity": null}, {"rate": 13.85, "obs": 12163, "bad": 1684, "partial": false, "maturity": null}, {"rate": 10.6, "obs": 9767, "bad": 1035, "partial": false, "maturity": null}, {"rate": 10.04, "obs": 9626, "bad": 966, "partial": false, "maturity": null}, {"rate": 8.26, "obs": 4539, "bad": 375, "partial": true, "maturity": 0.47153542489092043}]}, {"name": "老客", "key": "Old", "color": "var(--c2)", "points": [{"rate": 11.14, "obs": 15952, "bad": 1777, "partial": false, "maturity": null}, {"rate": 7.97, "obs": 11914, "bad": 950, "partial": false, "maturity": null}, {"rate": 5.54, "obs": 8031, "bad": 445, "partial": false, "maturity": null}, {"rate": 5.08, "obs": 7809, "bad": 397, "partial": false, "maturity": null}, {"rate": 3.85, "obs": 2752, "bad": 106, "partial": true, "maturity": 0.35241388141887564}]}]}, "weekChart": {"labels": ["08-24", "08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12", "10-19", "10-26"], "weeks": ["2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"], "fpd3": [{"rate": 13.68, "obs": 95, "partial": false}, {"rate": 16.71, "obs": 694, "partial": false}, {"rate": 14.52, "obs": 1501, "partial": false}, {"rate": 14.52, "obs": 2266, "partial": false}, {"rate": 14.24, "obs": 3364, "partial": false}, {"rate": 13.39, "obs": 4726, "partial": false}, {"rate": 12.33, "obs": 5612, "partial": false}, {"rate": 13.46, "obs": 6287, "partial": false}, {"rate": 14.16, "obs": 4971, "partial": false}, {"rate": 15.35, "obs": 632, "partial": true}], "fpd7": [{"rate": 11.58, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 13.83, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 12.06, "obs": 1501, "maturity": 1.0, "partial": false}, {"rate": 11.87, "obs": 2266, "maturity": 1.0, "partial": false}, {"rate": 11.8, "obs": 3363, "maturity": 0.9997027348394768, "partial": false}, {"rate": 10.43, "obs": 4698, "maturity": 0.9940753279729158, "partial": false}, {"rate": 9.89, "obs": 5594, "maturity": 0.9967925873129009, "partial": false}, {"rate": 10.61, "obs": 4789, "maturity": 0.7617305551137268, "partial": true}, null, null], "fpd7Low": [null, null, null, null, null, null, null, null, {"rate": 11.72, "obs": 1041, "maturity": 0.20941460470730236}, null], "fpd15": [{"rate": 9.47, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 11.1, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 8.66, "obs": 1501, "maturity": 1.0, "partial": false}, {"rate": 8.13, "obs": 2264, "maturity": 0.999117387466902, "partial": false}, {"rate": 8.15, "obs": 3350, "maturity": 0.9958382877526754, "partial": false}, {"rate": 6.81, "obs": 4685, "maturity": 0.9913245873889124, "partial": false}, {"rate": 7.27, "obs": 4140, "maturity": 0.7377049180327869, "partial": true}, null, null, null], "fpd15Low": [null, null, null, null, null, null, null, {"rate": 9.4, "obs": 670, "maturity": 0.10656911086368698}, null, null], "fpd15Amt": [{"rate": 8.36, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 9.88, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 7.46, "obs": 1501, "maturity": 1.0, "partial": false}, {"rate": 6.98, "obs": 2264, "maturity": 0.999117387466902, "partial": false}, {"rate": 7.22, "obs": 3350, "maturity": 0.9958382877526754, "partial": false}, {"rate": 6.02, "obs": 4685, "maturity": 0.9913245873889124, "partial": false}, {"rate": 6.41, "obs": 4140, "maturity": 0.7377049180327869, "partial": true}, null, null, null]}, "scoreChart": {"labels": ["1档", "2档", "3档", "4档", "5档"], "series": [{"name": "整体", "key": "ALL", "color": "var(--ink-2)", "points": [{"q": 1, "min": -1.0, "max": 0.06206997534259798, "avg": 0.045, "obs": 4252, "bad": 172, "rate": 4.05}, {"q": 2, "min": 0.06208845004301362, "max": 0.09128272982724421, "avg": 0.0762, "obs": 5220, "bad": 355, "rate": 6.8}, {"q": 3, "min": 0.09129032385514516, "max": 0.12837983740913464, "avg": 0.1086, "obs": 5154, "bad": 464, "rate": 9.0}, {"q": 4, "min": 0.128409626420534, "max": 0.18862379631878481, "avg": 0.1446, "obs": 1992, "bad": 208, "rate": 10.44}, {"q": 5, "min": 0.1890669330331718, "max": 0.5372854233620126, "avg": 0.2732, "obs": 816, "bad": 164, "rate": 20.1}]}, {"name": "新客", "key": "New", "color": "var(--c1)", "points": [{"q": 1, "min": -1.0, "max": 0.06205981866379053, "avg": 0.0455, "obs": 2369, "bad": 121, "rate": 5.11}, {"q": 2, "min": 0.06210481778990067, "max": 0.09128272982724421, "avg": 0.0762, "obs": 2886, "bad": 249, "rate": 8.63}, {"q": 3, "min": 0.09129032385514516, "max": 0.12837983740913464, "avg": 0.1087, "obs": 2903, "bad": 344, "rate": 11.85}, {"q": 4, "min": 0.128409626420534, "max": 0.18862379631878481, "avg": 0.1418, "obs": 969, "bad": 126, "rate": 13.0}, {"q": 5, "min": 0.1890669330331718, "max": 0.5372854233620126, "avg": 0.2754, "obs": 498, "bad": 126, "rate": 25.3}]}, {"name": "老客", "key": "Old", "color": "var(--c2)", "points": [{"q": 1, "min": -1.0, "max": 0.06206997534259798, "avg": 0.0445, "obs": 1883, "bad": 51, "rate": 2.71}, {"q": 2, "min": 0.06208845004301362, "max": 0.09128100879566896, "avg": 0.0762, "obs": 2334, "bad": 106, "rate": 4.54}, {"q": 3, "min": 0.09129977478173483, "max": 0.12837683601701405, "avg": 0.1084, "obs": 2251, "bad": 120, "rate": 5.33}, {"q": 4, "min": 0.12841546606780085, "max": 0.18811772316074982, "avg": 0.1473, "obs": 1023, "bad": 82, "rate": 8.02}, {"q": 5, "min": 0.18987966374690146, "max": 0.5372854233620126, "avg": 0.2698, "obs": 318, "bad": 38, "rate": 11.95}]}]}, "rankChart": [{"label": "1st", "sub": "New", "rate": 10.04, "obs": 9626, "bad": 966}, {"label": "2nd", "sub": "Old", "rate": 5.76, "obs": 4184, "bad": 241}, {"label": "3rd", "sub": "Old", "rate": 5.16, "obs": 1880, "bad": 97}, {"label": "4th+", "sub": "Old", "rate": 3.38, "obs": 1745, "bad": 59}], "aucChart": {"labels": ["08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12"], "weeks": ["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12"], "points": [{"week": "2026-08-31", "auc": 0.6366, "gini": 0.2733, "ks": 0.208, "obs": 694, "bad": 77, "rate": 11.1, "maturity": 1.0, "partial": false}, {"week": "2026-09-07", "auc": 0.6229, "gini": 0.2457, "ks": 0.201, "obs": 1501, "bad": 130, "rate": 8.66, "maturity": 1.0, "partial": false}, {"week": "2026-09-14", "auc": 0.6268, "gini": 0.2537, "ks": 0.2028, "obs": 2264, "bad": 184, "rate": 8.13, "maturity": 0.999117387466902, "partial": false}, {"week": "2026-09-21", "auc": 0.6221, "gini": 0.2441, "ks": 0.1889, "obs": 3350, "bad": 273, "rate": 8.15, "maturity": 0.9958382877526754, "partial": false}, {"week": "2026-09-28", "auc": 0.6183, "gini": 0.2366, "ks": 0.1801, "obs": 4684, "bad": 319, "rate": 6.81, "maturity": 0.9913245873889124, "partial": false}, {"week": "2026-10-05", "auc": 0.6408, "gini": 0.2817, "ks": 0.2188, "obs": 4140, "bad": 301, "rate": 7.27, "maturity": 0.7377049180327869, "partial": true}, {"week": "2026-10-12", "auc": 0.6412, "gini": 0.2825, "ks": 0.2552, "obs": 670, "bad": 63, "rate": 9.4, "maturity": 0.10656911086368698, "partial": true}]}, "monthlyAuc": {"2026-07": {"ALL": {"month": "2026-07", "userType": "ALL", "obs": 14, "bad": 4, "rate": 28.57, "auc": 0.25, "gini": -0.5, "ks": 0.5}, "New": {"month": "2026-07", "userType": "New", "obs": 6, "bad": 1, "rate": 16.67, "auc": 0.3, "gini": -0.4, "ks": 0.4}, "Old": {"month": "2026-07", "userType": "Old", "obs": 8, "bad": 3, "rate": 37.5, "auc": 0.2, "gini": -0.6, "ks": 0.6}}, "2026-08": {"ALL": {"month": "2026-08", "userType": "ALL", "obs": 163, "bad": 17, "rate": 10.43, "auc": 0.6209, "gini": 0.2417, "ks": 0.251}, "New": {"month": "2026-08", "userType": "New", "obs": 142, "bad": 15, "rate": 10.56, "auc": 0.6323, "gini": 0.2646, "ks": 0.2803}, "Old": {"month": "2026-08", "userType": "Old", "obs": 21, "bad": 2, "rate": 9.52, "auc": 0.5789, "gini": 0.1579, "ks": 0.4474}}, "2026-09": {"ALL": {"month": "2026-09", "userType": "ALL", "obs": 9469, "bad": 769, "rate": 8.12, "auc": 0.6233, "gini": 0.2465, "ks": 0.1791}, "New": {"month": "2026-09", "userType": "New", "obs": 5428, "bad": 567, "rate": 10.45, "auc": 0.6269, "gini": 0.2539, "ks": 0.1781}, "Old": {"month": "2026-09", "userType": "Old", "obs": 4041, "bad": 202, "rate": 5.0, "auc": 0.6221, "gini": 0.2441, "ks": 0.2232}}, "2026-10": {"ALL": {"month": "2026-10", "userType": "ALL", "obs": 7788, "bad": 573, "rate": 7.36, "auc": 0.6352, "gini": 0.2704, "ks": 0.2083}, "New": {"month": "2026-10", "userType": "New", "obs": 4049, "bad": 383, "rate": 9.46, "auc": 0.6421, "gini": 0.2843, "ks": 0.2232}, "Old": {"month": "2026-10", "userType": "Old", "obs": 3739, "bad": 190, "rate": 5.08, "auc": 0.6305, "gini": 0.261, "ks": 0.1941}}}, "mixChart": {"labels": ["08-24", "08-31", "09-07", "09-14", "09-21", "09-28", "10-05"], "weeks": ["2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05"], "new": [{"rate": 9.41, "amtRate": 8.4, "obs": 85, "bad": 8, "maturity": 1.0, "partial": false}, {"rate": 11.81, "amtRate": 10.44, "obs": 601, "bad": 71, "maturity": 1.0, "partial": false}, {"rate": 10.5, "amtRate": 9.23, "obs": 1010, "bad": 106, "maturity": 1.0, "partial": false}, {"rate": 9.91, "amtRate": 8.68, "obs": 1271, "bad": 126, "maturity": 0.999117387466902, "partial": false}, {"rate": 10.82, "amtRate": 9.54, "obs": 1793, "bad": 194, "maturity": 0.9958382877526754, "partial": false}, {"rate": 8.78, "amtRate": 7.88, "obs": 2472, "bad": 217, "maturity": 0.9913245873889124, "partial": false}, {"rate": 9.83, "amtRate": 8.6, "obs": 2014, "bad": 198, "maturity": 0.7377049180327869, "partial": true}], "old": [{"rate": 10.0, "amtRate": 8.11, "obs": 10, "bad": 1, "maturity": 1.0, "partial": false}, {"rate": 6.45, "amtRate": 6.02, "obs": 93, "bad": 6, "maturity": 1.0, "partial": false}, {"rate": 4.89, "amtRate": 3.97, "obs": 491, "bad": 24, "maturity": 1.0, "partial": false}, {"rate": 5.84, "amtRate": 4.91, "obs": 993, "bad": 58, "maturity": 0.999117387466902, "partial": false}, {"rate": 5.07, "amtRate": 4.84, "obs": 1557, "bad": 79, "maturity": 0.9958382877526754, "partial": false}, {"rate": 4.61, "amtRate": 4.15, "obs": 2213, "bad": 102, "maturity": 0.9913245873889124, "partial": false}, {"rate": 4.84, "amtRate": 4.45, "obs": 2126, "bad": 103, "maturity": 0.7377049180327869, "partial": true}]}, "psiByWeek": {"2026-09-14": 0.003655388254511377, "2026-09-21": 0.004323983767836733, "2026-09-28": 0.0035144643903451344}, "generatedAt": "2026-11-03T20:45:19+08:00"};
+const DATA = {"fpdLabels": ["FPD3", "FPD7", "FPD14", "FPD15", "FPD30"], "fpdCurves": {"ALL": {"name": "整体", "key": "ALL", "color": "var(--ink-2)", "points": [{"rate": 13.71, "obs": 30184, "bad": 4137, "partial": false, "maturity": null}, {"rate": 10.94, "obs": 24077, "bad": 2634, "partial": false, "maturity": null}, {"rate": 8.32, "obs": 17798, "bad": 1480, "partial": false, "maturity": null}, {"rate": 7.82, "obs": 17435, "bad": 1363, "partial": false, "maturity": null}, {"rate": 6.6, "obs": 7291, "bad": 481, "partial": true, "maturity": 0.41818181818181815}]}, "New": {"name": "新客", "key": "New", "color": "var(--c1)", "points": [{"rate": 16.58, "obs": 14232, "bad": 2360, "partial": false, "maturity": null}, {"rate": 13.85, "obs": 12163, "bad": 1684, "partial": false, "maturity": null}, {"rate": 10.6, "obs": 9767, "bad": 1035, "partial": false, "maturity": null}, {"rate": 10.04, "obs": 9626, "bad": 966, "partial": false, "maturity": null}, {"rate": 8.26, "obs": 4539, "bad": 375, "partial": true, "maturity": 0.47153542489092043}]}, "Old": {"name": "老客", "key": "Old", "color": "var(--c2)", "points": [{"rate": 11.14, "obs": 15952, "bad": 1777, "partial": false, "maturity": null}, {"rate": 7.97, "obs": 11914, "bad": 950, "partial": false, "maturity": null}, {"rate": 5.54, "obs": 8031, "bad": 445, "partial": false, "maturity": null}, {"rate": 5.08, "obs": 7809, "bad": 397, "partial": false, "maturity": null}, {"rate": 3.85, "obs": 2752, "bad": 106, "partial": true, "maturity": 0.35241388141887564}]}}, "scoreCurves": {"ALL": {"name": "整体", "key": "ALL", "color": "var(--ink-2)", "points": [{"q": 1, "min": -1.0, "max": 0.0620699753425979, "avg": 0.045, "obs": 4252, "bad": 172, "rate": 4.05}, {"q": 2, "min": 0.0620884500430136, "max": 0.0912827298272442, "avg": 0.0762, "obs": 5220, "bad": 355, "rate": 6.8}, {"q": 3, "min": 0.0912903238551451, "max": 0.1283798374091346, "avg": 0.1086, "obs": 5154, "bad": 464, "rate": 9.0}, {"q": 4, "min": 0.128409626420534, "max": 0.1886237963187848, "avg": 0.1446, "obs": 1992, "bad": 208, "rate": 10.44}, {"q": 5, "min": 0.1890669330331718, "max": 0.5372854233620126, "avg": 0.2732, "obs": 816, "bad": 164, "rate": 20.1}]}, "New": {"name": "新客", "key": "New", "color": "var(--c1)", "points": [{"q": 1, "min": -1.0, "max": 0.0620598186637905, "avg": 0.0455, "obs": 2369, "bad": 121, "rate": 5.11}, {"q": 2, "min": 0.0621048177899006, "max": 0.0912827298272442, "avg": 0.0762, "obs": 2886, "bad": 249, "rate": 8.63}, {"q": 3, "min": 0.0912903238551451, "max": 0.1283798374091346, "avg": 0.1087, "obs": 2903, "bad": 344, "rate": 11.85}, {"q": 4, "min": 0.128409626420534, "max": 0.1886237963187848, "avg": 0.1418, "obs": 969, "bad": 126, "rate": 13.0}, {"q": 5, "min": 0.1890669330331718, "max": 0.5372854233620126, "avg": 0.2754, "obs": 498, "bad": 126, "rate": 25.3}]}, "Old": {"name": "老客", "key": "Old", "color": "var(--c2)", "points": [{"q": 1, "min": -1.0, "max": 0.0620699753425979, "avg": 0.0445, "obs": 1883, "bad": 51, "rate": 2.71}, {"q": 2, "min": 0.0620884500430136, "max": 0.0912810087956689, "avg": 0.0762, "obs": 2334, "bad": 106, "rate": 4.54}, {"q": 3, "min": 0.0912997747817348, "max": 0.128376836017014, "avg": 0.1084, "obs": 2251, "bad": 120, "rate": 5.33}, {"q": 4, "min": 0.1284154660678008, "max": 0.1881177231607498, "avg": 0.1473, "obs": 1023, "bad": 82, "rate": 8.02}, {"q": 5, "min": 0.1898796637469014, "max": 0.5372854233620126, "avg": 0.2698, "obs": 318, "bad": 38, "rate": 11.95}]}}, "segments": {"ALL": {"name": "整体", "color": "var(--ink-2)", "scopeHint": "全部客群 · FPD15 成熟样本 17,435 笔", "weekChart": {"labels": ["08-24", "08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12", "10-19", "10-26"], "weeks": ["2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"], "fpd3": [{"rate": 13.68, "obs": 95, "partial": false}, {"rate": 16.71, "obs": 694, "partial": false}, {"rate": 14.52, "obs": 1501, "partial": false}, {"rate": 14.52, "obs": 2266, "partial": false}, {"rate": 14.24, "obs": 3364, "partial": false}, {"rate": 13.39, "obs": 4726, "partial": false}, {"rate": 12.33, "obs": 5612, "partial": false}, {"rate": 13.46, "obs": 6287, "partial": false}, {"rate": 14.16, "obs": 4971, "partial": false}, {"rate": 15.35, "obs": 632, "partial": true}], "fpd3Amt": [{"rate": 11.85, "obs": 95, "partial": false}, {"rate": 14.94, "obs": 694, "partial": false}, {"rate": 12.57, "obs": 1501, "partial": false}, {"rate": 12.93, "obs": 2266, "partial": false}, {"rate": 12.62, "obs": 3364, "partial": false}, {"rate": 12.19, "obs": 4726, "partial": false}, {"rate": 10.93, "obs": 5612, "partial": false}, {"rate": 12.06, "obs": 6287, "partial": false}, {"rate": 12.76, "obs": 4971, "partial": false}, {"rate": 14.81, "obs": 632, "partial": true}], "fpd7": [{"rate": 11.58, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 13.83, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 12.06, "obs": 1501, "maturity": 1.0, "partial": false}, {"rate": 11.87, "obs": 2266, "maturity": 1.0, "partial": false}, {"rate": 11.8, "obs": 3363, "maturity": 0.9997027348394768, "partial": false}, {"rate": 10.43, "obs": 4698, "maturity": 0.9940753279729158, "partial": false}, {"rate": 9.89, "obs": 5594, "maturity": 0.9967925873129009, "partial": false}, {"rate": 10.61, "obs": 4789, "maturity": 0.7617305551137268, "partial": true}, null, null], "fpd7Amt": [{"rate": 10.45, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 12.03, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 10.32, "obs": 1501, "maturity": 1.0, "partial": false}, {"rate": 10.51, "obs": 2266, "maturity": 1.0, "partial": false}, {"rate": 10.33, "obs": 3363, "maturity": 0.9997027348394768, "partial": false}, {"rate": 9.32, "obs": 4698, "maturity": 0.9940753279729158, "partial": false}, {"rate": 8.71, "obs": 5594, "maturity": 0.9967925873129009, "partial": false}, {"rate": 9.44, "obs": 4789, "maturity": 0.7617305551137268, "partial": true}, null, null], "fpd7Low": [null, null, null, null, null, null, null, null, {"rate": 11.72, "obs": 1041, "maturity": 0.20941460470730236}, null], "fpd15": [{"rate": 9.47, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 11.1, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 8.66, "obs": 1501, "maturity": 1.0, "partial": false}, {"rate": 8.13, "obs": 2264, "maturity": 0.999117387466902, "partial": false}, {"rate": 8.15, "obs": 3350, "maturity": 0.9958382877526754, "partial": false}, {"rate": 6.81, "obs": 4685, "maturity": 0.9913245873889124, "partial": false}, {"rate": 7.27, "obs": 4140, "maturity": 0.7377049180327869, "partial": true}, null, null, null], "fpd15Low": [null, null, null, null, null, null, null, {"rate": 9.4, "obs": 670, "maturity": 0.10656911086368698}, null, null], "fpd15Amt": [{"rate": 8.36, "obs": 95, "maturity": 1.0, "partial": false}, {"rate": 9.88, "obs": 694, "maturity": 1.0, "partial": false}, {"rate": 7.46, "obs": 1501, "maturity": 1.0, "partial": false}, {"rate": 6.98, "obs": 2264, "maturity": 0.999117387466902, "partial": false}, {"rate": 7.22, "obs": 3350, "maturity": 0.9958382877526754, "partial": false}, {"rate": 6.02, "obs": 4685, "maturity": 0.9913245873889124, "partial": false}, {"rate": 6.41, "obs": 4140, "maturity": 0.7377049180327869, "partial": true}, null, null, null]}, "aucChart": {"labels": ["08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12"], "weeks": ["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12"], "points": [{"week": "2026-08-31", "auc": 0.6366, "gini": 0.2732, "ks": 0.208, "obs": 694, "bad": 77, "rate": 11.1, "maturity": 1.0, "partial": false}, {"week": "2026-09-07", "auc": 0.6229, "gini": 0.2458, "ks": 0.201, "obs": 1501, "bad": 130, "rate": 8.66, "maturity": 1.0, "partial": false}, {"week": "2026-09-14", "auc": 0.6268, "gini": 0.2536, "ks": 0.2028, "obs": 2264, "bad": 184, "rate": 8.13, "maturity": 0.999117387466902, "partial": false}, {"week": "2026-09-21", "auc": 0.6221, "gini": 0.2442, "ks": 0.1889, "obs": 3350, "bad": 273, "rate": 8.15, "maturity": 0.9958382877526754, "partial": false}, {"week": "2026-09-28", "auc": 0.6183, "gini": 0.2366, "ks": 0.1801, "obs": 4684, "bad": 319, "rate": 6.81, "maturity": 0.9913245873889124, "partial": false}, {"week": "2026-10-05", "auc": 0.6408, "gini": 0.2816, "ks": 0.2188, "obs": 4140, "bad": 301, "rate": 7.27, "maturity": 0.7377049180327869, "partial": true}, {"week": "2026-10-12", "auc": 0.6412, "gini": 0.2824, "ks": 0.2552, "obs": 670, "bad": 63, "rate": 9.4, "maturity": 0.10656911086368698, "partial": true}]}, "psiByWeek": {"2026-09-14": 0.003655388254511377, "2026-09-21": 0.004323983767836733, "2026-09-28": 0.0035144643903451344}, "latestWeek": "2026-10-26"}, "New": {"name": "新客", "color": "var(--c1)", "scopeHint": "新客 · FPD15 成熟样本 9,626 笔（占整体 55%）", "weekChart": {"labels": ["08-24", "08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12", "10-19", "10-26"], "weeks": ["2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"], "fpd3": [{"rate": 12.94, "obs": 85, "partial": false}, {"rate": 17.14, "obs": 601, "partial": false}, {"rate": 16.83, "obs": 1010, "partial": false}, {"rate": 16.84, "obs": 1271, "partial": false}, {"rate": 18.02, "obs": 1798, "partial": false}, {"rate": 15.76, "obs": 2493, "partial": false}, {"rate": 15.82, "obs": 2433, "partial": false}, {"rate": 17.12, "obs": 2377, "partial": false}, {"rate": 16.59, "obs": 1839, "partial": false}, {"rate": 14.38, "obs": 306, "partial": true}], "fpd3Amt": [{"rate": 11.6, "obs": 85, "partial": false}, {"rate": 15.37, "obs": 601, "partial": false}, {"rate": 14.89, "obs": 1010, "partial": false}, {"rate": 15.13, "obs": 1271, "partial": false}, {"rate": 16.03, "obs": 1798, "partial": false}, {"rate": 14.48, "obs": 2493, "partial": false}, {"rate": 13.95, "obs": 2433, "partial": false}, {"rate": 15.58, "obs": 2377, "partial": false}, {"rate": 15.15, "obs": 1839, "partial": false}, {"rate": 13.64, "obs": 306, "partial": true}], "fpd7": [{"rate": 11.76, "obs": 85, "maturity": 1.0, "partial": false}, {"rate": 14.31, "obs": 601, "maturity": 1.0, "partial": false}, {"rate": 14.26, "obs": 1010, "maturity": 1.0, "partial": false}, {"rate": 14.16, "obs": 1271, "maturity": 1.0, "partial": false}, {"rate": 15.41, "obs": 1798, "maturity": 1.0, "partial": false}, {"rate": 13.05, "obs": 2482, "maturity": 0.99558764540714, "partial": false}, {"rate": 12.93, "obs": 2420, "maturity": 0.9946568023016852, "partial": false}, {"rate": 13.79, "obs": 1987, "maturity": 0.8359276398822044, "partial": true}, null, null], "fpd7Amt": [{"rate": 10.8, "obs": 85, "maturity": 1.0, "partial": false}, {"rate": 12.43, "obs": 601, "maturity": 1.0, "partial": false}, {"rate": 12.39, "obs": 1010, "maturity": 1.0, "partial": false}, {"rate": 12.55, "obs": 1271, "maturity": 1.0, "partial": false}, {"rate": 13.42, "obs": 1798, "maturity": 1.0, "partial": false}, {"rate": 11.8, "obs": 2482, "maturity": 0.99558764540714, "partial": false}, {"rate": 11.42, "obs": 2420, "maturity": 0.9946568023016852, "partial": false}, {"rate": 12.73, "obs": 1987, "maturity": 0.8359276398822044, "partial": true}, null, null], "fpd7Low": [null, null, null, null, null, null, null, null, {"rate": 14.9, "obs": 490, "maturity": 0.26644915715062534}, null], "fpd15": [{"rate": 9.41, "obs": 85, "maturity": 1.0, "partial": false}, {"rate": 11.81, "obs": 601, "maturity": 1.0, "partial": false}, {"rate": 10.5, "obs": 1010, "maturity": 1.0, "partial": false}, {"rate": 9.91, "obs": 1271, "maturity": 1.0, "partial": false}, {"rate": 10.82, "obs": 1793, "maturity": 0.9972191323692993, "partial": false}, {"rate": 8.78, "obs": 2472, "maturity": 0.9915764139590855, "partial": false}, {"rate": 9.83, "obs": 2014, "maturity": 0.8277846280312372, "partial": true}, null, null, null], "fpd15Low": [null, null, null, null, null, null, null, {"rate": 11.91, "obs": 361, "maturity": 0.15187210769877998}, null, null], "fpd15Amt": [{"rate": 8.4, "obs": 85, "maturity": 1.0, "partial": false}, {"rate": 10.44, "obs": 601, "maturity": 1.0, "partial": false}, {"rate": 9.23, "obs": 1010, "maturity": 1.0, "partial": false}, {"rate": 8.68, "obs": 1271, "maturity": 1.0, "partial": false}, {"rate": 9.54, "obs": 1793, "maturity": 0.9972191323692993, "partial": false}, {"rate": 7.88, "obs": 2472, "maturity": 0.9915764139590855, "partial": false}, {"rate": 8.6, "obs": 2014, "maturity": 0.8277846280312372, "partial": true}, null, null, null]}, "aucChart": {"labels": ["08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12"], "weeks": ["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12"], "points": [{"week": "2026-08-31", "auc": 0.6469, "gini": 0.2938, "ks": 0.2198, "obs": 601, "bad": 71, "rate": 11.81, "maturity": 1.0, "partial": false}, {"week": "2026-09-07", "auc": 0.6114, "gini": 0.2228, "ks": 0.183, "obs": 1010, "bad": 106, "rate": 10.5, "maturity": 1.0, "partial": false}, {"week": "2026-09-14", "auc": 0.6195, "gini": 0.239, "ks": 0.188, "obs": 1271, "bad": 126, "rate": 9.91, "maturity": 1.0, "partial": false}, {"week": "2026-09-21", "auc": 0.6308, "gini": 0.2616, "ks": 0.2024, "obs": 1793, "bad": 194, "rate": 10.82, "maturity": 0.9972191323692993, "partial": false}, {"week": "2026-09-28", "auc": 0.6346, "gini": 0.2692, "ks": 0.2156, "obs": 2471, "bad": 217, "rate": 8.78, "maturity": 0.9915764139590855, "partial": false}, {"week": "2026-10-05", "auc": 0.6485, "gini": 0.297, "ks": 0.2318, "obs": 2014, "bad": 198, "rate": 9.83, "maturity": 0.8277846280312372, "partial": true}, {"week": "2026-10-12", "auc": 0.6358, "gini": 0.2716, "ks": 0.2801, "obs": 361, "bad": 43, "rate": 11.91, "maturity": 0.15187210769877998, "partial": true}]}, "psiByWeek": {"2026-09-14": 0.005097323754625261, "2026-09-21": 0.008087542756151247, "2026-09-28": 0.0031423292352440457}, "latestWeek": "2026-10-26"}, "Old": {"name": "老客", "color": "var(--c2)", "scopeHint": "老客 · FPD15 成熟样本 7,809 笔（占整体 45%）", "weekChart": {"labels": ["08-24", "08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12", "10-19", "10-26"], "weeks": ["2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"], "fpd3": [{"rate": 20.0, "obs": 10, "partial": false}, {"rate": 13.98, "obs": 93, "partial": false}, {"rate": 9.78, "obs": 491, "partial": false}, {"rate": 11.56, "obs": 995, "partial": false}, {"rate": 9.9, "obs": 1566, "partial": false}, {"rate": 10.75, "obs": 2233, "partial": false}, {"rate": 9.66, "obs": 3179, "partial": false}, {"rate": 11.23, "obs": 3910, "partial": false}, {"rate": 12.74, "obs": 3132, "partial": false}, {"rate": 16.26, "obs": 326, "partial": true}], "fpd3Amt": [{"rate": 13.51, "obs": 10, "partial": false}, {"rate": 12.05, "obs": 93, "partial": false}, {"rate": 8.0, "obs": 491, "partial": false}, {"rate": 10.25, "obs": 995, "partial": false}, {"rate": 9.14, "obs": 1566, "partial": false}, {"rate": 9.9, "obs": 2233, "partial": false}, {"rate": 8.87, "obs": 3179, "partial": false}, {"rate": 10.18, "obs": 3910, "partial": false}, {"rate": 11.5, "obs": 3132, "partial": false}, {"rate": 15.81, "obs": 326, "partial": true}], "fpd7": [{"rate": 10.0, "obs": 10, "maturity": 1.0, "partial": false}, {"rate": 10.75, "obs": 93, "maturity": 1.0, "partial": false}, {"rate": 7.54, "obs": 491, "maturity": 1.0, "partial": false}, {"rate": 8.94, "obs": 995, "maturity": 1.0, "partial": false}, {"rate": 7.67, "obs": 1565, "maturity": 0.9993614303959132, "partial": false}, {"rate": 7.49, "obs": 2216, "maturity": 0.9923869234214062, "partial": false}, {"rate": 7.56, "obs": 3174, "maturity": 0.9984271783579742, "partial": false}, {"rate": 8.35, "obs": 2802, "maturity": 0.7166240409207161, "partial": true}, null, null], "fpd7Amt": [{"rate": 8.11, "obs": 10, "maturity": 1.0, "partial": false}, {"rate": 9.24, "obs": 93, "maturity": 1.0, "partial": false}, {"rate": 6.22, "obs": 491, "maturity": 1.0, "partial": false}, {"rate": 8.04, "obs": 995, "maturity": 1.0, "partial": false}, {"rate": 7.18, "obs": 1565, "maturity": 0.9993614303959132, "partial": false}, {"rate": 6.8, "obs": 2216, "maturity": 0.9923869234214062, "partial": false}, {"rate": 6.86, "obs": 3174, "maturity": 0.9984271783579742, "partial": false}, {"rate": 7.29, "obs": 2802, "maturity": 0.7166240409207161, "partial": true}, null, null], "fpd7Low": [null, null, null, null, null, null, null, null, {"rate": 8.89, "obs": 551, "maturity": 0.17592592592592593}, null], "fpd15": [{"rate": 10.0, "obs": 10, "maturity": 1.0, "partial": false}, {"rate": 6.45, "obs": 93, "maturity": 1.0, "partial": false}, {"rate": 4.89, "obs": 491, "maturity": 1.0, "partial": false}, {"rate": 5.84, "obs": 993, "maturity": 0.9979899497487437, "partial": false}, {"rate": 5.07, "obs": 1557, "maturity": 0.9942528735632183, "partial": false}, {"rate": 4.61, "obs": 2213, "maturity": 0.9910434393193014, "partial": false}, null, null, null, null], "fpd15Low": [null, null, null, null, null, null, {"rate": 4.84, "obs": 2126, "maturity": 0.6687637621893677}, {"rate": 6.47, "obs": 309, "maturity": 0.07902813299232736}, null, null], "fpd15Amt": [{"rate": 8.11, "obs": 10, "maturity": 1.0, "partial": false}, {"rate": 6.02, "obs": 93, "maturity": 1.0, "partial": false}, {"rate": 3.97, "obs": 491, "maturity": 1.0, "partial": false}, {"rate": 4.91, "obs": 993, "maturity": 0.9979899497487437, "partial": false}, {"rate": 4.84, "obs": 1557, "maturity": 0.9942528735632183, "partial": false}, {"rate": 4.15, "obs": 2213, "maturity": 0.9910434393193014, "partial": false}, null, null, null, null]}, "aucChart": {"labels": ["09-07", "09-14", "09-21", "09-28", "10-05", "10-12"], "weeks": ["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12"], "points": [{"week": "2026-09-07", "auc": 0.6737, "gini": 0.3474, "ks": 0.423, "obs": 491, "bad": 24, "rate": 4.89, "maturity": 1.0, "partial": false}, {"week": "2026-09-14", "auc": 0.65, "gini": 0.3, "ks": 0.2615, "obs": 993, "bad": 58, "rate": 5.84, "maturity": 0.9979899497487437, "partial": false}, {"week": "2026-09-21", "auc": 0.6239, "gini": 0.2478, "ks": 0.2206, "obs": 1557, "bad": 79, "rate": 5.07, "maturity": 0.9942528735632183, "partial": false}, {"week": "2026-09-28", "auc": 0.5903, "gini": 0.1806, "ks": 0.1733, "obs": 2213, "bad": 102, "rate": 4.61, "maturity": 0.9910434393193014, "partial": false}, {"week": "2026-10-05", "auc": 0.635, "gini": 0.27, "ks": 0.2135, "obs": 2126, "bad": 103, "rate": 4.84, "maturity": 0.6687637621893677, "partial": true}, {"week": "2026-10-12", "auc": 0.6562, "gini": 0.3124, "ks": 0.391, "obs": 309, "bad": 20, "rate": 6.47, "maturity": 0.07902813299232736, "partial": true}]}, "psiByWeek": {"2026-09-28": 0.007301088675022006}, "latestWeek": "2026-10-26"}}, "aucChart": {"labels": ["08-31", "09-07", "09-14", "09-21", "09-28", "10-05", "10-12"], "weeks": ["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12"], "points": [{"week": "2026-08-31", "auc": 0.6366, "gini": 0.2732, "ks": 0.208, "obs": 694, "bad": 77, "rate": 11.1, "maturity": 1.0, "partial": false}, {"week": "2026-09-07", "auc": 0.6229, "gini": 0.2458, "ks": 0.201, "obs": 1501, "bad": 130, "rate": 8.66, "maturity": 1.0, "partial": false}, {"week": "2026-09-14", "auc": 0.6268, "gini": 0.2536, "ks": 0.2028, "obs": 2264, "bad": 184, "rate": 8.13, "maturity": 0.999117387466902, "partial": false}, {"week": "2026-09-21", "auc": 0.6221, "gini": 0.2442, "ks": 0.1889, "obs": 3350, "bad": 273, "rate": 8.15, "maturity": 0.9958382877526754, "partial": false}, {"week": "2026-09-28", "auc": 0.6183, "gini": 0.2366, "ks": 0.1801, "obs": 4684, "bad": 319, "rate": 6.81, "maturity": 0.9913245873889124, "partial": false}, {"week": "2026-10-05", "auc": 0.6408, "gini": 0.2816, "ks": 0.2188, "obs": 4140, "bad": 301, "rate": 7.27, "maturity": 0.7377049180327869, "partial": true}, {"week": "2026-10-12", "auc": 0.6412, "gini": 0.2824, "ks": 0.2552, "obs": 670, "bad": 63, "rate": 9.4, "maturity": 0.10656911086368698, "partial": true}]}};
 const NS = 'http://www.w3.org/2000/svg';
 const fmtRate = v => (v == null ? '—' : v.toFixed(2) + '%');
 const fmtInt = n => (n == null ? '—' : n.toLocaleString('en-US'));
-const fmtSigned = (v, digits = 2, unit = '') => (v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(digits) + unit);
+
+const state = { segment: 'ALL', weekMode: 'count' };
+const segData = () => DATA.segments[state.segment];
+const isAllSeg = () => state.segment === 'ALL';
 
 function wilsonCi(obs, ratePct, z = 1.96) {
   if (!obs || ratePct == null) return null;
@@ -498,162 +494,6 @@ function wilsonCi(obs, ratePct, z = 1.96) {
   const half = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom;
   return { lo: Math.max(0, (center - half) * 100), hi: Math.min(100, (center + half) * 100) };
 }
-
-function meanStd(values) {
-  const n = values.length;
-  if (!n) return null;
-  const mean = values.reduce((sum, value) => sum + value, 0) / n;
-  const variance = n > 1 ? values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (n - 1) : 0;
-  return { mean, std: Math.sqrt(variance), n };
-}
-
-function statusOf(latest, base) {
-  if (latest == null || !base) return { cls: 'na', text: '样本不足' };
-  const sigma = Math.max(base.std, 0.5);
-  const z = (latest - base.mean) / sigma;
-  if (z >= 2) return { cls: 'alert', text: '预警', z };
-  if (z >= 1) return { cls: 'watch', text: '关注', z };
-  if (z <= -1) return { cls: 'ok', text: '改善', z };
-  return { cls: 'ok', text: '正常', z };
-}
-
-function confirmedIndices(points, getMaturity) {
-  const out = [];
-  points.forEach((point, index) => {
-    if (!point || point.partial) return;
-    const maturity = getMaturity ? getMaturity(point) : 1;
-    if (maturity >= 0.9) out.push(index);
-  });
-  return out;
-}
-
-function baselineStats(indices, points) {
-  const pool = indices.slice(0, -1).filter(index => points[index].obs >= 500).slice(-4);
-  if (!pool.length) return null;
-  const stats = meanStd(pool.map(index => points[index].rate));
-  return { ...stats, indices: pool };
-}
-
-function monitorItem(label, value, sub, status) {
-  return `<div class="m-item"><span class="m-label">${label}</span>`
-    + `<span class="m-value">${value}</span>`
-    + `<span class="m-sub">${sub}</span>`
-    + `<span class="m-status ${status.cls}">${status.text}</span></div>`;
-}
-
-function renderMonitor() {
-  const strip = document.getElementById('monitorStrip');
-  if (!strip) return;
-  const chart = DATA.weekChart;
-  const fpd15Idx = confirmedIndices(chart.fpd15, point => point.maturity == null ? 1 : point.maturity);
-  const fpd3Idx = confirmedIndices(chart.fpd3);
-  const items = [];
-
-  const i15 = fpd15Idx[fpd15Idx.length - 1];
-  const b15 = baselineStats(fpd15Idx, chart.fpd15);
-  const p15 = chart.fpd15[i15];
-  const s15 = statusOf(p15.rate, b15);
-  const d15 = b15 ? p15.rate - b15.mean : null;
-  items.push(monitorItem(
-    'FPD15 确认周 · 坏率',
-    `${fmtRate(p15.rate)} <small>${chart.weeks[i15].slice(5)}</small>`,
-    `n=${fmtInt(p15.obs)} · 基线 ${fmtRate(b15 ? b15.mean : null)}（${b15 ? b15.n : 0} 周）· 较基线 ${fmtSigned(d15, 2, 'pp')} · z=${fmtSigned(s15.z, 2, 'σ')}`,
-    s15
-  ));
-
-  const i3 = fpd3Idx[fpd3Idx.length - 1];
-  const b3 = baselineStats(fpd3Idx, chart.fpd3);
-  const p3 = chart.fpd3[i3];
-  const s3 = statusOf(p3.rate, b3);
-  const d3 = b3 ? p3.rate - b3.mean : null;
-  items.push(monitorItem(
-    'FPD3 早期信号 · 坏率',
-    `${fmtRate(p3.rate)} <small>${chart.weeks[i3].slice(5)}</small>`,
-    `n=${fmtInt(p3.obs)} · 基线 ${fmtRate(b3 ? b3.mean : null)}（${b3 ? b3.n : 0} 周）· 较基线 ${fmtSigned(d3, 2, 'pp')} · z=${fmtSigned(s3.z, 2, 'σ')}`,
-    s3
-  ));
-
-  const volumes = fpd3Idx.map(index => chart.fpd3[index].obs);
-  const latestVolume = volumes[volumes.length - 1];
-  const volumeBase = meanStd(volumes.slice(0, -1).slice(-4));
-  const volumeDelta = volumeBase ? (latestVolume / volumeBase.mean - 1) * 100 : null;
-  const volumeStatus = volumeDelta == null
-    ? { cls: 'na', text: '样本不足' }
-    : volumeDelta >= 15 ? { cls: 'watch', text: '放量' }
-    : volumeDelta <= -15 ? { cls: 'watch', text: '缩量' }
-    : { cls: 'ok', text: '平稳' };
-  items.push(monitorItem(
-    '放款量 · 最新完整周',
-    `${fmtInt(latestVolume)} 笔 <small>${chart.weeks[i3].slice(5)}</small>`,
-    `前 4 周均值 ${fmtInt(volumeBase ? Math.round(volumeBase.mean) : null)} · 变化 ${fmtSigned(volumeDelta, 1, '%')}`,
-    volumeStatus
-  ));
-
-  const aucPoints = (DATA.aucChart && DATA.aucChart.points) || [];
-  const psiMap = DATA.psiByWeek || {};
-  if (aucPoints.length || Object.keys(psiMap).length) {
-    let aucIdx = -1;
-    aucPoints.forEach((point, index) => { if (!point.partial) aucIdx = index; });
-    if (aucIdx < 0 && aucPoints.length) aucIdx = aucPoints.length - 1;
-    const aucPoint = aucIdx >= 0 ? aucPoints[aucIdx] : null;
-    const priorAuc = aucPoints
-      .filter((point, index) => index < aucIdx && !point.partial)
-      .slice(-4);
-    const aucBase = priorAuc.length ? meanStd(priorAuc.map(point => point.auc)) : null;
-    const psiWeek = aucPoint ? aucPoint.week : Object.keys(psiMap).sort().pop();
-    const psi = psiWeek != null ? psiMap[psiWeek] : null;
-    const psiCls = psi == null ? 'na' : psi >= 0.25 ? 'alert' : psi >= 0.1 ? 'watch' : 'ok';
-    let aucCls = 'na';
-    if (aucPoint && aucBase) {
-      const sigma = Math.max(aucBase.std, 0.01);
-      const z = (aucPoint.auc - aucBase.mean) / sigma;
-      aucCls = z <= -2 ? 'alert' : z <= -1 ? 'watch' : 'ok';
-    }
-    const cls = [psiCls, aucCls].includes('alert') ? 'alert'
-      : [psiCls, aucCls].includes('watch') ? 'watch'
-      : (psi != null || aucPoint) ? 'ok' : 'na';
-    const text = cls === 'alert'
-      ? (psiCls === 'alert' ? '分数漂移' : '排序走弱')
-      : cls === 'watch'
-        ? (psiCls === 'watch' ? '分数波动' : '排序关注')
-        : cls === 'ok' ? '稳定' : '样本不足';
-    const value = aucPoint
-      ? `AUC ${aucPoint.auc.toFixed(3)} <small>${aucPoint.week.slice(5)}</small>`
-      : psi != null
-        ? `PSI ${psi.toFixed(2)} <small>${psiWeek.slice(5)}</small>`
-        : '—';
-    const subBits = [];
-    if (aucPoint) {
-      subBits.push(`KS ${aucPoint.ks == null ? '—' : aucPoint.ks.toFixed(2)}`);
-      if (aucBase) subBits.push(`基线 AUC ${aucBase.mean.toFixed(3)}（${priorAuc.length} 周）`);
-      subBits.push(`PSI ${psi == null ? '—' : psi.toFixed(2)}`);
-    }
-    items.push(monitorItem(
-      aucPoint ? '排序力与分数漂移 · 最新确认周' : '分数漂移 · 最新确认周',
-      value,
-      subBits.join(' · '),
-      { cls, text }
-    ));
-  }
-
-  const generated = DATA.generatedAt ? new Date(DATA.generatedAt) : null;
-  let freshness = { cls: 'na', text: '未知' };
-  let freshnessValue = '—';
-  let freshnessSub = '未记录生成时间';
-  if (generated && !Number.isNaN(generated.getTime())) {
-    const days = Math.max(0, Math.floor((Date.now() - generated.getTime()) / 86400000));
-    freshnessValue = `${days} 天`;
-    freshnessSub = `生成于 ${generated.toLocaleDateString('zh-CN')} · 最新放款周 ${chart.weeks[chart.weeks.length - 1]}`;
-    freshness = days > 14 ? { cls: 'alert', text: '需刷新' }
-      : days > 7 ? { cls: 'watch', text: '偏旧' }
-      : { cls: 'ok', text: '正常' };
-  }
-  items.push(monitorItem('数据新鲜度 · 距生成', freshnessValue, freshnessSub, freshness));
-
-  strip.innerHTML = items.join('');
-}
-
-renderMonitor();
 
 function svgEl(svg, tag, attrs, text) {
   const node = document.createElementNS(NS, tag);
@@ -836,110 +676,45 @@ function makeLineChart(svgId, tipId, cfg) {
   });
 }
 
-function makeBarChart(svgId, tipId, cfg) {
-  const svg = document.getElementById(svgId);
-  const tip = document.getElementById(tipId);
-  const { width, height, margin, data, yMax, yTicks, color, xLabel, yLabel, yFormat } = cfg;
-  const fmtY = yFormat || (value => value + '%');
-  const innerW = width - margin.l - margin.r;
-  const innerH = height - margin.t - margin.b;
-  const y = v => margin.t + (1 - v / yMax) * innerH;
-  const band = innerW / data.length;
-  const barW = Math.min(58, band * 0.52);
-  clearSvg(svg);
-
-  yTicks.forEach(v => {
-    svgEl(svg, 'line', {
-      x1: margin.l, x2: width - margin.r, y1: y(v), y2: y(v),
-      stroke: v === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1
-    });
-    svgEl(svg, 'text', {
-      x: margin.l - 8, y: y(v) + 1, 'text-anchor': 'end',
-      fill: 'var(--muted)', 'font-size': 11.5
-    }, fmtY(v));
+function renderFpd() {
+  const keys = isAllSeg() ? ['ALL', 'New', 'Old'] : [state.segment, 'ALL'];
+  const fpdSeries = keys.map(key => {
+    const curve = DATA.fpdCurves[key];
+    const reference = !isAllSeg() && key === 'ALL';
+    return {
+      name: reference ? '整体（参考）' : curve.name,
+      key,
+      color: curve.color,
+      points: curve.points,
+      dash: reference ? '5 4' : '',
+      width: reference ? 1.8 : 2
+    };
   });
-
-  if (yLabel) {
-    const cy = margin.t + innerH / 2;
-    svgEl(svg, 'text', {
-      x: 13, y: cy, 'text-anchor': 'middle',
-      transform: `rotate(-90 13 ${cy})`,
-      fill: 'var(--muted)', 'font-size': 11.5
-    }, yLabel);
-  }
-
-  data.forEach((item, index) => {
-    const cx = margin.l + band * (index + 0.5);
-    const x0 = cx - barW / 2;
-    const y0 = y(0);
-    const yTop = y(item.rate);
-    const r = 4;
-    const path = `M${x0},${y0} L${x0},${yTop + r} Q${x0},${yTop} ${x0 + r},${yTop} L${x0 + barW - r},${yTop} Q${x0 + barW},${yTop} ${x0 + barW},${yTop + r} L${x0 + barW},${y0} Z`;
-    const bar = svgEl(svg, 'path', { d: path, fill: color });
-    svgEl(svg, 'text', {
-      x: cx, y: yTop - 8, 'text-anchor': 'middle',
-      fill: 'var(--ink)', 'font-size': 12, 'font-weight': 600
-    }, fmtRate(item.rate));
-    svgEl(svg, 'text', {
-      x: cx, y: height - margin.b + 18, 'text-anchor': 'middle',
-      fill: 'var(--ink-2)', 'font-size': 11.5
-    }, item.label);
-    svgEl(svg, 'text', {
-      x: cx, y: height - margin.b + 31, 'text-anchor': 'middle',
-      fill: 'var(--muted)', 'font-size': 10.5
-    }, item.sub);
-    svgEl(svg, 'text', {
-      x: cx, y: height - margin.b + 44, 'text-anchor': 'middle',
-      fill: 'var(--muted)', 'font-size': 10.5
-    }, `n=${fmtInt(item.obs)}`);
-
-    const hit = svgEl(svg, 'rect', {
-      x: margin.l + band * index, y: margin.t, width: band, height: innerH,
-      fill: 'transparent'
-    });
-    hit.addEventListener('mousemove', event => {
-      const box = svg.getBoundingClientRect();
-      bar.setAttribute('opacity', 0.82);
-      tip.innerHTML = `<b>${item.label} · ${item.sub}</b><br><span>FPD15 笔数坏率 <b>${fmtRate(item.rate)}</b> · n=${fmtInt(item.obs)} · 坏 ${fmtInt(item.bad)}</span>`;
-      tip.classList.toggle('down', yTop * (box.height / height) < 90);
-      tip.style.left = Math.max(100, Math.min(box.width - 100, cx * (box.width / width))) + 'px';
-      tip.style.top = yTop * (box.height / height) + 'px';
-      tip.style.display = 'block';
-    });
-    hit.addEventListener('mouseleave', () => {
-      bar.setAttribute('opacity', 1);
-      tip.style.display = 'none';
-    });
+  const fpdSelectedAbove = !isAllSeg() && fpdSeries[0].points[3].rate >= fpdSeries[1].points[3].rate;
+  makeLineChart('fpdCurve', 'fpdTip', {
+    width: 1040, height: 300, margin: { t: 30, r: 130, b: 46, l: 56 },
+    labels: DATA.fpdLabels,
+    series: fpdSeries,
+    yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '观察窗口', yLabel: '笔数坏率',
+    directLabels: fpdSeries.map((series, index) => ({
+      series: index, index: 3,
+      text: `${series.name} ${fmtRate(series.points[3].rate)}`,
+      dx: 0,
+      dy: isAllSeg() ? (index === 1 ? -12 : 18) : (index === 0 ? (fpdSelectedAbove ? -14 : 20) : (fpdSelectedAbove ? 20 : -14)),
+      anchor: 'middle'
+    })),
+    tooltip: index => {
+      const rows = fpdSeries.map(series => {
+        const point = series.points[index];
+        return `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b> · n=${fmtInt(point.obs)}</span>`;
+      }).join('<br>');
+      const age = index === 4
+        ? `<br><span>30 天成熟：${fpdSeries.map(series => `${series.name} ${Math.round(series.points[4].maturity * 100)}%`).join(' · ')}</span>`
+        : '';
+      return `<b>${DATA.fpdLabels[index]} · 笔数坏率</b><br>${rows}${age}`;
+    }
   });
-
-  svgEl(svg, 'text', {
-    x: width - margin.r, y: height - 6, 'text-anchor': 'end',
-    fill: 'var(--muted)', 'font-size': 11.5
-  }, xLabel);
 }
-
-const fpdSeries = DATA.fpdCurve.series;
-makeLineChart('fpdCurve', 'fpdTip', {
-  width: 1040, height: 300, margin: { t: 30, r: 130, b: 46, l: 56 },
-  labels: DATA.fpdCurve.labels,
-  series: fpdSeries,
-  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '观察窗口', yLabel: '笔数坏率',
-  directLabels: fpdSeries.map((series, index) => ({
-    series: index, index: 3,
-    text: `${series.name} ${fmtRate(series.points[3].rate)}`,
-    dx: 0, dy: index === 1 ? -12 : 18, anchor: 'middle'
-  })),
-  tooltip: index => {
-    const rows = fpdSeries.map(series => {
-      const point = series.points[index];
-      return `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b> · n=${fmtInt(point.obs)}</span>`;
-    }).join('<br>');
-    const age = index === 4
-      ? `<br><span>30 天成熟：整体 ${Math.round(fpdSeries[0].points[4].maturity * 100)}% · 新 ${Math.round(fpdSeries[1].points[4].maturity * 100)}% · 老 ${Math.round(fpdSeries[2].points[4].maturity * 100)}%</span>`
-      : '';
-    return `<b>${DATA.fpdCurve.labels[index]} · 笔数坏率</b><br>${rows}${age}`;
-  }
-});
 
 const lastPointIndex = points => {
   for (let i = points.length - 1; i >= 0; i--) if (points[i]) return i;
@@ -948,70 +723,91 @@ const lastPointIndex = points => {
 
 function renderWeekChart(mode) {
   const amount = mode === 'amount';
+  const chart = segData().weekChart;
   const countSeries = [
-    { name: 'FPD3', key: 'fpd3', color: 'var(--muted)', points: DATA.weekChart.fpd3, dash: '5 4', width: 1.8 },
-    { name: 'FPD7', key: 'fpd7', color: 'var(--c3)', points: DATA.weekChart.fpd7, dash: '5 4', width: 1.8 },
-    { name: 'FPD15', key: 'fpd15', color: 'var(--c1)', points: DATA.weekChart.fpd15, width: 2 }
+    { name: 'FPD3', key: 'fpd3', color: 'var(--muted)', points: chart.fpd3, dash: '5 4', width: 1.8 },
+    { name: 'FPD7', key: 'fpd7', color: 'var(--c3)', points: chart.fpd7, dash: '5 4', width: 1.8 },
+    { name: 'FPD15', key: 'fpd15', color: 'var(--c1)', points: chart.fpd15, width: 2 }
   ];
   const amountSeries = [
-    { name: 'FPD15 金额', key: 'fpd15Amt', color: 'var(--c1)', points: DATA.weekChart.fpd15Amt, width: 2 }
+    { name: 'FPD3 金额', key: 'fpd3Amt', color: 'var(--muted)', points: chart.fpd3Amt, dash: '5 4', width: 1.8 },
+    { name: 'FPD7 金额', key: 'fpd7Amt', color: 'var(--c3)', points: chart.fpd7Amt, dash: '5 4', width: 1.8 },
+    { name: 'FPD15 金额', key: 'fpd15Amt', color: 'var(--c1)', points: chart.fpd15Amt, width: 2 }
   ];
   const series = amount ? amountSeries : countSeries;
-  const last15 = lastPointIndex(DATA.weekChart.fpd15);
-  const last7 = lastPointIndex(DATA.weekChart.fpd7);
-  const last3 = lastPointIndex(DATA.weekChart.fpd3);
-  const lastAmt = lastPointIndex(DATA.weekChart.fpd15Amt);
-  const directLabels = amount ? [] : [
+  const last15 = lastPointIndex(chart.fpd15);
+  const last7 = lastPointIndex(chart.fpd7);
+  const last3 = lastPointIndex(chart.fpd3);
+  const lastAmt3 = lastPointIndex(chart.fpd3Amt);
+  const lastAmt7 = lastPointIndex(chart.fpd7Amt);
+  const lastAmt15 = lastPointIndex(chart.fpd15Amt);
+  const directLabels = amount ? [
+    {
+      series: 2, index: lastAmt15,
+      text: `FPD15 金额 ${fmtRate(chart.fpd15Amt[lastAmt15].rate)}${chart.fpd15Amt[lastAmt15].partial ? '*' : ''}`,
+      dx: 8, dy: -10, anchor: 'start'
+    },
+    {
+      series: 1, index: lastAmt7,
+      text: `FPD7 金额 ${fmtRate(chart.fpd7Amt[lastAmt7].rate)}${chart.fpd7Amt[lastAmt7].partial ? '*' : ''}`,
+      dx: 8, dy: -10, anchor: 'start'
+    },
+    {
+      series: 0, index: lastAmt3,
+      text: `FPD3 金额 ${fmtRate(chart.fpd3Amt[lastAmt3].rate)}${chart.fpd3Amt[lastAmt3].partial ? '†' : ''}`,
+      dx: -8, dy: -26, anchor: 'end'
+    }
+  ] : [
     {
       series: 2, index: last15,
-      text: `FPD15 ${fmtRate(DATA.weekChart.fpd15[last15].rate)}${DATA.weekChart.fpd15[last15].partial ? '*' : ''}`,
+      text: `FPD15 ${fmtRate(chart.fpd15[last15].rate)}${chart.fpd15[last15].partial ? '*' : ''}`,
       dx: 8, dy: -10, anchor: 'start'
     },
     {
       series: 1, index: last7,
-      text: `FPD7 ${fmtRate(DATA.weekChart.fpd7[last7].rate)}${DATA.weekChart.fpd7[last7].partial ? '*' : ''}`,
+      text: `FPD7 ${fmtRate(chart.fpd7[last7].rate)}${chart.fpd7[last7].partial ? '*' : ''}`,
       dx: 8, dy: -10, anchor: 'start'
     },
     {
       series: 0, index: last3,
-      text: `FPD3 ${fmtRate(DATA.weekChart.fpd3[last3].rate)}${DATA.weekChart.fpd3[last3].partial ? '†' : ''}`,
+      text: `FPD3 ${fmtRate(chart.fpd3[last3].rate)}${chart.fpd3[last3].partial ? '†' : ''}`,
       dx: -8, dy: -10, anchor: 'end'
     }
   ];
-  if (amount && lastAmt >= 0) {
-    directLabels.push({
-      series: 0, index: lastAmt,
-      text: `FPD15 金额 ${fmtRate(DATA.weekChart.fpd15Amt[lastAmt].rate)}${DATA.weekChart.fpd15Amt[lastAmt].partial ? '*' : ''}`,
-      dx: 8, dy: -10, anchor: 'start'
-    });
-  }
   makeLineChart('weekChart', 'weekTip', {
     width: 1040, height: 300, margin: { t: 30, r: 100, b: 46, l: 56 },
-    labels: DATA.weekChart.labels,
+    labels: chart.labels,
     series,
-    volume: { values: DATA.weekChart.fpd3.map(point => point ? point.obs : null) },
+    volume: { values: chart.fpd3.map(point => point ? point.obs : null) },
     ciSeries: amount ? null : 2,
     yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '放款周（2026）', yLabel: amount ? '金额坏率' : '笔数坏率',
     directLabels,
     tooltip: index => {
-      const fpd3 = DATA.weekChart.fpd3[index];
-      const fpd7 = DATA.weekChart.fpd7[index];
-      const fpd15 = DATA.weekChart.fpd15[index];
+      const fpd3 = chart.fpd3[index];
+      const fpd7 = chart.fpd7[index];
+      const fpd15 = chart.fpd15[index];
       if (amount) {
-        const parts = [`<b>${DATA.weekChart.weeks[index]} · 金额坏率</b>`];
-        const amt = DATA.weekChart.fpd15Amt[index];
-        parts.push(amt
-          ? `<span><i style="background:var(--c1)"></i>FPD15 金额 <b>${fmtRate(amt.rate)}</b> · n=${fmtInt(amt.obs)} · ${Math.round(amt.maturity * 100)}% 成熟${amt.partial ? '*' : ''}</span>`
+        const parts = [`<b>${chart.weeks[index]} · 金额坏率</b>`];
+        const amt3 = chart.fpd3Amt[index];
+        const amt7 = chart.fpd7Amt[index];
+        const amt15 = chart.fpd15Amt[index];
+        parts.push(amt3
+          ? `<span><i style="background:var(--muted)"></i>FPD3 金额 <b>${fmtRate(amt3.rate)}</b> · n=${fmtInt(amt3.obs)}${amt3.partial ? ' · 周未完整' : ''}</span>`
+          : '<span>FPD3 金额无数据</span>');
+        parts.push(amt7
+          ? `<span><i style="background:var(--c3)"></i>FPD7 金额 <b>${fmtRate(amt7.rate)}</b> · n=${fmtInt(amt7.obs)} · ${Math.round(amt7.maturity * 100)}% 成熟${amt7.partial ? '*' : ''}</span>`
+          : '<span>FPD7 金额坏率尚未达到 70% 成熟</span>');
+        parts.push(amt15
+          ? `<span><i style="background:var(--c1)"></i>FPD15 金额 <b>${fmtRate(amt15.rate)}</b> · n=${fmtInt(amt15.obs)} · ${Math.round(amt15.maturity * 100)}% 成熟${amt15.partial ? '*' : ''}</span>`
           : '<span>FPD15 金额坏率尚未达到 70% 成熟</span>');
-        if (fpd15) parts.push(`<span>笔数坏率 ${fmtRate(fpd15.rate)}（n=${fmtInt(fpd15.obs)}）</span>`);
-        if (fpd3) parts.push(`<span>FPD3 早期信号 ${fmtRate(fpd3.rate)}</span>`);
+        if (fpd15) parts.push(`<span>笔数坏率 FPD15 ${fmtRate(fpd15.rate)}（n=${fmtInt(fpd15.obs)}）</span>`);
         return parts.join('<br>');
       }
-      const parts = [`<b>${DATA.weekChart.weeks[index]} · 笔数坏率</b>`];
+      const parts = [`<b>${chart.weeks[index]} · 笔数坏率</b>`];
       if (fpd3) parts.push(`<span><i style="background:var(--muted)"></i>FPD3 <b>${fmtRate(fpd3.rate)}</b> · n=${fmtInt(fpd3.obs)}${fpd3.partial ? ' · 周未完整' : ''}</span>`);
       if (fpd7) parts.push(`<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(fpd7.rate)}</b> · n=${fmtInt(fpd7.obs)} · ${Math.round(fpd7.maturity * 100)}% 成熟${fpd7.partial ? '*' : ''}</span>`);
       else {
-        const low7 = DATA.weekChart.fpd7Low[index];
+        const low7 = chart.fpd7Low[index];
         parts.push(low7
           ? `<span><i style="background:var(--c3)"></i>FPD7 <b>${fmtRate(low7.rate)}</b> · n=${fmtInt(low7.obs)} · ${Math.round(low7.maturity * 100)}% 成熟（低于 70%，未入图）</span>`
           : '<span>FPD7 尚未达到 70% 成熟</span>');
@@ -1021,7 +817,7 @@ function renderWeekChart(mode) {
         parts.push(`<span><i style="background:var(--c1)"></i>FPD15 <b>${fmtRate(fpd15.rate)}</b> · n=${fmtInt(fpd15.obs)} · ${Math.round(fpd15.maturity * 100)}% 成熟${fpd15.partial ? '*' : ''}${ci ? ` · 95% CI ${fmtRate(ci.lo)}–${fmtRate(ci.hi)}` : ''}</span>`);
       }
       else {
-        const low = DATA.weekChart.fpd15Low[index];
+        const low = chart.fpd15Low[index];
         parts.push(low
           ? `<span><i style="background:var(--muted)"></i>FPD15 <b>${fmtRate(low.rate)}</b> · n=${fmtInt(low.obs)} · ${Math.round(low.maturity * 100)}% 成熟（低于 70%，未入图）</span>`
           : '<span>FPD15 尚未达到 70% 成熟</span>');
@@ -1029,10 +825,8 @@ function renderWeekChart(mode) {
       return parts.join('<br>');
     }
   });
-  const countLegend = document.getElementById('weekLegendCount');
-  const amountLegend = document.getElementById('weekLegendAmount');
-  if (countLegend) countLegend.hidden = amount;
-  if (amountLegend) amountLegend.hidden = !amount;
+  document.querySelectorAll('.week-legend-count').forEach(el => { el.hidden = amount; });
+  document.querySelectorAll('.week-legend-amount').forEach(el => { el.hidden = !amount; });
 }
 
 const weekButtons = document.querySelectorAll('[data-week-mode]');
@@ -1043,37 +837,82 @@ weekButtons.forEach(button => {
       item.classList.toggle('on', active);
       item.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
-    renderWeekChart(button.dataset.weekMode);
+    state.weekMode = button.dataset.weekMode;
+    renderWeekChart(state.weekMode);
   });
 });
-renderWeekChart('count');
 
-const scoreSeries = DATA.scoreChart.series;
-makeLineChart('scoreChart', 'scoreTip', {
-  width: 1040, height: 300, margin: { t: 30, r: 135, b: 46, l: 56 },
-  labels: DATA.scoreChart.labels,
-  series: scoreSeries,
-  yMax: 20, yTicks: [0, 5, 10, 15, 20], xLabel: '模型分分档（低 → 高）', yLabel: '笔数坏率',
-  directLabels: scoreSeries.map((series, index) => ({
-    series: index, index: 4,
-    text: `${series.name} ${fmtRate(series.points[4].rate)}`,
-    dx: 8, dy: -10, anchor: 'start'
-  })),
-  tooltip: index => {
-    const base = scoreSeries[0].points[index];
-    const rows = scoreSeries.map(series => {
-      const point = series.points[index];
-      return `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b> · n=${fmtInt(point.obs)}</span>`;
-    }).join('<br>');
-    return `<b>${DATA.scoreChart.labels[index]} · ${base.min.toFixed(4)} ~ ${base.max.toFixed(4)} · 笔数坏率</b><br>${rows}`;
-  }
+const creditBinButtons = document.querySelectorAll('[data-credit-bins]');
+creditBinButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    creditBinButtons.forEach(item => {
+      const active = item === button;
+      item.classList.toggle('on', active);
+      item.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-credit-table]').forEach(table => {
+      table.hidden = table.dataset.creditTable !== button.dataset.creditBins;
+    });
+  });
 });
 
-if (DATA.aucChart && DATA.aucChart.points.length > 1) {
-  const aucPoints = DATA.aucChart.points;
+function renderScoreChart() {
+  const keys = isAllSeg() ? ['ALL', 'New', 'Old'] : [state.segment, 'ALL'];
+  const scoreSeries = keys.map(key => {
+    const curve = DATA.scoreCurves[key];
+    const reference = !isAllSeg() && key === 'ALL';
+    return {
+      name: reference ? '整体（参考）' : curve.name,
+      key,
+      color: curve.color,
+      points: curve.points,
+      dash: reference ? '5 4' : '',
+      width: reference ? 1.8 : 2
+    };
+  });
+  const maxRate = Math.max(...scoreSeries.flatMap(series => series.points.map(point => point.rate)));
+  const yMax = Math.max(20, Math.ceil(maxRate / 5) * 5);
+  const tickStep = yMax <= 25 ? 5 : 10;
+  const yTicks = [];
+  for (let value = 0; value <= yMax; value += tickStep) yTicks.push(value);
+  const selectedAbove = !isAllSeg() && scoreSeries[0].points[4].rate >= scoreSeries[1].points[4].rate;
+  makeLineChart('scoreChart', 'scoreTip', {
+    width: 1040, height: 300, margin: { t: 30, r: 135, b: 46, l: 56 },
+    labels: ['1档', '2档', '3档', '4档', '5档'],
+    series: scoreSeries,
+    yMax, yTicks, xLabel: '模型分分档（低 → 高）', yLabel: '笔数坏率',
+    directLabels: scoreSeries.map((series, index) => ({
+      series: index, index: 4,
+      text: `${series.name} ${fmtRate(series.points[4].rate)}`,
+      dx: 8,
+      dy: isAllSeg() ? -10 : (index === 0 ? (selectedAbove ? -14 : 20) : (selectedAbove ? 20 : -14)),
+      anchor: 'start'
+    })),
+    tooltip: index => {
+      const base = DATA.scoreCurves.ALL.points[index];
+      const rows = scoreSeries.map(series => {
+        const point = series.points[index];
+        return `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b> · n=${fmtInt(point.obs)}</span>`;
+      }).join('<br>');
+      return `<b>${['1档', '2档', '3档', '4档', '5档'][index]} · ${base.min.toFixed(4)} ~ ${base.max.toFixed(4)} · 笔数坏率</b><br>${rows}`;
+    }
+  });
+}
+
+function renderAucChart() {
+  const view = segData();
+  const aucPoints = (view.aucChart && view.aucChart.points) || [];
+  const legend = document.getElementById('aucLegend');
+  if (aucPoints.length < 2) {
+    const svg = document.getElementById('aucChart');
+    if (svg) clearSvg(svg);
+    if (legend) legend.innerHTML = '<span>该客群暂无可展示的周度排序力样本</span>';
+    return;
+  }
+  const segColor = isAllSeg() ? 'var(--c1)' : view.color;
   const aucSeries = [
     {
-      name: 'AUC', key: 'auc', color: 'var(--c1)', width: 2,
+      name: 'AUC', key: 'auc', color: segColor, width: 2,
       points: aucPoints.map(point => ({
         rate: point.auc, obs: point.obs,
         maturity: point.maturity, partial: point.partial
@@ -1087,6 +926,22 @@ if (DATA.aucChart && DATA.aucChart.points.length > 1) {
       }))
     }
   ];
+  let overallSeries = null;
+  let overallByWeek = null;
+  if (!isAllSeg() && DATA.aucChart && DATA.aucChart.points.length > 1) {
+    overallByWeek = new Map(DATA.aucChart.points.map(point => [point.week, point]));
+    overallSeries = {
+      name: '整体 AUC（参考）', key: 'overallAuc', color: 'var(--ink-2)', width: 1.8, dash: '5 4',
+      points: view.aucChart.weeks.map(week => {
+        const point = overallByWeek.get(week);
+        return point ? {
+          rate: point.auc, obs: point.obs,
+          maturity: point.maturity, partial: point.partial
+        } : null;
+      })
+    };
+    aucSeries.push(overallSeries);
+  }
   const lastAuc = lastPointIndex(aucSeries[0].points);
   const lastKs = lastPointIndex(aucSeries[1].points);
   const aucLabels = [];
@@ -1104,9 +959,20 @@ if (DATA.aucChart && DATA.aucChart.points.length > 1) {
       dx: 8, dy: 16, anchor: 'start'
     });
   }
+  if (overallSeries) {
+    const lastOverall = lastPointIndex(overallSeries.points);
+    if (lastOverall >= 0) {
+      const overallPoint = overallByWeek.get(view.aucChart.weeks[lastOverall]);
+      aucLabels.push({
+        series: 2, index: lastOverall,
+        text: `整体 ${overallPoint.auc.toFixed(3)}`,
+        dx: 8, dy: 30, anchor: 'start'
+      });
+    }
+  }
   makeLineChart('aucChart', 'aucTip', {
     width: 1040, height: 280, margin: { t: 30, r: 110, b: 46, l: 56 },
-    labels: DATA.aucChart.labels,
+    labels: view.aucChart.labels,
     series: aucSeries,
     volume: { values: aucPoints.map(point => point.obs) },
     yMax: 1, yTicks: [0, 0.25, 0.5, 0.75, 1],
@@ -1117,104 +983,50 @@ if (DATA.aucChart && DATA.aucChart.points.length > 1) {
       const point = aucPoints[index];
       const gini = point.gini == null ? '—' : point.gini.toFixed(3);
       const ks = point.ks == null ? '—' : point.ks.toFixed(3);
-      return `<b>${point.week} · 排序力</b><br>`
-        + `<span><i style="background:var(--c1)"></i>AUC <b>${point.auc.toFixed(3)}</b> · Gini ${gini}</span><br>`
+      let html = `<b>${point.week} · ${view.name}排序力</b><br>`
+        + `<span><i style="background:${segColor}"></i>AUC <b>${point.auc.toFixed(3)}</b> · Gini ${gini}</span><br>`
         + `<span><i style="background:var(--c3)"></i>KS <b>${ks}</b></span><br>`
         + `<span>n=${fmtInt(point.obs)} · 坏 ${fmtInt(point.bad)} · ${Math.round(point.maturity * 100)}% 成熟${point.partial ? '*' : ''}</span>`;
+      if (overallSeries) {
+        const overall = overallByWeek.get(point.week);
+        if (overall) html += `<br><span><i style="background:var(--ink-2)"></i>整体 AUC <b>${overall.auc.toFixed(3)}</b></span>`;
+      }
+      return html;
     }
   });
+  if (legend) {
+    legend.innerHTML = [
+      `<span><i style="background:${segColor}"></i>${view.name} AUC</span>`,
+      '<span><i class="dash" style="border-top-color:var(--c3)"></i>KS</span>',
+      overallSeries ? '<span><i class="dash" style="border-top-color:var(--ink-2)"></i>整体 AUC（参考）</span>' : '',
+      '<span><i class="bar" style="background:var(--grid)"></i>FPD15 成熟样本</span>'
+    ].join('');
+  }
 }
 
-if (DATA.mixChart && DATA.mixChart.weeks.length) {
-  const mixSeries = [
-    { name: '新客', key: 'New', color: 'var(--c1)', points: DATA.mixChart.new, width: 2 },
-    { name: '老客', key: 'Old', color: 'var(--c2)', points: DATA.mixChart.old, width: 2 }
-  ];
-  const lastNew = lastPointIndex(mixSeries[0].points);
-  const lastOld = lastPointIndex(mixSeries[1].points);
-  const mixLabels = [];
-  if (lastNew >= 0) {
-    mixLabels.push({
-      series: 0, index: lastNew,
-      text: `新客 ${fmtRate(mixSeries[0].points[lastNew].rate)}`,
-      dx: 8, dy: -10, anchor: 'start'
-    });
-  }
-  if (lastOld >= 0) {
-    mixLabels.push({
-      series: 1, index: lastOld,
-      text: `老客 ${fmtRate(mixSeries[1].points[lastOld].rate)}`,
-      dx: 8, dy: 16, anchor: 'start'
-    });
-  }
-  makeLineChart('mixChart', 'mixTip', {
-    width: 1040, height: 280, margin: { t: 30, r: 110, b: 46, l: 56 },
-    labels: DATA.mixChart.labels,
-    series: mixSeries,
-    yMax: 20, yTicks: [0, 5, 10, 15, 20],
-    xLabel: '放款周（2026）', yLabel: 'FPD15 笔数坏率',
-    directLabels: mixLabels,
-    tooltip: index => {
-      const parts = [`<b>${DATA.mixChart.weeks[index]} · FPD15 新老客</b>`];
-      mixSeries.forEach(series => {
-        const point = series.points[index];
-        if (!point) {
-          parts.push(`<span>${series.name} 尚未达到 70% 成熟</span>`);
-          return;
-        }
-        const amount = point.amtRate == null ? '—' : fmtRate(point.amtRate);
-        parts.push(
-          `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b>`
-          + ` · n=${fmtInt(point.obs)} · 金额 ${amount}`
-          + ` · ${Math.round(point.maturity * 100)}% 成熟${point.partial ? '*' : ''}</span>`
-        );
-      });
-      return parts.join('<br>');
-    }
+function applySegment(seg) {
+  state.segment = seg;
+  document.querySelectorAll('[data-segment]').forEach(button => {
+    const active = button.dataset.segment === seg;
+    button.classList.toggle('on', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
+  document.querySelectorAll('[data-seg-panel]').forEach(panel => {
+    panel.hidden = panel.dataset.segPanel !== seg;
+  });
+  const hint = document.getElementById('scopeHint');
+  if (hint) hint.textContent = segData().scopeHint;
+  renderFpd();
+  renderWeekChart(state.weekMode);
+  renderScoreChart();
+  renderAucChart();
 }
 
-makeBarChart('rankChart', 'rankTip', {
-  width: 520, height: 300, margin: { t: 30, r: 24, b: 64, l: 52 },
-  data: DATA.rankChart,
-  yMax: 12, yTicks: [0, 3, 6, 9, 12],
-  color: 'var(--c1)', xLabel: '复借期数', yLabel: '笔数坏率'
+document.querySelectorAll('[data-segment]').forEach(button => {
+  button.addEventListener('click', () => applySegment(button.dataset.segment));
 });
 
-function renderMonthlyAuc() {
-  const card = document.getElementById('monthlyCard');
-  const body = document.getElementById('monthlyAucBody');
-  if (!card || !body) return;
-  const monthly = DATA.monthlyAuc || {};
-  const months = Object.keys(monthly).sort().reverse();
-  if (!months.length) { card.hidden = true; return; }
-  card.hidden = false;
-  body.textContent = '';
-  months.forEach(month => {
-    ['ALL', 'New', 'Old'].forEach(userType => {
-      const row = monthly[month][userType];
-      if (!row) return;
-      const tr = document.createElement('tr');
-      const cells = [
-        month,
-        userType,
-        row.obs == null ? '—' : fmtInt(row.obs),
-        row.bad == null ? '—' : fmtInt(row.bad),
-        row.rate == null ? '—' : fmtRate(row.rate),
-        row.auc == null ? '—' : row.auc.toFixed(4),
-        row.gini == null ? '—' : row.gini.toFixed(4),
-        row.ks == null ? '—' : row.ks.toFixed(4),
-      ];
-      cells.forEach(text => {
-        const td = document.createElement('td');
-        td.textContent = text;
-        tr.appendChild(td);
-      });
-      body.appendChild(tr);
-    });
-  });
-}
-renderMonthlyAuc();
+applySegment('ALL');
 </script>
 </body>
 </html>
