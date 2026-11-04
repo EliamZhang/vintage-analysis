@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""同步 Vintage 监控看板数据：执行 wagego_04_vintage分析.sql 的 13 个查询块。
+"""同步 WageGo 风险监控看板数据：执行 wagego_04_vintage分析.sql 的 13 个查询块。
 
 产出：同步数据/vintage_01~11.csv、vintage_data.zip。
 只服务监控看板；新客戳额模型分分析的表同步见 sync_new_user_credit_analysis.py。
@@ -124,7 +124,7 @@ def run(setup_statements, queries, query_fn):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="同步 Vintage 监控看板数据。")
+    parser = argparse.ArgumentParser(description="同步 WageGo 风险监控看板数据。")
     parser.add_argument("--blocks", help="只执行指定块，逗号分隔，如 1,3,5a,5b,6,7")
     parser.add_argument("--dry-run", action="store_true", help="只检查块号和输出文件名，不连接数据库")
     args = parser.parse_args(argv)

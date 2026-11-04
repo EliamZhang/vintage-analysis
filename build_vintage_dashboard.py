@@ -826,7 +826,7 @@ def header_html():
 <header class="hero">
   <div class="hero-copy">
     <p class="eyebrow">WAGEGO · RISK MONITORING</p>
-    <h1>Vintage 监控看板</h1>
+    <h1>WageGo 风险监控看板</h1>
     <p class="sub">按放款周看首期逾期率（FPD），并按模型分分档拆分；新客视图另看全量戳额样本的模型分分布。除标注“金额”外，坏率均为笔数口径。</p>
   </div>
 </header>
@@ -1705,7 +1705,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WageGo Vintage 监控看板</title>
+<title>WageGo 风险监控看板</title>
 <style>
   :root {
     color-scheme: light;
@@ -2545,7 +2545,7 @@ def render_html(data, generated_at, input_name, generated_iso):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="从 vintage_data.zip 生成 Vintage 监控看板。")
+    parser = argparse.ArgumentParser(description="从 vintage_data.zip 生成 WageGo 风险监控看板。")
     parser.add_argument("--input", default=str(DEFAULT_INPUT), help="vintage_data.zip 或存有 vintage_*.csv 的目录")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="输出 HTML 路径")
     args = parser.parse_args(argv)
