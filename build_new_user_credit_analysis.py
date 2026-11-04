@@ -55,6 +55,15 @@ OLD_DESC = "发标 3rd 模型"
 NEW_DESC = "交易流水 LGB 模型"
 
 WINDOWS = (15, 7)  # 主口径在前
+# 放款金额带（按 real_amount 划分，左开右闭；按当前样本 50~550 的分布切分）。
+AMOUNT_BANDS = (
+    (0, 100, "≤100"),
+    (100, 150, "101–150"),
+    (150, 200, "151–200"),
+    (200, 250, "201–250"),
+    (250, 500, "251–500"),
+    (500, None, ">500"),
+)
 # 固定十等分分箱：thresholds = 10%~100% 百分位，max 为各档分数上界。
 # 两个模型各用自己的一套固定切点，线上模型不再按当前样本等笔数切档。
 NEW_DECILE_THRESHOLDS = tuple(range(10, 101, 10))
@@ -196,6 +205,41 @@ def deciles(score, label, amount=None, loss=None, cuts=None):
             item["loss_amt"] = loss_amt
             item["amt_rate"] = round(loss_amt / amt * 100, 2) if amt else None
         rows.append(item)
+    return rows
+
+
+def amount_band_stats(amount, label, loss):
+    """按放款本金分带统计笔数、笔数坏率与金额口径的置入/置出。"""
+    amount = np.asarray(amount, dtype=float)
+    label = np.asarray(label, dtype=int)
+    loss = np.asarray(loss, dtype=float)
+    total_amt = float(amount.sum())
+    total_loss = float(loss.sum())
+    total_n = int(len(amount))
+    rows = []
+    for lo, hi, name in AMOUNT_BANDS:
+        if hi is None:
+            mask = amount > lo
+        else:
+            mask = (amount > lo) & (amount <= hi)
+        n = int(mask.sum())
+        bad = int(label[mask].sum())
+        amt = float(amount[mask].sum())
+        loss_amt = float(loss[mask].sum())
+        rows.append(
+            {
+                "band": name,
+                "n": n,
+                "bad": bad,
+                "rate": round(bad / n * 100, 2) if n else None,
+                "amt": amt,
+                "loss_amt": loss_amt,
+                "amt_rate": round(loss_amt / amt * 100, 2) if amt else None,
+                "n_share": round(n / total_n * 100, 1) if total_n else None,
+                "amt_share": round(amt / total_amt * 100, 1) if total_amt else None,
+                "loss_share": round(loss_amt / total_loss * 100, 1) if total_loss else None,
+            }
+        )
     return rows
 
 
@@ -743,6 +787,11 @@ def build_data(sample: pd.DataFrame, reject_pct: int, oot_start: str) -> dict:
             "models": {},
         }
         loss_col = f"estimate_principal_remaining_fpd{w}"
+        entry["amount_bands"] = amount_band_stats(
+            pd.to_numeric(base["real_amount"], errors="coerce").fillna(0).to_numpy(float),
+            base[ovd_col].astype(int).to_numpy(),
+            pd.to_numeric(base[loss_col], errors="coerce").fillna(0).to_numpy(float),
+        )
         for key, col in (("old", "old_score"), ("new", "new_score")):
             d = base.dropna(subset=[col])
             y = d[ovd_col].astype(int).to_numpy()
@@ -2046,6 +2095,41 @@ def money_decile_table(data, window_key="15") -> str:
     """
 
 
+def money_band_table(data, window_key="15") -> str:
+    entry = data["windows"][window_key]
+    rows = []
+    for r in entry["amount_bands"]:
+        if not r["n"]:
+            continue
+        rows.append(
+            f"""
+            <tr>
+              <td class="w">{r['band']}</td>
+              <td>{fmt_int(r['n'])}</td>
+              <td class="soft">{fmt_pct(r['rate'])}</td>
+              <td>{fmt_int(r['amt'])}</td>
+              <td class="soft">{fmt_int(r['loss_amt'])}</td>
+              <td class="strong">{fmt_pct(r['amt_rate'])}</td>
+              <td class="soft">{fmt_pct(r['amt_share'], 1)}</td>
+              <td class="soft">{fmt_pct(r['loss_share'], 1)}</td>
+            </tr>"""
+        )
+    return f"""
+      <div class="table-wrap">
+        <table class="money">
+          <thead>
+            <tr>
+              <th>放款金额带</th><th>笔数</th><th>笔数坏率</th>
+              <th>置入（放款本金）</th><th>置出（未还本金）</th><th>置出率</th>
+              <th>置入占比</th><th>置出占比</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(rows)}</tbody>
+        </table>
+      </div>
+    """
+
+
 def money_card(data) -> str:
     entry = data["windows"]["15"]
     m = entry["models"]["new"]
@@ -2058,6 +2142,19 @@ def money_card(data) -> str:
     top3_amt_share = sum(d["amt"] for d in top3) / m["amt"] * 100 if m["amt"] else 0
     top3_loss_share = sum(d["loss_amt"] for d in top3) / m["loss_amt"] * 100 if m["loss_amt"] else 0
     old_top = old_m["deciles"][-1]
+    bands = [b for b in entry["amount_bands"] if b["n"] and b["loss_share"] is not None]
+    band_line = ""
+    if bands:
+        top_band = max(bands, key=lambda b: b["loss_share"])
+        big_band = bands[-1]
+        band_line = (
+            "<br><br><b>按金额带看：</b>"
+            f"损失最集中在 {top_band['band']} 档：笔数占 {fmt_pct(top_band['n_share'], 1)}、"
+            f"放款本金占 {fmt_pct(top_band['amt_share'], 1)}，"
+            f"却贡献了 {fmt_pct(top_band['loss_share'], 1)} 的未还本金，置出率 {fmt_pct(top_band['amt_rate'])}；"
+            f"而 {big_band['band']} 档置出率仅 {fmt_pct(big_band['amt_rate'])}。"
+            "金额是审批后的额度结果，分带差异混入额度策略，仅作结构参考。"
+        )
     money_take = takeaway(
         "<b>先看整体：</b>"
         "把「置入」理解成放出去的本金、「置出」理解成到期没收回来的本金，"
@@ -2074,7 +2171,8 @@ def money_card(data) -> str:
         f"而全客群每 100 元只损失约 {m['amt_rate']:.1f} 元。"
         "模型把“坏账概率高”和“坏账金额大”的人一起排到了前面，"
         "所以做拒绝、额度调整或催收排序时，都能优先命中真正费钱的那批人。"
-        "<br><br><b>比较时注意：</b>"
+        + band_line
+        + "<br><br><b>比较时注意：</b>"
         f"两个模型第 10 档的人数不同（新模型 {fmt_int(top['n'])} 笔，线上模型 {fmt_int(old_top['n'])} 笔），"
         "不能直接拿两边的置出金额比大小；模型之间应比较同一拒绝比例下的金额拦截率（见「拦截收益」）。"
     )
@@ -2112,8 +2210,11 @@ def money_card(data) -> str:
       {money_overall_table(data)}
       <div class="subhead">分档明细（FPD15）</div>
       {money_decile_table(data, '15')}
+      <div class="subhead">按借款金额带（FPD15）</div>
+      {money_band_table(data, '15')}
       <p class="note">置入 = real_amount 之和；置出 = due + N 当天借据快照的未还本金之和，成熟样本上无缺失；
-      置出率 = 置出 / 置入；留存 = 置入 − 置出。金额为放款本金口径，不含利息与费用。</p>
+      置出率 = 置出 / 置入；留存 = 置入 − 置出。金额为放款本金口径，不含利息与费用。
+      金额带按放款本金 real_amount 划分（左开右闭）；金额是审批后的额度结果，分带差异会混入额度策略，仅作结构参考。</p>
     </section>
     """
 
