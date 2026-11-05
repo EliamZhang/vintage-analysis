@@ -25,6 +25,7 @@ DEFAULT_OUTPUT = PROJECT_DIR / "vintage_监控看板.html"
 
 WINDOWS = (1, 3, 7, 14, 15, 30)
 WINDOW_LABELS = {1: "FPD1", 3: "FPD3", 7: "FPD7", 14: "FPD14", 15: "FPD15", 30: "FPD30"}
+AUC_WINDOWS = (1, 3, 7, 15)
 # 新客风险 1.0 固定分箱上限；第 5 箱为 > 最后一个阈值
 SCORE_BIN_UPPER = (0.062086, 0.091284, 0.128392, 0.188973)
 # 线上模型戳额分布固定 10 档上限（旧模型固定十等分切点；相邻两档合并即上面的 5 档）
@@ -462,13 +463,20 @@ def build_credit_dist(raw):
     }
 
 
-def build_auc_chart(weekly_auc, weeks_by):
+def build_auc_chart(weekly_auc, weeks_by, window=15):
     auc_chart = {"labels": [], "weeks": [], "points": []}
     for week in sorted(weekly_auc):
         row = weekly_auc[week]
         week_item = weeks_by.get(week)
         if row["auc"] is None or (row["obs"] or 0) < 200 or not week_item:
             continue
+        win_item = week_item["windows"].get(window)
+        if win_item is not None:
+            maturity = win_item["maturity"]
+        else:
+            # 块 4 只同步 FPD3/7/14/15/30；FPD1 用当周 AUC 样本 / FPD3 样本近似成熟度。
+            fpd3_obs = week_item.get("fpd3Obs") or 0
+            maturity = min(1.0, (row["obs"] or 0) / fpd3_obs) if fpd3_obs else 0.0
         auc_chart["labels"].append(week[5:])
         auc_chart["weeks"].append(week)
         auc_chart["points"].append(
@@ -480,8 +488,8 @@ def build_auc_chart(weekly_auc, weeks_by):
                 "obs": row["obs"],
                 "bad": row["bad"],
                 "rate": row["rate"],
-                "maturity": week_item["fpd15Maturity"],
-                "partial": week_item["fpd15Maturity"] < 0.9 or week_item["incomplete"],
+                "maturity": maturity,
+                "partial": maturity < 0.9 or week_item["incomplete"],
             }
         )
     return auc_chart
@@ -682,7 +690,8 @@ def build_data(raw):
     weekly_auc_by_seg = {"ALL": {}, "New": {}, "Old": {}}
     for row in raw.get("vintage_08_weekly_auc.csv") or []:
         segment = row.get("user_type") or "ALL"
-        weekly_auc_by_seg.setdefault(segment, {})[row["week_start"]] = {
+        window = to_int(row.get("window_days")) or 15
+        weekly_auc_by_seg.setdefault(segment, {}).setdefault(window, {})[row["week_start"]] = {
             "week": row["week_start"],
             "obs": to_int(row["obs_cnt"]),
             "bad": to_int(row["bad_cnt"]),
@@ -696,11 +705,19 @@ def build_data(raw):
             "vintage_08_weekly_auc.csv 缺少 ALL / New / Old 分组；"
             "请重新执行 sync_vintage.py 同步块 8"
         )
-    weekly_auc = weekly_auc_by_seg["ALL"]
+    auc_windows = [
+        window
+        for window in AUC_WINDOWS
+        if any(window in weekly_auc_by_seg[seg] for seg in weekly_auc_by_seg)
+    ] or [15]
+    default_auc_window = 15 if 15 in auc_windows else auc_windows[-1]
 
     psi_by_week = build_psi_by_week(score_week, score_week_weeks, weeks_by)
 
-    auc_chart = build_auc_chart(weekly_auc, weeks_by)
+    auc_charts = {
+        window: build_auc_chart(weekly_auc_by_seg["ALL"].get(window, {}), weeks_by, window)
+        for window in auc_windows
+    }
 
     common_row = raw["vintage_02_fpd15_vs_fpd30.csv"][0]
     coverage_row = raw["vintage_05a_score_coverage.csv"][0]
@@ -816,7 +833,6 @@ def build_data(raw):
             seg_score_week = score_week
             seg_score_week_weeks = score_week_weeks
             seg_psi = psi_by_week
-            seg_auc_chart = auc_chart
         else:
             seg_windows = user[seg_key]
             seg_weeks, seg_weeks_by, seg_chart_weeks = build_week_view(
@@ -826,7 +842,15 @@ def build_data(raw):
             seg_score_week = score_week_by_seg[seg_key]
             seg_score_week_weeks = score_week_week_list(seg_score_week, seg_chart_weeks)
             seg_psi = build_psi_by_week(seg_score_week, seg_score_week_weeks, seg_weeks_by)
-            seg_auc_chart = build_auc_chart(weekly_auc_by_seg[seg_key], seg_weeks_by)
+
+        seg_auc_charts = {
+            window: build_auc_chart(
+                weekly_auc_by_seg.get(seg_key, {}).get(window, {}),
+                seg_weeks_by,
+                window,
+            )
+            for window in auc_windows
+        }
 
         seg_score = score[seg_key]
         seg_usable = [item for item in seg_chart_weeks if item["fpd15Maturity"] >= 0.7]
@@ -879,7 +903,7 @@ def build_data(raw):
             "scoreWeek": seg_score_week,
             "scoreWeekWeeks": seg_score_week_weeks,
             "psiByWeek": seg_psi,
-            "aucChart": seg_auc_chart,
+            "aucCharts": seg_auc_charts,
             "lift": lift_value,
             "monotonic": seg_monotonic,
             "latest": seg_latest,
@@ -910,8 +934,10 @@ def build_data(raw):
         "scoreWeek": score_week,
         "scoreWeekWeeks": score_week_weeks,
         "psiByWeek": psi_by_week,
-        "weeklyAuc": weekly_auc,
-        "aucChart": auc_chart,
+        "weeklyAuc": weekly_auc_by_seg["ALL"].get(default_auc_window, {}),
+        "aucCharts": auc_charts,
+        "aucWindows": auc_windows,
+        "aucWindowDefault": default_auc_window,
         "csvCount": len(REQUIRED_FILES)
         + sum(1 for name in OPTIONAL_FILES if raw.get(name) is not None),
         "coverage": coverage,
@@ -1518,7 +1544,7 @@ def funnel_card_html(data):
     scope = scope_meta_html(
         f"戳额周（周一）{funnel['firstWeek']} ~ {funnel['lastWeek']}；"
         f"最新周距同步日不足 30 天时标 *，仅参考。",
-        "出额样本 = 新客戳额生产打分全量用户；出额结果取出额转化明细，"
+        "出额样本 = 每个用户全历史首次戳额申请（不设时间窗）；出额结果取出额转化明细，"
         "借款申请取戳额日之后的 Y 标签申请记录；用户级去重。"
         f"样本少于 {CREDIT_WEEK_MIN_OBS} 人的戳额周已排除"
         + (f"（{excluded_text}）" if excluded_text else "")
@@ -1719,102 +1745,125 @@ def stability_card_html(data):
     def mark(text, marker):
         return sup(text, marker) if marker and text != "—" else text
 
-    points_all = data["aucChart"]["points"]
+    auc_windows = data["aucWindows"]
+    default_window = data["aucWindowDefault"]
+    default_chart = data["aucCharts"].get(default_window) or {"points": []}
+    points_all = default_chart["points"]
     point_range = (
         f"{points_all[0]['week']} ~ {points_all[-1]['week']}" if points_all else "—"
     )
+    window_names = " / ".join(WINDOW_LABELS[window] for window in auc_windows)
     scope = scope_meta_html(
-        f"放款周（周一）{point_range}；按周计算排序力；PSI 仅使用确认周（放款周完整且 FPD15 成熟度 ≥90%）。",
-        "FPD15 成熟放款 + 模型分非空 → 按周内分数排名计算 AUC / Gini / KS"
+        f"放款周（周一）{point_range}；可切换 {window_names} 观察窗口；按周计算排序力；"
+        "PSI 仅使用确认周（放款周完整且 FPD15 成熟度 ≥90%）。",
+        "各窗口成熟放款 + 模型分非空 → 按周内分数排名计算 AUC / Gini / KS"
         "（并列取平均秩）→ 周成熟样本 &lt;200 剔除；客群按 user_type 过滤。",
     )
+    toggle = ""
+    if len(auc_windows) > 1:
+        buttons = "".join(
+            f'<button type="button" class="{"on" if window == default_window else ""}" '
+            f'data-auc-window="{window}" '
+            f'aria-pressed="{"true" if window == default_window else "false"}">'
+            f"{WINDOW_LABELS[window]}</button>"
+            for window in auc_windows
+        )
+        toggle = f"""
+  <div class="chart-head">
+    <div class="seg" role="group" aria-label="AUC 观察窗口">{buttons}</div>
+  </div>"""
     blocks = []
     for seg_key, seg_name, seg_color in SEGMENT_META:
         view = data["segments"][seg_key]
-        points = view["aucChart"]["points"]
-        if not points:
-            blocks.append(
-                seg_panel(
-                    seg_key,
-                    '<p class="note">该客群周度排序力样本不足，暂无可展示的确认周。</p>',
+        panels = []
+        for window in auc_windows:
+            label = WINDOW_LABELS[window]
+            hidden = "" if window == default_window else " hidden"
+            chart = view["aucCharts"].get(window) or {"points": []}
+            points = chart["points"]
+            if not points:
+                panels.append(
+                    f'<div data-auc-panel="{window}"{hidden}>'
+                    f'<p class="note">{label} 周度排序力样本不足，暂无可展示的确认周。</p>'
+                    "</div>"
                 )
-            )
-            continue
+                continue
 
-        rows = []
-        for point in points:
-            maturity = point["maturity"]
-            if maturity < 0.7:
-                cls, marker = "num dim", None
-            elif maturity < 0.9 or point["partial"]:
-                cls, marker = "num soft", "*"
-            else:
-                cls, marker = "num", None
-            auc_text = mark(f"{point['auc']:.3f}", marker)
-            gini_text = mark(
-                f"{point['gini']:.3f}" if point["gini"] is not None else "—", marker
-            )
-            ks_text = mark(
-                f"{point['ks']:.3f}" if point["ks"] is not None else "—", marker
-            )
-            rows.append(
-                f"<tr><td>{point['week']}</td><td class='num'>{fmt_int(point['obs'])}</td>"
-                f"<td class='{cls}'>{auc_text}</td>"
-                f"<td class='{cls}'>{gini_text}</td>"
-                f"<td class='{cls}'>{ks_text}</td>"
-                f"<td class='num'>{fmt_rate(point['rate'])}</td>"
-                f"<td class='{cls}'>{fmt_pct0(maturity)}</td></tr>"
-            )
+            rows = []
+            for point in points:
+                maturity = point["maturity"]
+                if maturity < 0.7:
+                    cls, marker = "num dim", None
+                elif maturity < 0.9 or point["partial"]:
+                    cls, marker = "num soft", "*"
+                else:
+                    cls, marker = "num", None
+                auc_text = mark(f"{point['auc']:.3f}", marker)
+                gini_text = mark(
+                    f"{point['gini']:.3f}" if point["gini"] is not None else "—", marker
+                )
+                ks_text = mark(
+                    f"{point['ks']:.3f}" if point["ks"] is not None else "—", marker
+                )
+                rows.append(
+                    f"<tr><td>{point['week']}</td><td class='num'>{fmt_int(point['obs'])}</td>"
+                    f"<td class='{cls}'>{auc_text}</td>"
+                    f"<td class='{cls}'>{gini_text}</td>"
+                    f"<td class='{cls}'>{ks_text}</td>"
+                    f"<td class='num'>{fmt_rate(point['rate'])}</td>"
+                    f"<td class='{cls}'>{fmt_pct0(maturity)}</td></tr>"
+                )
 
-        confirmed = [point for point in points if not point["partial"]]
-        latest = confirmed[-1] if confirmed else points[-1]
-        prior = [
-            point for point in points
-            if point["week"] < latest["week"] and not point["partial"]
-        ][-4:]
-        baseline_text = ""
-        if prior:
-            mean_auc = sum(point["auc"] for point in prior) / len(prior)
-            baseline_text = (
-                f"最新确认周 {latest['week']} AUC {latest['auc']:.3f}"
-                f"（前 {len(prior)} 周均值 {mean_auc:.3f}）"
-                f"，Gini {latest['gini']:.3f}，KS {latest['ks']:.3f}。"
+            confirmed = [point for point in points if not point["partial"]]
+            latest = confirmed[-1] if confirmed else points[-1]
+            prior = [
+                point for point in points
+                if point["week"] < latest["week"] and not point["partial"]
+            ][-4:]
+            baseline_text = ""
+            if prior:
+                mean_auc = sum(point["auc"] for point in prior) / len(prior)
+                baseline_text = (
+                    f"最新确认周 {latest['week']} AUC {latest['auc']:.3f}"
+                    f"（前 {len(prior)} 周均值 {mean_auc:.3f}）"
+                    f"，Gini {latest['gini']:.3f}，KS {latest['ks']:.3f}。"
+                )
+            psi = view["psiByWeek"]
+            psi_text = ""
+            if psi:
+                last_week = sorted(psi)[-1]
+                psi_text = f"最近一周 PSI {psi[last_week]:.2f}（{last_week}）。"
+            scope_text = (
+                f"AUC / Gini / KS 基于 {label} 成熟样本，按周内分数排名计算"
+                if seg_key == "ALL"
+                else f"AUC / Gini / KS 基于{seg_name}{label}成熟样本，按周内分数排名计算"
             )
-        psi = view["psiByWeek"]
-        psi_text = ""
-        if psi:
-            last_week = sorted(psi)[-1]
-            psi_text = f"最近一周 PSI {psi[last_week]:.2f}（{last_week}）。"
-        scope_text = (
-            "AUC / Gini / KS 基于 FPD15 成熟样本，按周内分数排名计算"
-            if seg_key == "ALL"
-            else f"AUC / Gini / KS 基于{seg_name}FPD15 成熟样本，按周内分数排名计算"
-        )
-        note = (
-            f"{scope_text}，AUC 对并列分数取平均秩；"
-            "周样本少于 200 的周不纳入。星号 * 表示 70–90% 成熟，仅参考。"
-            f"{baseline_text}{psi_text}"
-            "AUC 连续走低或 KS 明显收缩时，优先检查模型分分布和入催客群变化。"
-        )
-        blocks.append(
-            seg_panel(
-                seg_key,
+            note = (
+                f"{scope_text}，AUC 对并列分数取平均秩；"
+                "周样本少于 200 的周不纳入。星号 * 表示 70–90% 成熟，仅参考。"
+                f"{baseline_text}{psi_text}"
+                "AUC 连续走低或 KS 明显收缩时，优先检查模型分分布和入催客群变化。"
+            )
+            panels.append(
                 f"""
+<div data-auc-panel="{window}"{hidden}>
 <div class="table-wrap">
 <table class="compact">
-  <thead><tr><th>放款周</th><th>成熟样本</th><th>AUC</th><th>Gini</th><th>KS</th><th>FPD15 坏率</th><th>成熟度</th></tr></thead>
+  <thead><tr><th>放款周</th><th>成熟样本</th><th>AUC</th><th>Gini</th><th>KS</th><th>{label} 坏率</th><th>成熟度</th></tr></thead>
   <tbody>{''.join(rows)}</tbody>
 </table>
 </div>
 <p class="note">{note}</p>
-""",
+</div>
+"""
             )
-        )
+        blocks.append(seg_panel(seg_key, "".join(panels)))
     return f"""
 <section class="card">
   <h2>周度排序力{SAMPLE_TAG_HTML}<span class="tag" title="AUC = P(坏样本分数高于好样本) + 0.5 × P(并列)；Gini = 2 × AUC − 1">模型监控</span></h2>
   {scope}
-  <p class="desc">按放款周看模型分对 FPD15 的排序能力；AUC 和 KS 越高越好。灰柱为当周 FPD15 成熟样本量。图表与表格随顶部客群切换。</p>
+  <p class="desc">按放款周看模型分对各 FPD 窗口的排序能力，可切换 {window_names}；AUC 和 KS 越高越好。灰柱为当周该窗口成熟样本量。图表与表格随顶部客群切换，窗口对三个客群同时生效。</p>
+  {toggle}
   <div class="chart-wrap">
     <svg id="aucChart" viewBox="0 0 1040 280" role="img" aria-label="周度 AUC 与 KS"></svg>
     <div class="tip" id="aucTip"></div>
@@ -1878,11 +1927,16 @@ def quality_card_html(data):
 
 def footer_html(data, generated_at, input_name):
     extras = []
-    if data["aucChart"].get("points"):
+    if any(chart.get("points") for chart in data["aucCharts"].values()):
+        window_names = " / ".join(
+            WINDOW_LABELS[window] for window in data["aucWindows"]
+        )
         extras.append(
-            "<li>周度排序力与漂移：AUC 按周内分数排名计算，并列分数取平均秩；"
+            "<li>周度排序力与漂移：观察窗口支持 "
+            f"{window_names}（成熟样本各自独立）；"
+            "AUC 按周内分数排名计算，并列分数取平均秩；"
             "Gini = 2×AUC−1；KS 按分数分组累计好坏分布计算；周样本少于 200 的周不纳入。"
-            "PSI 按 5 档份额计算，基线为前最多 4 个确认周；&lt;0.10 稳定，"
+            "PSI 固定按 FPD15 的 5 档份额计算，基线为前最多 4 个确认周；&lt;0.10 稳定，"
             "0.10–0.25 关注，≥0.25 预警（5 档粒度为近似）。</li>"
         )
     if data.get("creditDist"):
@@ -1896,7 +1950,8 @@ def footer_html(data, generated_at, input_name):
         )
     if data.get("funnel"):
         extras.append(
-            "<li>新客出额转化漏斗：出额样本为戳额生产打分全量用户；"
+            "<li>新客出额转化漏斗：出额样本为每个用户全历史首次戳额申请"
+            "（额度申请表优先、风控事件兜底），不设时间窗；"
             "出额审批通过率取出额转化明细表（edw_ewa.dwb_user_fst_conv_dtl），"
             "借款审核通过率与成交率取 Y 标签主表中戳额日之后的借款申请；"
             "均为用户级去重，审核通过含审核通过、放款成功与放款失败。"
@@ -2166,7 +2221,7 @@ const NS = 'http://www.w3.org/2000/svg';
 const fmtRate = v => (v == null ? '—' : v.toFixed(2) + '%');
 const fmtInt = n => (n == null ? '—' : n.toLocaleString('en-US'));
 
-const state = { segment: 'ALL', weekMode: 'count' };
+const state = { segment: 'ALL', weekMode: 'count', aucWindow: String(DATA.aucWindowDefault) };
 const sampleTagBySegment = {
   ALL: '样本：整体发标成交样本',
   New: '样本：新客发标成交样本',
@@ -2611,12 +2666,15 @@ function renderScoreChart() {
 
 function renderAucChart() {
   const view = segData();
-  const aucPoints = (view.aucChart && view.aucChart.points) || [];
+  const windowKey = state.aucWindow;
+  const windowLabel = DATA.windowLabels[windowKey] || ('FPD' + windowKey);
+  const chart = (view.aucCharts && view.aucCharts[windowKey]) || { points: [], weeks: [], labels: [] };
+  const aucPoints = chart.points || [];
   const legend = document.getElementById('aucLegend');
   if (aucPoints.length < 2) {
     const svg = document.getElementById('aucChart');
     if (svg) clearSvg(svg);
-    if (legend) legend.innerHTML = '<span>该客群暂无可展示的周度排序力样本</span>';
+    if (legend) legend.innerHTML = `<span>${windowLabel} 暂无可展示的周度排序力样本</span>`;
     return;
   }
   const segColor = isAllSeg() ? 'var(--c1)' : view.color;
@@ -2638,11 +2696,11 @@ function renderAucChart() {
   ];
   let overallSeries = null;
   let overallByWeek = null;
-  if (!isAllSeg() && DATA.aucChart && DATA.aucChart.points.length > 1) {
-    overallByWeek = new Map(DATA.aucChart.points.map(point => [point.week, point]));
+  if (!isAllSeg() && DATA.aucCharts && DATA.aucCharts[windowKey] && DATA.aucCharts[windowKey].points.length > 1) {
+    overallByWeek = new Map(DATA.aucCharts[windowKey].points.map(point => [point.week, point]));
     overallSeries = {
       name: '整体 AUC（参考）', key: 'overallAuc', color: 'var(--ink-2)', width: 1.8, dash: '5 4',
-      points: view.aucChart.weeks.map(week => {
+      points: chart.weeks.map(week => {
         const point = overallByWeek.get(week);
         return point ? {
           rate: point.auc, obs: point.obs,
@@ -2672,7 +2730,7 @@ function renderAucChart() {
   if (overallSeries) {
     const lastOverall = lastPointIndex(overallSeries.points);
     if (lastOverall >= 0) {
-      const overallPoint = overallByWeek.get(view.aucChart.weeks[lastOverall]);
+      const overallPoint = overallByWeek.get(chart.weeks[lastOverall]);
       aucLabels.push({
         series: 2, index: lastOverall,
         text: `整体 ${overallPoint.auc.toFixed(3)}`,
@@ -2682,7 +2740,7 @@ function renderAucChart() {
   }
   makeLineChart('aucChart', 'aucTip', {
     width: 1040, height: 280, margin: { t: 30, r: 110, b: 46, l: 56 },
-    labels: view.aucChart.labels,
+    labels: chart.labels,
     series: aucSeries,
     volume: { values: aucPoints.map(point => point.obs) },
     yMax: 1, yTicks: [0, 0.25, 0.5, 0.75, 1],
@@ -2693,7 +2751,7 @@ function renderAucChart() {
       const point = aucPoints[index];
       const gini = point.gini == null ? '—' : point.gini.toFixed(3);
       const ks = point.ks == null ? '—' : point.ks.toFixed(3);
-      let html = `<b>${point.week} · ${view.name}排序力</b><br>`
+      let html = `<b>${point.week} · ${view.name}${windowLabel}排序力</b><br>`
         + `<span><i style="background:${segColor}"></i>AUC <b>${point.auc.toFixed(3)}</b> · Gini ${gini}</span><br>`
         + `<span><i style="background:var(--c3)"></i>KS <b>${ks}</b></span><br>`
         + `<span>n=${fmtInt(point.obs)} · 坏 ${fmtInt(point.bad)} · ${Math.round(point.maturity * 100)}% 成熟${point.partial ? '*' : ''}</span>`;
@@ -2709,9 +2767,22 @@ function renderAucChart() {
       `<span><i style="background:${segColor}"></i>${view.name} AUC</span>`,
       '<span><i class="dash" style="border-top-color:var(--c3)"></i>KS</span>',
       overallSeries ? '<span><i class="dash" style="border-top-color:var(--ink-2)"></i>整体 AUC（参考）</span>' : '',
-      '<span><i class="bar" style="background:var(--grid)"></i>FPD15 成熟样本</span>'
+      `<span><i class="bar" style="background:var(--grid)"></i>${windowLabel} 成熟样本</span>`
     ].join('');
   }
+}
+
+function applyAucWindow(windowKey) {
+  state.aucWindow = String(windowKey);
+  document.querySelectorAll('[data-auc-window]').forEach(button => {
+    const active = button.dataset.aucWindow === state.aucWindow;
+    button.classList.toggle('on', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-auc-panel]').forEach(panel => {
+    panel.hidden = panel.dataset.aucPanel !== state.aucWindow;
+  });
+  renderAucChart();
 }
 
 function applySegment(seg) {
@@ -2739,6 +2810,11 @@ document.querySelectorAll('[data-segment]').forEach(button => {
   button.addEventListener('click', () => applySegment(button.dataset.segment));
 });
 
+document.querySelectorAll('[data-auc-window]').forEach(button => {
+  button.addEventListener('click', () => applyAucWindow(button.dataset.aucWindow));
+});
+
+applyAucWindow(state.aucWindow);
 applySegment('ALL');
 </script>
 </body>
@@ -2779,7 +2855,7 @@ def render_html(data, generated_at, input_name, generated_iso):
             "color": seg_color,
             "scopeHint": view["scopeHint"],
             "weekChart": view["weekChart"],
-            "aucChart": view["aucChart"],
+            "aucCharts": view["aucCharts"],
             "psiByWeek": view["psiByWeek"],
             "latestWeek": view["latestWeek"]["week"],
         }
@@ -2789,7 +2865,12 @@ def render_html(data, generated_at, input_name, generated_iso):
         "fpdCurves": fpd_curves,
         "scoreCurves": score_curves,
         "segments": segments,
-        "aucChart": data["aucChart"],
+        "aucCharts": data["aucCharts"],
+        "aucWindows": data["aucWindows"],
+        "aucWindowDefault": data["aucWindowDefault"],
+        "windowLabels": {
+            str(window): WINDOW_LABELS[window] for window in data["aucWindows"]
+        },
     }
     data_json = json.dumps(chart_data, ensure_ascii=False).replace("</", "<\\/")
     html = HTML_TEMPLATE

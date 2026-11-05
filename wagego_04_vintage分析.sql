@@ -525,14 +525,45 @@ ORDER BY rank_order, user_type
 
 
 -- ============================================================
--- 块 8：周度排序力（FPD15 成熟样本）
+-- 块 8：周度排序力（FPD1 / FPD3 / FPD7 / FPD15 成熟样本）
 --   AUC 对分数并列取平均秩：AUC = (坏样本秩和 - n_bad(n_bad+1)/2) / (n_bad*n_good)
 --   Gini = 2*AUC - 1；KS = max |坏累计占比 - 好累计占比|（按分数分组）
---   输出 user_type = New / Old / ALL 三组
+--   输出 window_days × user_type（New / Old / ALL）
 -- ============================================================
 WITH base AS (
     SELECT
-         DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
+         1                                                           AS window_days
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd1_ovd                                                AS label
+        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    WHERE t.y_fpd1_obs = 1
+      AND t.disburse_time IS NOT NULL
+    UNION ALL
+    SELECT
+         3                                                           AS window_days
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd3_ovd                                                AS label
+        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    WHERE t.y_fpd3_obs = 1
+      AND t.disburse_time IS NOT NULL
+    UNION ALL
+    SELECT
+         7                                                           AS window_days
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd7_ovd                                                AS label
+        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    WHERE t.y_fpd7_obs = 1
+      AND t.disburse_time IS NOT NULL
+    UNION ALL
+    SELECT
+         15                                                          AS window_days
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
         ,t.user_type                                                 AS user_type
         ,t.y_fpd15_ovd                                               AS label
         ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
@@ -541,81 +572,96 @@ WITH base AS (
       AND t.disburse_time IS NOT NULL
 ),
 scored AS (
-    SELECT week_start, user_type, label, score
+    SELECT window_days, week_start, user_type, label, score
     FROM base
     WHERE score IS NOT NULL
       AND week_start IS NOT NULL
     UNION ALL
-    SELECT week_start, 'ALL' AS user_type, label, score
+    SELECT window_days, week_start, 'ALL' AS user_type, label, score
     FROM base
     WHERE score IS NOT NULL
       AND week_start IS NOT NULL
 ),
 ranked AS (
     SELECT
-         week_start
+         window_days
+        ,week_start
         ,user_type
         ,label
-        ,RANK() OVER (PARTITION BY week_start, user_type ORDER BY score)        AS r_min
-        ,COUNT(*) OVER (PARTITION BY week_start, user_type, score)              AS tie_cnt
+        ,RANK() OVER (
+            PARTITION BY window_days, week_start, user_type ORDER BY score
+        )                                                                    AS r_min
+        ,COUNT(*) OVER (
+            PARTITION BY window_days, week_start, user_type, score
+        )                                                                    AS tie_cnt
     FROM scored
 ),
 rank_avg AS (
     SELECT
-         week_start
+         window_days
+        ,week_start
         ,user_type
         ,label
-        ,r_min + (tie_cnt - 1) / 2.0                                            AS avg_rank
+        ,r_min + (tie_cnt - 1) / 2.0                                         AS avg_rank
     FROM ranked
 ),
 auc AS (
     SELECT
-         week_start
+         window_days
+        ,week_start
         ,user_type
-        ,COUNT(*)                                                               AS obs_cnt
-        ,SUM(label)                                                             AS bad_cnt
-        ,SUM(CASE WHEN label = 1 THEN avg_rank ELSE 0 END)                      AS bad_rank_sum
+        ,COUNT(*)                                                            AS obs_cnt
+        ,SUM(label)                                                          AS bad_cnt
+        ,SUM(CASE WHEN label = 1 THEN avg_rank ELSE 0 END)                   AS bad_rank_sum
     FROM rank_avg
-    GROUP BY week_start, user_type
+    GROUP BY window_days, week_start, user_type
 ),
 score_grp AS (
     SELECT
-         week_start
+         window_days
+        ,week_start
         ,user_type
         ,score
-        ,COUNT(*)                                                               AS obs_cnt
-        ,SUM(label)                                                             AS bad_cnt
+        ,COUNT(*)                                                            AS obs_cnt
+        ,SUM(label)                                                          AS bad_cnt
     FROM scored
-    GROUP BY week_start, user_type, score
+    GROUP BY window_days, week_start, user_type, score
 ),
 cum AS (
     SELECT
-         week_start
+         window_days
+        ,week_start
         ,user_type
         ,score
         ,SUM(bad_cnt) OVER (
-            PARTITION BY week_start, user_type ORDER BY score
+            PARTITION BY window_days, week_start, user_type ORDER BY score
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        )                                                                       AS cum_bad
+        )                                                                    AS cum_bad
         ,SUM(obs_cnt - bad_cnt) OVER (
-            PARTITION BY week_start, user_type ORDER BY score
+            PARTITION BY window_days, week_start, user_type ORDER BY score
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        )                                                                       AS cum_good
-        ,SUM(bad_cnt) OVER (PARTITION BY week_start, user_type)                 AS tot_bad
-        ,SUM(obs_cnt - bad_cnt) OVER (PARTITION BY week_start, user_type)       AS tot_good
+        )                                                                    AS cum_good
+        ,SUM(bad_cnt) OVER (
+            PARTITION BY window_days, week_start, user_type
+        )                                                                    AS tot_bad
+        ,SUM(obs_cnt - bad_cnt) OVER (
+            PARTITION BY window_days, week_start, user_type
+        )                                                                    AS tot_good
     FROM score_grp
 ),
 ks AS (
     SELECT
-         week_start
+         window_days
+        ,week_start
         ,user_type
         ,MAX(ABS(CAST(cum_bad AS DOUBLE) / NULLIF(tot_bad, 0)
-                 - CAST(cum_good AS DOUBLE) / NULLIF(tot_good, 0)))             AS ks
+                 - CAST(cum_good AS DOUBLE) / NULLIF(tot_good, 0)))          AS ks
     FROM cum
-    GROUP BY week_start, user_type
+    GROUP BY window_days, week_start, user_type
 )
 SELECT
-     a.week_start
+     a.window_days
+    ,a.week_start
     ,a.user_type
     ,a.obs_cnt
     ,a.bad_cnt
@@ -627,9 +673,10 @@ SELECT
     ,ROUND(k.ks, 4)                                                            AS ks
 FROM auc a
 LEFT JOIN ks k
-  ON a.week_start = k.week_start
+  ON a.window_days = k.window_days
+ AND a.week_start = k.week_start
  AND a.user_type = k.user_type
-ORDER BY a.week_start, a.user_type
+ORDER BY a.window_days, a.week_start, a.user_type
 ;
 
 
@@ -662,96 +709,142 @@ ORDER BY week_start, user_type
 ;
 
 -- ============================================================
--- 块 10：月度排序力（FPD15）× 新老客
+-- 块 10：月度排序力（FPD1 / FPD3 / FPD7 / FPD15）× 新老客
 --   月度口径 = 放款日所在自然月；AUC / Gini / KS 算法与块 8 一致
---   输出 user_type = New / Old / ALL 三组
+--   输出 window_days × user_type（New / Old / ALL）
 -- ============================================================
 WITH base AS (
     SELECT
-         DATE_FORMAT(TO_DATE(t.disburse_time), 'yyyy-MM') AS month_key
-        ,t.user_type                                               AS user_type
-        ,t.y_fpd15_ovd                                             AS label
-        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626          AS score
+         1                                                           AS window_days
+        ,DATE_FORMAT(TO_DATE(t.disburse_time), 'yyyy-MM')            AS month_key
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd1_ovd                                                AS label
+        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    WHERE t.y_fpd1_obs = 1
+      AND t.disburse_time IS NOT NULL
+    UNION ALL
+    SELECT
+         3                                                           AS window_days
+        ,DATE_FORMAT(TO_DATE(t.disburse_time), 'yyyy-MM')            AS month_key
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd3_ovd                                                AS label
+        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    WHERE t.y_fpd3_obs = 1
+      AND t.disburse_time IS NOT NULL
+    UNION ALL
+    SELECT
+         7                                                           AS window_days
+        ,DATE_FORMAT(TO_DATE(t.disburse_time), 'yyyy-MM')            AS month_key
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd7_ovd                                                AS label
+        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    WHERE t.y_fpd7_obs = 1
+      AND t.disburse_time IS NOT NULL
+    UNION ALL
+    SELECT
+         15                                                          AS window_days
+        ,DATE_FORMAT(TO_DATE(t.disburse_time), 'yyyy-MM')            AS month_key
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd15_ovd                                               AS label
+        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626            AS score
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     WHERE t.y_fpd15_obs = 1
       AND t.disburse_time IS NOT NULL
 ),
 scored AS (
-    SELECT month_key, user_type, label, score
+    SELECT window_days, month_key, user_type, label, score
     FROM base
     WHERE score IS NOT NULL
       AND month_key IS NOT NULL
     UNION ALL
-    SELECT month_key, 'ALL' AS user_type, label, score
+    SELECT window_days, month_key, 'ALL' AS user_type, label, score
     FROM base
     WHERE score IS NOT NULL
       AND month_key IS NOT NULL
 ),
 ranked AS (
     SELECT
-         month_key
+         window_days
+        ,month_key
         ,user_type
         ,label
-        ,RANK() OVER (PARTITION BY month_key, user_type ORDER BY score)        AS r_min
-        ,COUNT(*) OVER (PARTITION BY month_key, user_type, score)              AS tie_cnt
+        ,RANK() OVER (
+            PARTITION BY window_days, month_key, user_type ORDER BY score
+        )                                                                    AS r_min
+        ,COUNT(*) OVER (
+            PARTITION BY window_days, month_key, user_type, score
+        )                                                                    AS tie_cnt
     FROM scored
 ),
 rank_avg AS (
     SELECT
-         month_key
+         window_days
+        ,month_key
         ,user_type
         ,label
-        ,r_min + (tie_cnt - 1) / 2.0                                           AS avg_rank
+        ,r_min + (tie_cnt - 1) / 2.0                                         AS avg_rank
     FROM ranked
 ),
 auc AS (
     SELECT
-         month_key
+         window_days
+        ,month_key
         ,user_type
-        ,COUNT(*)                                                              AS obs_cnt
-        ,SUM(label)                                                            AS bad_cnt
-        ,SUM(CASE WHEN label = 1 THEN avg_rank ELSE 0 END)                     AS bad_rank_sum
+        ,COUNT(*)                                                            AS obs_cnt
+        ,SUM(label)                                                          AS bad_cnt
+        ,SUM(CASE WHEN label = 1 THEN avg_rank ELSE 0 END)                   AS bad_rank_sum
     FROM rank_avg
-    GROUP BY month_key, user_type
+    GROUP BY window_days, month_key, user_type
 ),
 score_grp AS (
     SELECT
-         month_key
+         window_days
+        ,month_key
         ,user_type
         ,score
-        ,COUNT(*)                                                              AS obs_cnt
-        ,SUM(label)                                                            AS bad_cnt
+        ,COUNT(*)                                                            AS obs_cnt
+        ,SUM(label)                                                          AS bad_cnt
     FROM scored
-    GROUP BY month_key, user_type, score
+    GROUP BY window_days, month_key, user_type, score
 ),
 cum AS (
     SELECT
-         month_key
+         window_days
+        ,month_key
         ,user_type
         ,score
         ,SUM(bad_cnt) OVER (
-            PARTITION BY month_key, user_type ORDER BY score
+            PARTITION BY window_days, month_key, user_type ORDER BY score
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        )                                                                      AS cum_bad
+        )                                                                    AS cum_bad
         ,SUM(obs_cnt - bad_cnt) OVER (
-            PARTITION BY month_key, user_type ORDER BY score
+            PARTITION BY window_days, month_key, user_type ORDER BY score
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        )                                                                      AS cum_good
-        ,SUM(bad_cnt) OVER (PARTITION BY month_key, user_type)                 AS tot_bad
-        ,SUM(obs_cnt - bad_cnt) OVER (PARTITION BY month_key, user_type)       AS tot_good
+        )                                                                    AS cum_good
+        ,SUM(bad_cnt) OVER (
+            PARTITION BY window_days, month_key, user_type
+        )                                                                    AS tot_bad
+        ,SUM(obs_cnt - bad_cnt) OVER (
+            PARTITION BY window_days, month_key, user_type
+        )                                                                    AS tot_good
     FROM score_grp
 ),
 ks AS (
     SELECT
-         month_key
+         window_days
+        ,month_key
         ,user_type
         ,MAX(ABS(CAST(cum_bad AS DOUBLE) / NULLIF(tot_bad, 0)
-                 - CAST(cum_good AS DOUBLE) / NULLIF(tot_good, 0)))            AS ks
+                 - CAST(cum_good AS DOUBLE) / NULLIF(tot_good, 0)))          AS ks
     FROM cum
-    GROUP BY month_key, user_type
+    GROUP BY window_days, month_key, user_type
 )
 SELECT
-     a.month_key
+     a.window_days
+    ,a.month_key
     ,a.user_type
     ,a.obs_cnt
     ,a.bad_cnt
@@ -763,9 +856,10 @@ SELECT
     ,ROUND(k.ks, 4)                                                            AS ks
 FROM auc a
 LEFT JOIN ks k
-  ON a.month_key = k.month_key
+  ON a.window_days = k.window_days
+ AND a.month_key = k.month_key
  AND a.user_type = k.user_type
-ORDER BY a.month_key, a.user_type
+ORDER BY a.window_days, a.month_key, a.user_type
 ;
 
 
@@ -990,8 +1084,9 @@ ORDER BY week_start, q
 
 -- ============================================================
 -- 块 12：新客出额样本转化漏斗（按戳额周）
---   出额样本：model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score
---           每个用户一行，sample_datetime = 戳额申请时间
+--   出额样本：model.tmp_eliam_wagego_new_user_credit_full_samples（全历史、不设时间窗）
+--           每个用户一行，sample_datetime = 戳额申请时间；
+--           建表 SQL 见 wagego_06_新客戳额全历史样本表.sql
 --   出额审批通过率 = 有额用户 / 出额明细可匹配用户
 --           出额结果取 edw_ewa.dwb_user_fst_conv_dtl 的首次有额时间/额度；
 --           若该表用户主键不是 user_id，请按实际字段调整 join
@@ -1004,7 +1099,7 @@ WITH credit AS (
     SELECT
          user_id
         ,MIN(sample_datetime) AS sample_datetime
-    FROM model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score
+    FROM model.tmp_eliam_wagego_new_user_credit_full_samples
     GROUP BY user_id
 ),
 credit_w AS (
@@ -1076,7 +1171,7 @@ SELECT
     ,ROUND(CAST(pass_cnt AS DOUBLE) / NULLIF(apply_cnt, 0) * 100, 2)             AS audit_pass_rate_cnt_pct
     ,ROUND(CAST(deal_cnt AS DOUBLE) / NULLIF(pass_cnt, 0) * 100, 2)              AS deal_rate_cnt_pct
     ,ROUND(CAST(deal_users AS DOUBLE) / NULLIF(credit_users, 0) * 100, 2)        AS credit_deal_rate_pct
-    ,DATEDIFF(CURRENT_DATE(), DATE_ADD(TO_DATE(week_start), 7))      AS cohort_days
+    ,GREATEST(0, DATEDIFF(CURRENT_DATE(), DATE_ADD(TO_DATE(week_start), 7))) AS cohort_days
 FROM agg
 ORDER BY week_start
 ;
