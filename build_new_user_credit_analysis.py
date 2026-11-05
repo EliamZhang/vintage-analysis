@@ -3899,7 +3899,7 @@ def main(argv=None):
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="输出 HTML")
     parser.add_argument("--start", default="2026-08-01", help="戳额起始日")
     parser.add_argument("--end", default="2026-10-24", help="戳额结束日（不含）")
-    parser.add_argument("--oot-start", default="2026-09-30", help="OOT 起始日（按戳额时间）")
+    parser.add_argument("--oot-start", default="2026-10-03", help="OOT 起始日（按戳额时间）")
     parser.add_argument("--reject", type=int, default=30, help="互换矩阵的拒绝比例 %")
     args = parser.parse_args(argv)
 
