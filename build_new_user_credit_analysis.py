@@ -208,6 +208,28 @@ def deciles(score, label, amount=None, loss=None, cuts=None):
     return rows
 
 
+def quintiles_from_deciles(dec):
+    """相邻两个十分位合并为五档，切点不变，用于 OOT 等小样本视图。"""
+    rows = []
+    for i in range(0, len(dec), 2):
+        pair = dec[i : i + 2]
+        n = sum(p["n"] for p in pair)
+        bad = sum(p["bad"] for p in pair)
+        mins = [p["score_min"] for p in pair if p["score_min"] is not None]
+        maxs = [p["score_max"] for p in pair if p["score_max"] is not None]
+        rows.append(
+            {
+                "q": i // 2 + 1,
+                "n": n,
+                "bad": bad,
+                "rate": (bad / n * 100) if n else None,
+                "score_min": min(mins) if mins else None,
+                "score_max": max(maxs) if maxs else None,
+            }
+        )
+    return rows
+
+
 def amount_band_stats(amount, label, loss):
     """按放款本金分带统计笔数、笔数坏率与金额口径的置入/置出。"""
     amount = np.asarray(amount, dtype=float)
@@ -425,12 +447,29 @@ def segment_metrics(base, ovd_col, mask, reject_pct):
         y = d[ovd_col].astype(int).to_numpy()
         s = d[f"{key}_score"].to_numpy(float)
         auc, ks = auc_ks(s, y)
+        dec = deciles(s, y, cuts=NEW_DECILE_CUTS if key == "new" else OLD_DECILE_CUTS)
+        overall_rate = float(y.mean() * 100) if len(y) else 0.0
+        for item in dec:
+            item["lift"] = (
+                round(item["rate"] / overall_rate, 2)
+                if item["rate"] is not None and overall_rate
+                else None
+            )
+        quint = quintiles_from_deciles(dec)
+        for item in quint:
+            item["lift"] = (
+                round(item["rate"] / overall_rate, 2)
+                if item["rate"] is not None and overall_rate
+                else None
+            )
         out["models"][key] = {
             "n": int(len(d)),
             "bad": int(y.sum()),
             "auc": round(auc, 4) if auc is not None else None,
             "ks": round(ks, 4) if ks is not None else None,
             "cut": cutoff_stats(s, y, reject_pct),
+            "deciles": dec,
+            "quintiles": quint,
         }
     pair = seg.dropna(subset=["old_score", "new_score"])
     if len(pair):
@@ -1663,12 +1702,14 @@ def scenario_table(data, window_key) -> str:
     """
 
 
-def decile_table(data, window_key) -> str:
+def decile_table(data, window_key, segment=None, quintile=False) -> str:
     entry = data["windows"][window_key]
-    old = entry["models"]["old"]["deciles"]
-    new = entry["models"]["new"]["deciles"]
+    models = entry["models"] if segment is None else entry["segments"][segment]["models"]
+    field = "quintiles" if quintile else "deciles"
+    old = models["old"][field]
+    new = models["new"][field]
     rows = []
-    for q in range(10):
+    for q in range(len(new)):
         o, n = old[q], new[q]
         rows.append(
             f"""
@@ -1909,9 +1950,14 @@ def decile_card(data) -> str:
     )
     return f"""
     <section class="card" id="decile">
-      <h2>十分位坏率<span class="tag" title="全样本成熟成交样本（含 OOT）；两个模型均按各自的固定十分位切点分档，第 10 档风险最高">全样本成熟 · FPD15</span></h2>
-      <p class="desc">样本为全样本成熟成交样本（含 OOT）。柱状图为各档笔数坏率，第 1 档分数最低、第 10 档最高；
-      lift = 该档坏率 / 全体坏率。</p>
+      <h2>十分位坏率<span class="tag" title="可在全样本（10 档）与 OOT 后（5 档）之间切换；分档沿用同一套固定十分位切点，末档风险最高">FPD15 · 固定切点分档</span></h2>
+      <p class="desc">样本为成熟成交样本，可切换「全样本（10 档）/ OOT 后（5 档）」：全样本 FPD15 成熟 {fmt_int(entry['n_obs'])} 笔，
+      OOT 后（戳额时间 ≥ {escape(data['meta']['oot_start'])}）{fmt_int(entry['segments']['oot']['n'])} 笔；OOT 后把相邻两个十分位合并为 5 档，切点不变。
+      柱状图为各档笔数坏率，第 1 档分数最低、末档最高；lift = 该档坏率 / 同口径全体坏率。</p>
+      <div class="seg-toggle" id="decileToggle" role="group" aria-label="样本口径">
+        <button type="button" data-seg="all" class="on">全样本 · 10 档</button>
+        <button type="button" data-seg="oot">OOT 后 · 5 档</button>
+      </div>
       <div class="chart-wrap">
         <svg id="decileChart" viewBox="0 0 1000 340" role="img" aria-label="FPD15 十分位坏率对比"></svg>
         <div class="tip" id="decileTip"></div>
@@ -1919,10 +1965,10 @@ def decile_card(data) -> str:
       <div class="legend">
         <span><i class="sq new"></i>新戳额模型</span>
         <span><i class="sq old"></i>线上模型</span>
-        <span class="muted">横轴：第 1 档 = 分数最低（最安全）· lift = 该档坏率 / 全体坏率</span>
+        <span class="muted">横轴：第 1 档 = 分数最低（最安全）· lift = 该档坏率 / 同口径全体坏率</span>
       </div>
       {takeaway(
-          "<b>分档效果：</b>"
+          "<b>分档效果（全样本口径）：</b>"
           f"把客户按分数从低到高分成 10 档，新模型从第 1 档到第 10 档坏率"
           f"{'逐档上升' if mono else '整体拉开'}；最高档坏率 {fmt_pct(new_dec[-1]['rate'])}，"
           f"是整体坏率的 {fmt_num(new_dec[-1]['lift'], 2)} 倍，"
@@ -1933,11 +1979,13 @@ def decile_card(data) -> str:
           "<br><br><b>应用场景：</b>做额度分层、人工复核或差异化定价时，可以直接按新模型档位分配资源；"
           "最高档人数相对少但坏账集中，适合优先拦截或加严审核。"
       )}
-      <div class="subhead">分档明细</div>
-      {decile_table(data, '15')}
+      <div class="subhead">分档明细<span class="muted">（与上方柱状图同口径）</span></div>
+      <div id="decileTableAll">{decile_table(data, '15')}</div>
+      <div id="decileTableOot" hidden>{decile_table(data, '15', 'oot', quintile=True)}</div>
       <p class="note">两个模型均按各自的固定十分位切点分档：新戳额模型各档上界 {rule_txt}；
       线上模型各档上界 {old_rule_txt}。首档以下并入第 1 档，末档以上并入第 10 档，
-      落在相邻档间隔内的分数并入下一档。分数区间为本次样本实际最小–最大值，不是固定规则区间。</p>
+      落在相邻档间隔内的分数并入下一档。分数区间为本次样本实际最小–最大值，不是固定规则区间。
+      OOT 后视图由相邻两个十分位合并为 5 档，切点不变。</p>
     </section>
     """
 
@@ -2644,6 +2692,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .panel { min-width: 0; }
   .chart-wrap { position: relative; margin: 3px 0 2px; }
   .chart-wrap svg { display: block; width: 100%; height: auto; }
+  .seg-toggle { display: inline-flex; gap: 4px; margin: 2px 0 8px; }
+  .seg-toggle button {
+    border: 1px solid var(--ring); background: var(--surface); color: var(--ink-2);
+    border-radius: 999px; padding: 4px 13px; font-size: 11.5px;
+    font-family: inherit; cursor: pointer;
+  }
+  .seg-toggle button:hover { border-color: var(--muted); }
+  .seg-toggle button.on { background: var(--ink); border-color: var(--ink); color: var(--page); }
   .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--ink-2); margin: 4px 0 0 2px; }
   .legend b { color: var(--ink); font-weight: 600; }
   .dot {
@@ -2834,12 +2890,12 @@ __ROC_CARD__
 __DECILE_CARD__
 __CROSS_CARD__
 __WEEKLY_CARD__
-__CONVERSION_CARD__
 __MONEY_CARD__
 __CAPTURE_CARD__
 __THROUGH_CARD__
 __SWAP_CARD__
 __LIMIT_CARD__
+__CONVERSION_CARD__
 __FOOTER__
 </main>
 <script>
@@ -2847,6 +2903,7 @@ const DATA = __DATA_JSON__;
 const NS = 'http://www.w3.org/2000/svg';
 const fmtPct = (v, d) => (v == null ? '—' : v.toFixed(d == null ? 2 : d) + '%');
 const fmtInt = n => (n == null ? '—' : n.toLocaleString('en-US'));
+const fmtLift = v => (v == null ? '—' : v.toFixed(2) + '×');
 
 function svgEl(parent, tag, attrs, text) {
   const node = document.createElementNS(NS, tag);
@@ -3027,17 +3084,22 @@ function drawRoc(windowKey) {
 }
 
 /* ---------- 十分位 ---------- */
+let decileSeg = 'all';
 function drawDeciles() {
   const entry = DATA.windows['15'];
+  const models = decileSeg === 'oot' ? entry.segments.oot.models : entry.models;
   const svg = document.getElementById('decileChart');
   const tip = tipCtl(svg, document.getElementById('decileTip'));
   const W = 1000, H = 340, m = { l: 52, r: 16, t: 18, b: 50 };
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const newD = entry.models.new.deciles, oldD = entry.models.old.deciles;
+  const newD = decileSeg === 'oot' ? models.new.quintiles : models.new.deciles;
+  const oldD = decileSeg === 'oot' ? models.old.quintiles : models.old.deciles;
+  const nBins = newD.length;
+  svg.setAttribute('aria-label', decileSeg === 'oot' ? 'FPD15 OOT 后五分位坏率对比' : 'FPD15 十分位坏率对比');
   const rawMax = Math.max(...newD.concat(oldD).map(d => d.rate || 0));
   const yMax = Math.ceil(rawMax / 10) * 10;
-  const groupW = iw / 10;
-  const barW = Math.min(22, groupW * 0.30);
+  const groupW = iw / nBins;
+  const barW = Math.min(nBins > 5 ? 22 : 34, groupW * 0.30);
   const gap = 2;
   const cx = q => m.l + (q - 0.5) * groupW;
   const y = v => m.t + (1 - v / yMax) * ih;
@@ -3055,7 +3117,7 @@ function drawDeciles() {
     fill: 'var(--grid)', opacity: 0, 'pointer-events': 'none'
   });
 
-  for (let q = 1; q <= 10; q++) {
+  for (let q = 1; q <= nBins; q++) {
     svgEl(svg, 'text', {
       x: cx(q), y: H - m.b + 20, 'text-anchor': 'middle',
       fill: 'var(--muted)', 'font-size': 11.5
@@ -3081,29 +3143,39 @@ function drawDeciles() {
     });
   }
 
-  // 只在最高档直接标注
-  const topNew = newD[9], topOld = oldD[9];
-  [['var(--c2)', topOld, -(barW + gap / 2)], ['var(--c1)', topNew, gap / 2]].forEach(([color, d, dx]) => {
-    svgEl(svg, 'text', {
-      x: cx(10) + dx + barW / 2, y: y(d.rate) - 7, 'text-anchor': 'middle',
-      fill: 'var(--ink)', 'font-size': 11.5, 'font-weight': 600
-    }, fmtPct(d.rate) + ' · ' + d.lift.toFixed(2) + '×');
-  });
+  // 每档直接标注坏率与 lift；同组两根柱的标注过近时，较高柱的标注再上移一行
+  for (let q = 1; q <= nBins; q++) {
+    const items = [
+      { d: oldD[q - 1], dx: -(barW + gap / 2), ly: y(oldD[q - 1].rate || 0) - 7 },
+      { d: newD[q - 1], dx: gap / 2, ly: y(newD[q - 1].rate || 0) - 7 }
+    ];
+    if (Math.abs(items[0].ly - items[1].ly) < 14) {
+      const tall = items[0].ly <= items[1].ly ? items[0] : items[1];
+      const short = tall === items[0] ? items[1] : items[0];
+      tall.ly = short.ly - 14;
+    }
+    items.forEach(b => {
+      svgEl(svg, 'text', {
+        x: cx(q) + b.dx + barW / 2, y: b.ly, 'text-anchor': 'middle',
+        fill: 'var(--ink)', 'font-size': 10, 'font-weight': 600
+      }, fmtPct(b.d.rate) + ' · ' + fmtLift(b.d.lift));
+    });
+  }
 
   const hoverRect = svgEl(svg, 'rect', {
     x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent', tabindex: 0
   });
-  let active = 10;
+  let active = nBins;
   function show(q) {
     active = q;
     band.setAttribute('x', m.l + (q - 1) * groupW);
     band.setAttribute('width', groupW);
     band.setAttribute('opacity', 0.55);
     tip.show({
-      title: '第 ' + q + ' 档' + (q === 1 ? '（最安全）' : q === 10 ? '（最高风险）' : ''),
+      title: '第 ' + q + ' 档' + (q === 1 ? '（最安全）' : q === nBins ? '（最高风险）' : ''),
       rows: [
-        { value: fmtPct(newD[q - 1].rate), name: '新戳额模型 n=' + fmtInt(newD[q - 1].n) + ' · lift ' + newD[q - 1].lift.toFixed(2) + '×', color: 'var(--c1)' },
-        { value: fmtPct(oldD[q - 1].rate), name: '线上模型 n=' + fmtInt(oldD[q - 1].n) + ' · lift ' + oldD[q - 1].lift.toFixed(2) + '×', color: 'var(--c2)' }
+        { value: fmtPct(newD[q - 1].rate), name: '新戳额模型 n=' + fmtInt(newD[q - 1].n) + ' · lift ' + fmtLift(newD[q - 1].lift), color: 'var(--c1)' },
+        { value: fmtPct(oldD[q - 1].rate), name: '线上模型 n=' + fmtInt(oldD[q - 1].n) + ' · lift ' + fmtLift(oldD[q - 1].lift), color: 'var(--c2)' }
       ]
     }, cx(q), y(Math.max(newD[q - 1].rate, oldD[q - 1].rate)) - 6);
   }
@@ -3115,7 +3187,7 @@ function drawDeciles() {
   function groupAt(clientX) {
     const box = svg.getBoundingClientRect();
     const ux = (clientX - box.left) / box.width * W;
-    return Math.min(10, Math.max(1, Math.floor((ux - m.l) / groupW) + 1));
+    return Math.min(nBins, Math.max(1, Math.floor((ux - m.l) / groupW) + 1));
   }
   hoverRect.addEventListener('pointermove', e => show(groupAt(e.clientX)));
   hoverRect.addEventListener('pointerleave', clear);
@@ -3769,6 +3841,15 @@ function drawMoney(key) {
 
 drawRoc('15');
 drawRoc('7');
+document.getElementById('decileToggle').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-seg]');
+  if (!btn || btn.dataset.seg === decileSeg) return;
+  decileSeg = btn.dataset.seg;
+  document.querySelectorAll('#decileToggle button').forEach(b => b.classList.toggle('on', b === btn));
+  document.getElementById('decileTableAll').hidden = decileSeg !== 'all';
+  document.getElementById('decileTableOot').hidden = decileSeg !== 'oot';
+  drawDeciles();
+});
 drawDeciles();
 drawCapture();
 drawApproval();
@@ -3843,10 +3924,6 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
         ("decile", "十分位坏率"),
         ("cross", "五分位交叉矩阵"),
         ("weekly", "分周稳定性"),
-    ]
-    if limit and limit.get("conversion"):
-        toc_entries.append(("conversion", "转化漏斗"))
-    toc_entries += [
         ("money", "置入与置出"),
         ("capture", "拦截收益"),
         ("through", "通过收益"),
@@ -3854,6 +3931,8 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
     ]
     if limit:
         toc_entries.append(("limit", "戳额生产打分全量"))
+    if limit and limit.get("conversion"):
+        toc_entries.append(("conversion", "转化漏斗"))
     toc_links = "".join(
         f'<li><a href="#{anchor}">{escape(title)}</a></li>'
         for anchor, title in toc_entries
