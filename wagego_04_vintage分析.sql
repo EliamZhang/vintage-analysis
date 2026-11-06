@@ -1086,7 +1086,6 @@ ORDER BY week_start, q
 -- 块 12：新客出额样本转化漏斗（按戳额周）
 --   出额样本：model.tmp_eliam_wagego_new_user_credit_full_samples（全历史、不设时间窗）
 --           每个用户一行，sample_datetime = 戳额申请时间；
---           建表 SQL 见 wagego_06_新客戳额全历史样本表.sql
 --   出额审批通过率 = 有额用户 / 出额明细可匹配用户
 --           出额结果取 edw_ewa.dwb_user_fst_conv_dtl 的首次有额时间/额度；
 --           若该表用户主键不是 user_id，请按实际字段调整 join
