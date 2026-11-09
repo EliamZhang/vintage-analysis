@@ -1,6 +1,6 @@
 SET spark.sql.session.timeZone = Australia/Sydney;
 
--- 样本：model.tmp_eliam_wagego_all_user_bid_full_samples（新老客全部发标申请，含未成交；全历史、不设时间窗）
+-- 样本：model.tmp_eliam_wagego_all_user_bid_20260801_20261106_samples（新老客全部发标申请，含未成交；窗口 2026-08-01 ~ 2026-11-06）
 --       sample_datetime = 申请时间 apply_time
 -- 数据源：ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log.model_input
 -- 关联键：样本 flow_id（借据号 loan_no）= 日志 scene_id（发标时点打点）
@@ -14,14 +14,14 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 
 
 -- 银行流水明细：一行一笔交易，拼上对应银行卡的信息，金额保留原始正负号
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_all_user_bid_full_variable_illion_transaction_middle;
-CREATE TABLE model.tmp_eliam_wagego_all_user_bid_full_variable_illion_transaction_middle AS
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_all_user_bid_20260801_20261106_variable_illion_transaction_middle;
+CREATE TABLE model.tmp_eliam_wagego_all_user_bid_20260801_20261106_variable_illion_transaction_middle AS
 WITH sample AS (
     SELECT
          flow_id
         ,user_id
         ,sample_datetime
-    FROM model.tmp_eliam_wagego_all_user_bid_full_samples
+    FROM model.tmp_eliam_wagego_all_user_bid_20260801_20261106_samples
 ),
 latest_log AS (
     SELECT
@@ -116,14 +116,14 @@ LEFT JOIN account acc
 
 
 -- 银行卡余额：一行一张卡一天的日终余额
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_all_user_bid_full_balance_time_series_middle;
-CREATE TABLE model.tmp_eliam_wagego_all_user_bid_full_balance_time_series_middle AS
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_all_user_bid_20260801_20261106_balance_time_series_middle;
+CREATE TABLE model.tmp_eliam_wagego_all_user_bid_20260801_20261106_balance_time_series_middle AS
 WITH sample AS (
     SELECT
          flow_id
         ,user_id
         ,sample_datetime
-    FROM model.tmp_eliam_wagego_all_user_bid_full_samples
+    FROM model.tmp_eliam_wagego_all_user_bid_20260801_20261106_samples
 ),
 latest_log AS (
     SELECT
