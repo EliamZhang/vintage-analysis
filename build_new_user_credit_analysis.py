@@ -3,6 +3,7 @@
 
 样本：wagego_02 中的新客首笔成交样本（application_rank = 1，戳额时间落在窗口内）。
 新戳额模型分数取自戳额成交样本，按 last_limit_flow_id = 打分文件的 flow_id 关联；线上模型分数取自主表。
+FT 分组：按 last_limit_flow_id = 决策策略类型文件的 flow_id 关联 strategy_type，样本口径不变。
 
 用法：
     python build_new_user_credit_analysis.py
@@ -44,10 +45,13 @@ DEFAULT_LABEL = RAW_DIR / "table_tmp_eliam_wagego_dwd_loan_apply_label.csv"
 DEFAULT_SCORE = _input_path("aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv")
 DEFAULT_LIMIT_SCORE = _input_path("wagego_new_user_credit_20260801_20261023_score.csv")
 DEFAULT_LIMIT_OLD_SCORE = _input_path("wagego_new_user_credit_20260801_20261023_old_score.csv")
+DEFAULT_STRATEGY = _input_path("wagego_new_user_credit_deal_strategy_type.csv")
+DEFAULT_BID = _input_path("table_tmp_eliam_wagego_all_user_bid_score_20260801_20261106.csv")
 DEFAULT_OUTPUT = PROJECT_DIR / "新客戳额_模型分分析.html"
 
 OLD_SCORE = "aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626"
 NEW_SCORE = "aus_new_wagego_credit_20261028_v1_0_txn_lgb_score"
+FT_TYPES = ("new_normal_ft", "old_normal_ft")  # 决策策略类型里的 FT 组
 
 OLD_NAME = "线上模型"
 NEW_NAME = "新戳额模型"
@@ -391,7 +395,26 @@ def roc_points(score, label, steps=200):
 # --------------------------------------------------------------------------- 数据
 
 
-def load_sample(label_csv: Path, score_csv: Path, start: str, end: str) -> pd.DataFrame:
+def load_bid_sample(bid_csv: Path) -> pd.DataFrame | None:
+    """发标全量样本 + 新模型分；只读评估所需列。"""
+    columns = pd.read_csv(bid_csv, encoding="utf-8-sig", nrows=0).columns
+    wanted = [
+        c
+        for c in (
+            "user_type",
+            "is_disburse_success",
+            NEW_SCORE,
+            *[f"y_fpd{w}_{s}" for w in WINDOWS for s in ("obs", "ovd")],
+        )
+        if c in columns
+    ]
+    if NEW_SCORE not in wanted:
+        return None
+    return pd.read_csv(bid_csv, encoding="utf-8-sig", usecols=wanted, low_memory=False)
+
+
+def load_sample(label_csv: Path, score_csv: Path, start: str, end: str,
+                strategy_csv: Path | None = None) -> pd.DataFrame:
     label = pd.read_csv(label_csv, encoding="utf-8-sig", low_memory=False)
     label["last_limit_time"] = pd.to_datetime(label["last_limit_time"], errors="coerce")
     rank = pd.to_numeric(label["application_rank"], errors="coerce")
@@ -421,6 +444,20 @@ def load_sample(label_csv: Path, score_csv: Path, start: str, end: str) -> pd.Da
     merged["days_to_disburse"] = (
         pd.to_datetime(merged["disburse_time"]) - merged["last_limit_time"]
     ).dt.total_seconds() / 86400
+
+    if strategy_csv is not None and Path(strategy_csv).exists():
+        strategy = pd.read_csv(
+            strategy_csv, encoding="utf-8-sig", usecols=["flow_id", "strategy_type"]
+        )
+        strategy["flow_id"] = strategy["flow_id"].astype(str).str.strip()
+        strategy = strategy.drop_duplicates("flow_id").rename(
+            columns={"flow_id": "strategy_flow_id"}
+        )
+        merged = merged.merge(
+            strategy, left_on="last_limit_flow_id", right_on="strategy_flow_id", how="left"
+        ).drop(columns=["strategy_flow_id"])
+        merged["strategy_type"] = merged["strategy_type"].astype("string").str.strip()
+        merged["is_ft"] = merged["strategy_type"].isin(FT_TYPES).fillna(False)
 
     unscored = sample[~sample["last_limit_flow_id"].isin(set(score["flow_id"]))]
     merged.attrs["unscored"] = int(len(unscored))
@@ -780,6 +817,165 @@ def load_limit_data(
     }
 
 
+def _ft_data(sample: pd.DataFrame) -> dict | None:
+    """成交样本按决策策略类型切 FT / 非 FT：类型分布 + 成熟样本坏率与模型 AUC。"""
+    if "is_ft" not in sample.columns:
+        return None
+
+    matched = sample[sample["strategy_type"].notna()]
+    ft = {
+        "n_total": int(len(sample)),
+        "n_matched": int(len(matched)),
+        "n_unmatched": int(len(sample) - len(matched)),
+        "n_ft": int(sample["is_ft"].sum()),
+        "strategy_counts": [
+            {"type": str(name), "n": int(n)}
+            for name, n in matched["strategy_type"].value_counts().items()
+        ],
+        "by_type": [],
+        "score_stats": {},
+        "windows": {},
+    }
+
+    score_masks = {
+        "ft": sample["is_ft"].to_numpy(dtype=bool),
+        "non_ft": (sample["strategy_type"].notna() & ~sample["is_ft"]).to_numpy(dtype=bool),
+        "unmatched": sample["strategy_type"].isna().to_numpy(dtype=bool),
+    }
+    new_scores = pd.to_numeric(sample["new_score"], errors="coerce")
+    for key, mask in score_masks.items():
+        scores = new_scores[mask].dropna()
+        if scores.empty:
+            ft["score_stats"][key] = {"n": 0}
+            continue
+        q = scores.quantile([0.1, 0.5, 0.9])
+        ft["score_stats"][key] = {
+            "n": int(len(scores)),
+            "mean": round(float(scores.mean()), 4),
+            "p10": round(float(q.loc[0.1]), 4),
+            "p50": round(float(q.loc[0.5]), 4),
+            "p90": round(float(q.loc[0.9]), 4),
+        }
+
+    base15 = sample[sample["y_fpd15_obs"] == 1]
+    for name, group in base15.groupby(
+        base15["strategy_type"].fillna("未匹配"), observed=True
+    ):
+        ft["by_type"].append(
+            {
+                "type": str(name),
+                "n": int(len(group)),
+                "bad": int(group["y_fpd15_ovd"].sum()),
+                "rate": round(float(group["y_fpd15_ovd"].mean() * 100), 2),
+            }
+        )
+    ft["by_type"].sort(key=lambda item: item["n"], reverse=True)
+
+    ft["weekly"] = []
+    for week in sorted(sample["disburse_week"].dropna().unique()):
+        grp = base15[base15["disburse_week"] == week]
+        row = {"week": str(week)}
+        for key, seg in (
+            ("ft", grp[grp["is_ft"]]),
+            ("non_ft", grp[grp["strategy_type"].notna() & ~grp["is_ft"]]),
+        ):
+            entry = {
+                "n": int(len(seg)),
+                "bad": int(seg["y_fpd15_ovd"].sum()),
+                "rate": round(float(seg["y_fpd15_ovd"].mean() * 100), 2)
+                if len(seg)
+                else None,
+            }
+            for model_key in ("new", "old"):
+                d = seg.dropna(subset=[f"{model_key}_score"])
+                y = d["y_fpd15_ovd"].astype(int).to_numpy()
+                entry[f"{model_key}_auc"] = None
+                if y.sum() >= WEEK_MIN_BAD and len(y) - y.sum() >= WEEK_MIN_BAD:
+                    entry[f"{model_key}_auc"] = round(
+                        auc_ks(d[f"{model_key}_score"].to_numpy(float), y)[0], 4
+                    )
+            row[key] = entry
+        ft["weekly"].append(row)
+    both = [
+        r
+        for r in ft["weekly"]
+        if r["ft"]["rate"] is not None and r["non_ft"]["rate"] is not None
+    ]
+    ft["weekly_summary"] = {
+        "both": len(both),
+        "ft_higher": sum(1 for r in both if r["ft"]["rate"] > r["non_ft"]["rate"]),
+    }
+
+    for w in WINDOWS:
+        obs_col, ovd_col = f"y_fpd{w}_obs", f"y_fpd{w}_ovd"
+        base = sample[sample[obs_col] == 1]
+        masks = {
+            "ft": base["is_ft"].to_numpy(dtype=bool),
+            "non_ft": (base["strategy_type"].notna() & ~base["is_ft"]).to_numpy(dtype=bool),
+        }
+        groups = {}
+        for key, mask in masks.items():
+            seg = base[mask]
+            entry = {
+                "n": int(len(seg)),
+                "bad": int(seg[ovd_col].sum()),
+                "rate": round(float(seg[ovd_col].mean() * 100), 2) if len(seg) else None,
+            }
+            for model_key in ("new", "old"):
+                d = seg.dropna(subset=[f"{model_key}_score"])
+                auc, _ = auc_ks(
+                    d[f"{model_key}_score"].to_numpy(float),
+                    d[ovd_col].astype(int).to_numpy(),
+                )
+                entry[f"{model_key}_auc"] = round(auc, 4) if auc is not None else None
+            groups[key] = entry
+        ft["windows"][str(w)] = groups
+
+    return ft
+
+
+def _bid_data(frame: pd.DataFrame) -> dict | None:
+    """发标全量样本上的新模型区分度：按新老客分组，Y 只对放款成功的申请成熟。"""
+    required = {"user_type", "is_disburse_success"}
+    for w in WINDOWS:
+        required |= {f"y_fpd{w}_obs", f"y_fpd{w}_ovd"}
+    if NEW_SCORE not in frame.columns or not required.issubset(frame.columns):
+        return None
+
+    df = frame.copy()
+    df["bid_score"] = pd.to_numeric(df[NEW_SCORE], errors="coerce")
+    df["deal"] = pd.to_numeric(df["is_disburse_success"], errors="coerce").fillna(0) == 1
+    result = {
+        "n": int(len(df)),
+        "n_deal": int(df["deal"].sum()),
+        "n_scored": int(df["bid_score"].notna().sum()),
+        "groups": [],
+    }
+    for user_type in ("New", "Old"):
+        seg = df[df["user_type"].astype("string").str.strip() == user_type]
+        entry = {
+            "user_type": user_type,
+            "n": int(len(seg)),
+            "n_deal": int(seg["deal"].sum()),
+            "windows": {},
+        }
+        for w in WINDOWS:
+            obs_col, ovd_col = f"y_fpd{w}_obs", f"y_fpd{w}_ovd"
+            base = seg[seg[obs_col] == 1]
+            d = base.dropna(subset=["bid_score"])
+            y = d[ovd_col].astype(int).to_numpy()
+            auc, ks = auc_ks(d["bid_score"].to_numpy(float), y)
+            entry["windows"][str(w)] = {
+                "n_obs": int(len(base)),
+                "bad": int(y.sum()) if len(y) else 0,
+                "rate": round(float(y.mean() * 100), 2) if len(y) else None,
+                "auc": round(auc, 4) if auc is not None else None,
+                "ks": round(ks, 4) if ks is not None else None,
+            }
+        result["groups"].append(entry)
+    return result
+
+
 def build_data(sample: pd.DataFrame, reject_pct: int, oot_start: str) -> dict:
     obs_at = pd.to_datetime(sample["obs_dt"]).max()
     data = {
@@ -814,6 +1010,9 @@ def build_data(sample: pd.DataFrame, reject_pct: int, oot_start: str) -> dict:
         },
     }
     weeks = data["weeks"]
+    ft = _ft_data(sample)
+    if ft is not None:
+        data["ft"] = ft
 
     for w in WINDOWS:
         obs_col, ovd_col = f"y_fpd{w}_obs", f"y_fpd{w}_ovd"
@@ -2468,6 +2667,230 @@ def weekly_card(data) -> str:
     """
 
 
+def ft_card(data) -> str:
+    ft = data.get("ft")
+    if not ft:
+        return ""
+    total = ft["n_total"]
+    share = ft["n_ft"] / total * 100 if total else None
+    matched_share = ft["n_matched"] / total * 100 if total else None
+    type_detail = {row["type"]: row for row in ft["by_type"]}
+
+    type_counts = list(ft["strategy_counts"])
+    if ft["n_unmatched"]:
+        type_counts.append({"type": "未匹配", "n": ft["n_unmatched"]})
+    type_rows = []
+    for item in type_counts:
+        detail = type_detail.get(item["type"])
+        tag = ' <span class="tag">FT</span>' if item["type"] in FT_TYPES else ""
+        type_rows.append(
+            f"""
+        <tr>
+          <td>{escape(item['type'])}{tag}</td>
+          <td>{fmt_int(item['n'])}</td>
+          <td>{fmt_pct(item['n'] / total * 100 if total else None)}</td>
+          <td>{fmt_int(detail['n']) if detail else '—'}</td>
+          <td>{fmt_pct(detail['rate']) if detail else '—'}</td>
+        </tr>"""
+        )
+
+    group_rows = []
+    for w in WINDOWS:
+        groups = ft["windows"][str(w)]
+        for key, name in (("ft", "FT"), ("non_ft", "非 FT")):
+            g = groups[key]
+            cls = ' class="oot"' if key == "ft" else ""
+            group_rows.append(
+                f"""
+        <tr{cls}>
+          <td class="w">FPD{w}</td>
+          <td>{name}</td>
+          <td>{fmt_int(g['n'])}</td>
+          <td>{fmt_int(g['bad'])}</td>
+          <td>{fmt_pct(g['rate'])}</td>
+          <td class="strong">{fmt_num(g['new_auc'])}</td>
+          <td>{fmt_num(g['old_auc'])}</td>
+        </tr>"""
+            )
+
+    weekly_rows = []
+    for r in ft["weekly"]:
+        label = escape(r["week"][5:] if len(r["week"]) >= 10 else r["week"])
+        for key, name in (("ft", "FT"), ("non_ft", "非 FT")):
+            g = r[key]
+            cls = ' class="oot"' if key == "ft" else ""
+            weekly_rows.append(
+                f"""
+        <tr{cls}>
+          <td class="w">{label}</td>
+          <td>{name}</td>
+          <td>{fmt_int(g['n'])}</td>
+          <td>{fmt_int(g['bad'])}</td>
+          <td>{fmt_pct(g['rate'])}</td>
+          <td class="strong">{fmt_num(g['new_auc'])}</td>
+          <td>{fmt_num(g['old_auc'])}</td>
+        </tr>"""
+            )
+
+    ft15 = ft["windows"]["15"]["ft"]
+    non15 = ft["windows"]["15"]["non_ft"]
+    score_stats = ft["score_stats"]
+    score_rows = []
+    for key, name in (("ft", "FT"), ("non_ft", "非 FT")):
+        s = score_stats[key]
+        score_rows.append(
+            f"""
+        <tr>
+          <td>{name}</td>
+          <td>{fmt_int(s['n'])}</td>
+          <td class="strong">{fmt_num(s.get('mean'), 4)}</td>
+          <td>{fmt_num(s.get('p10'), 4)}</td>
+          <td>{fmt_num(s.get('p50'), 4)}</td>
+          <td>{fmt_num(s.get('p90'), 4)}</td>
+        </tr>"""
+        )
+    ft_score = score_stats["ft"].get("mean")
+    non_ft_score = score_stats["non_ft"].get("mean")
+    ws = ft["weekly_summary"]
+    weekly_note = (
+        f"<br><br><b>分周走势：</b>{fmt_int(ws['both'])} 个两组都有成熟样本的放款周里，"
+        f"FT 坏率有 {fmt_int(ws['ft_higher'])} 周高于非 FT；"
+        "若差距集中在少数周，需要关注对应周的小样本波动。"
+        if ws["both"]
+        else ""
+    )
+    return f"""
+    <section class="card" id="ft">
+      <h2>FT 样本表现<span class="tag" title="按戳额决策表的 strategy_type 打标；不改变报告样本口径">成交样本 · 策略类型匹配</span></h2>
+      <p class="desc">用戳额决策表把成交样本按策略类型分组：FT = {escape(' / '.join(FT_TYPES))}，
+      其余匹配到决策记录的为非 FT；决策表没有对应流水的样本保留在样本中，单列为「未匹配」。
+      分组只用于本卡对比，报告其他卡片的样本与结论不变。</p>
+      <div class="subhead">策略类型分布<span class="muted">（按成交笔数，含未成熟样本）</span></div>
+      <div class="table-wrap">
+        <table class="metrics">
+          <thead>
+            <tr>
+              <th>策略类型</th><th>成交笔数</th><th>占比</th><th>FPD15 成熟</th><th>FPD15 坏率</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(type_rows)}</tbody>
+        </table>
+      </div>
+      <div class="subhead">FT vs 非 FT<span class="muted">（成熟成交样本）</span></div>
+      <div class="table-wrap">
+        <table class="metrics">
+          <thead>
+            <tr>
+              <th>窗口</th><th>组别</th><th>成熟笔数</th><th>坏样本</th><th>坏率</th>
+              <th>新模型 AUC</th><th>线上模型 AUC</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(group_rows)}</tbody>
+        </table>
+      </div>
+      <div class="subhead">FT vs 非 FT · 按放款周<span class="muted">（FPD15 成熟成交样本；坏样本或好样本少于 {WEEK_MIN_BAD} 笔的周不计算 AUC）</span></div>
+      <div class="table-wrap">
+        <table class="metrics">
+          <thead>
+            <tr>
+              <th>放款周</th><th>组别</th><th>成熟笔数</th><th>坏样本</th><th>坏率</th>
+              <th>新模型 AUC</th><th>线上模型 AUC</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(weekly_rows)}</tbody>
+        </table>
+      </div>
+      <div class="subhead">新模型分数分布<span class="muted">（全部成交样本 · 分数越高风险越高）</span></div>
+      <div class="table-wrap">
+        <table class="metrics">
+          <thead>
+            <tr>
+              <th>组别</th><th>有分笔数</th><th>均分</th><th>P10</th><th>P50</th><th>P90</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(score_rows)}</tbody>
+        </table>
+      </div>
+      {takeaway(
+          f"<b>FT 覆盖：</b>成交样本 {fmt_int(total)} 笔中，FT {fmt_int(ft['n_ft'])} 笔（{fmt_pct(share)}）；"
+          f"匹配到决策记录 {fmt_int(ft['n_matched'])} 笔（{fmt_pct(matched_share)}），"
+          f"未匹配 {fmt_int(ft['n_unmatched'])} 笔。"
+          f"<br><br><b>FPD15 表现：</b>FT 组成熟 {fmt_int(ft15['n'])} 笔、坏率 {fmt_pct(ft15['rate'])}；"
+          f"非 FT 组成熟 {fmt_int(non15['n'])} 笔、坏率 {fmt_pct(non15['rate'])}。"
+          f"新模型组内 AUC 分别为 {fmt_num(ft15['new_auc'])} 和 {fmt_num(non15['new_auc'])}，"
+          "说明排序能力在 FT 组内是否同样成立。"
+          f"{weekly_note}"
+          f"<br><br><b>客群结构：</b>新模型均分 FT {fmt_num(ft_score, 4)}、非 FT {fmt_num(non_ft_score, 4)}"
+          "（分数越高风险越高）；均分差得越多，坏率差异里由客群结构解释的部分就越大，"
+          "剩余部分才更可能来自策略本身。"
+          "<br><br><b>使用提示：</b>FT 组样本量通常小于全样本，坏率和 AUC 的波动更大；"
+          "若 FT 组成熟笔数不足，结论只作方向参考。"
+      )}
+      <p class="note">FT 判定：strategy_type ∈ {{{escape(', '.join(FT_TYPES))}}}；非 FT 为有决策记录但不在 FT 组；
+      未匹配为决策表按 flow_id 关联不到该戳额流水。坏率 / AUC 用成熟样本、组内各自有分样本计算，
+      坏样本或好样本不足时显示 —；分数分布用全部成交样本（含未成熟），只统计 FT / 非 FT 组中有新模型分的记录。
+      本卡不剔除任何样本，也未改变报告主样本口径。</p>
+    </section>
+    """
+
+
+def bid_card(data) -> str:
+    bid = data.get("bid")
+    if not bid:
+        return ""
+    rows = []
+    for w in WINDOWS:
+        for g in bid["groups"]:
+            m = g["windows"][str(w)]
+            deal_rate = g["n_deal"] / g["n"] * 100 if g["n"] else None
+            rows.append(
+                f"""
+        <tr>
+          <td class="w">FPD{w}</td>
+          <td>{'新客' if g['user_type'] == 'New' else '老客'}</td>
+          <td>{fmt_int(g['n'])}</td>
+          <td>{fmt_int(g['n_deal'])}</td>
+          <td>{fmt_pct(deal_rate)}</td>
+          <td>{fmt_int(m['n_obs'])}</td>
+          <td>{fmt_int(m['bad'])}</td>
+          <td>{fmt_pct(m['rate'])}</td>
+          <td class="strong">{fmt_num(m['auc'])}</td>
+          <td>{fmt_num(m['ks'])}</td>
+        </tr>"""
+            )
+    g15 = {g["user_type"]: g["windows"]["15"] for g in bid["groups"]}
+    new15, old15 = g15.get("New", {}), g15.get("Old", {})
+    deal_rate = bid["n_deal"] / bid["n"] * 100 if bid["n"] else None
+    return f"""
+    <section class="card" id="bid">
+      <h2>发标样本表现<span class="tag" title="模型分打在发标全量样本上；与报告主样本相互独立">独立口径 · 新模型</span></h2>
+      <p class="desc">把新模型分打在 wagego_02 的新老客发标全量样本上（含未成交申请），看模型在发标环节是否同样有区分度。
+      发标样本的 Y 只对放款成功的申请成熟，坏率与 AUC 实际在发标成交子集上计算；发标全量只统计申请与成交笔数。</p>
+      <div class="table-wrap">
+        <table class="metrics">
+          <thead>
+            <tr>
+              <th>窗口</th><th>客群</th><th>发标申请</th><th>成交笔数</th><th>成交率</th>
+              <th>成熟笔数</th><th>坏样本</th><th>坏率</th><th>AUC</th><th>KS</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(rows)}</tbody>
+        </table>
+      </div>
+      {takeaway(
+          f"<b>样本：</b>发标申请 {fmt_int(bid['n'])} 笔，成交 {fmt_int(bid['n_deal'])} 笔（{fmt_pct(deal_rate)}），"
+          f"有模型分 {fmt_int(bid['n_scored'])} 笔。"
+          f"<br><br><b>FPD15 区分度：</b>新客 AUC {fmt_num(new15.get('auc'))}（KS {fmt_num(new15.get('ks'))}，坏率 {fmt_pct(new15.get('rate'))}），"
+          f"老客 AUC {fmt_num(old15.get('auc'))}（KS {fmt_num(old15.get('ks'))}，坏率 {fmt_pct(old15.get('rate'))}）。"
+          "该口径独立于戳额成交样本，可与上方主报告对比，判断模型在发标环节的迁移效果。"
+          "<br><br><b>使用提示：</b>此卡只用于判断模型在发标样本上是否仍有效，不改变报告主样本与主结论。"
+      )}
+      <p class="note">发标样本来自 wagego_02 的 all_user_bid 样本（含未成交申请），模型分为新戳额模型在发标时点的打分；
+      坏率 / AUC 用 FPD7、FPD15 成熟且有分的成交样本计算，未成熟与未成交申请不计入。</p>
+    </section>
+    """
+
+
 def weekly_panel(data, w) -> str:
     entry = data["windows"][str(w)]
     return f"""
@@ -2485,7 +2908,8 @@ def weekly_panel(data, w) -> str:
     """
 
 
-def footer_html(data, generated_at, label_name, score_name, limit=None, limit_name="") -> str:
+def footer_html(data, generated_at, label_name, score_name, limit=None, limit_name="",
+                strategy_name="", bid_name="") -> str:
     meta = data["meta"]
     unscored_note = (
         "均为窗口末尾放款、FPD7/FPD15 均未成熟，不影响评估。"
@@ -2501,12 +2925,23 @@ def footer_html(data, generated_at, label_name, score_name, limit=None, limit_na
             覆盖 {escape(limit['dt_min'])} 至 {escape(limit['dt_max'])}；已打分 {fmt_int(limit['n_scored'])} 人、
             缺分 {fmt_int(limit['n_missing'])} 人（{fmt_pct(limit['missing_rate'])}）。
             该样本不含标签（未成交申请无表现数据），分布卡只比较新旧分数分布与档位迁移；AUC / KS 仅在戳额成交样本上计算。</li>"""
+    strategy_note = (
+        f"、{escape(strategy_name)}（决策策略类型）" if strategy_name else ""
+    )
+    bid_note = ""
+    if data.get("bid"):
+        bid = data["bid"]
+        bid_note = f"""
+        <li><b>发标样本</b>：{escape(bid_name)} 为 wagego_02 的新老客发标全量样本（含未成交申请）叠加新模型分，
+            共 {fmt_int(bid['n'])} 笔申请、成交 {fmt_int(bid['n_deal'])} 笔。该样本的 Y 只对放款成功的申请成熟，
+            坏率 / AUC 在成交子集上计算，与主样本（新客首笔成交）相互独立。</li>"""
+    bid_source = f"、{escape(bid_name)}（发标样本）" if bid_name else ""
     return f"""
     <footer class="foot">
       <ul class="notes">
         <li><b>样本口径</b>：wagego_02 的新客首笔成交样本（application_rank = 1，按戳额时间 {escape(meta['start'])} 至 {escape(meta['end_display'])} 筛选），
             与新戳额模型打分文件按 last_limit_flow_id = flow_id 关联，共 {fmt_int(meta['n_sample'])} 人。首借客户每人一笔，人数与笔数一致。
-            样本表中另有 {fmt_int(meta['n_unscored'])} 笔未打分、不入样：{unscored_note}</li>
+            样本表中另有 {fmt_int(meta['n_unscored'])} 笔未打分、不入样：{unscored_note}</li>{bid_note}
         <li><b>OOT 口径</b>：OOT 按戳额时间 last_limit_time ≥ {escape(oot_start)} 划分；OOT 后为 {escape(oot_start)} 及以后，
             OOT 前（切点之前）为 {escape(meta['start'])} 至 {escape(pre_end)}。
             OOT 后 / OOT 前分段的 AUC / KS / ΔAUC 见「OOT 后表现」卡，未成熟样本不计入对应窗口。</li>{limit_note}
@@ -2525,7 +2960,7 @@ def footer_html(data, generated_at, label_name, score_name, limit=None, limit_na
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：{escape(label_name)}、{escape(score_name)}；生成脚本 build_new_user_credit_analysis.py；生成时间 {escape(generated_at)}。</li>
+        <li><b>数据源</b>：{escape(label_name)}、{escape(score_name)}{strategy_note}{bid_source}；生成脚本 build_new_user_credit_analysis.py；生成时间 {escape(generated_at)}。</li>
       </ul>
     </footer>
     """
@@ -2890,6 +3325,8 @@ __ROC_CARD__
 __DECILE_CARD__
 __CROSS_CARD__
 __WEEKLY_CARD__
+__FT_CARD__
+__BID_CARD__
 __MONEY_CARD__
 __CAPTURE_CARD__
 __THROUGH_CARD__
@@ -3870,7 +4307,8 @@ drawOot();
 
 
 def build_html(data, generated_at: str, label_name: str, score_name: str,
-               limit=None, limit_name: str = "") -> str:
+               limit=None, limit_name: str = "", strategy_name: str = "",
+               bid_name: str = "") -> str:
     meta = data["meta"]
     header = f"""
     <header>
@@ -3924,6 +4362,12 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
         ("decile", "十分位坏率"),
         ("cross", "五分位交叉矩阵"),
         ("weekly", "分周稳定性"),
+    ]
+    if data.get("ft"):
+        toc_entries.append(("ft", "FT 样本表现"))
+    if data.get("bid"):
+        toc_entries.append(("bid", "发标样本表现"))
+    toc_entries += [
         ("money", "置入与置出"),
         ("capture", "拦截收益"),
         ("through", "通过收益"),
@@ -3959,8 +4403,11 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
     html = html.replace("__THROUGH_CARD__", through_card(data))
     html = html.replace("__SWAP_CARD__", swap_card(data))
     html = html.replace("__WEEKLY_CARD__", weekly_card(data))
+    html = html.replace("__FT_CARD__", ft_card(data))
+    html = html.replace("__BID_CARD__", bid_card(data))
     html = html.replace("__FOOTER__", footer_html(
-        data, generated_at, label_name, score_name, limit, limit_name
+        data, generated_at, label_name, score_name, limit, limit_name, strategy_name,
+        bid_name,
     ))
     payload = json.dumps(to_py(data), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     html = html.replace("__DATA_JSON__", payload.replace("</", "<\\/"))
@@ -3975,6 +4422,10 @@ def main(argv=None):
                         help="戳额生产打分全量新模型分 CSV")
     parser.add_argument("--limit-old-score-csv", default=str(DEFAULT_LIMIT_OLD_SCORE),
                         help="戳额生产打分全量线上旧模型分 CSV（按 flow_id 关联）")
+    parser.add_argument("--strategy-csv", default=str(DEFAULT_STRATEGY),
+                        help="成交样本决策策略类型 CSV（按 last_limit_flow_id 关联）")
+    parser.add_argument("--bid-csv", default=str(DEFAULT_BID),
+                        help="发标全量样本 + 新模型分 CSV（按新老客分组评估）")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="输出 HTML")
     parser.add_argument("--start", default="2026-08-01", help="戳额起始日")
     parser.add_argument("--end", default="2026-10-24", help="戳额结束日（不含）")
@@ -3986,12 +4437,27 @@ def main(argv=None):
     score_path = Path(args.score_csv)
     limit_path = Path(args.limit_score_csv)
     limit_old_path = Path(args.limit_old_score_csv)
+    strategy_path = Path(args.strategy_csv)
+    bid_path = Path(args.bid_csv)
     for path in (label_path, score_path):
         if not path.exists():
             parser.error(f"文件不存在：{path}")
 
-    sample = load_sample(label_path, score_path, args.start, args.end)
+    strategy_arg = strategy_path if strategy_path.exists() else None
+    if strategy_arg is None:
+        print(f"未找到成交样本决策策略类型，跳过 FT 卡：{strategy_path}")
+    bid_arg = bid_path if bid_path.exists() else None
+    if bid_arg is None:
+        print(f"未找到发标样本打分，跳过发标卡：{bid_path}")
+    sample = load_sample(label_path, score_path, args.start, args.end, strategy_arg)
     data = build_data(sample, args.reject, args.oot_start)
+    if bid_arg is not None:
+        bid_frame = load_bid_sample(bid_arg)
+        bid = _bid_data(bid_frame) if bid_frame is not None else None
+        if bid is not None:
+            data["bid"] = bid
+        else:
+            print(f"发标样本缺少必要列，跳过发标卡：{bid_arg}")
     data["meta"]["start"] = args.start
     data["meta"]["end_display"] = (
         pd.Timestamp(args.end) - pd.Timedelta(days=1)
@@ -4013,6 +4479,8 @@ def main(argv=None):
     html = build_html(
         data, generated_at, label_path.name, score_path.name,
         limit_data, limit_path.name,
+        strategy_path.name if strategy_arg else "",
+        bid_path.name if data.get("bid") else "",
     )
 
     output = Path(args.output)
@@ -4040,6 +4508,25 @@ def main(argv=None):
             f"  戳额转化 {c['n']:,} 人 | 申请 {c['apply_rate']:.2f}% | "
             f"成交 {c['disburse_rate']:.2f}% | 申请→成交 {c['apply_to_disburse']:.2f}%"
         )
+
+    if data.get("ft"):
+        f = data["ft"]
+        print(
+            f"  FT 样本 {f['n_ft']:,} / {f['n_total']:,} 笔 | "
+            f"策略类型匹配 {f['n_matched']:,} 笔 | 未匹配 {f['n_unmatched']:,} 笔"
+        )
+
+    if data.get("bid"):
+        b = data["bid"]
+        g15 = {g["user_type"]: g["windows"]["15"] for g in b["groups"]}
+        parts = []
+        for user_type, name in (("New", "新客"), ("Old", "老客")):
+            m = g15.get(user_type, {})
+            parts.append(
+                f"{name} AUC {m['auc'] if m.get('auc') is not None else '—'} "
+                f"/ 坏率 {m['rate'] if m.get('rate') is not None else '—'}%"
+            )
+        print(f"  发标样本 {b['n']:,} 笔 / 成交 {b['n_deal']:,} 笔 | " + " | ".join(parts))
 
 
 if __name__ == "__main__":
