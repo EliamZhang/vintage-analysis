@@ -1,27 +1,27 @@
 SET spark.sql.session.timeZone = Australia/Sydney;
 
--- 样本：model.tmp_eliam_wagego_all_user_bid_20260801_20261106_samples（新老客全部发标申请，含未成交；窗口 2026-08-01 ~ 2026-11-06）
---       sample_datetime = 申请时间 apply_time
+-- 样本：model.tmp_eliam_wagego_new_user_credit_20260801_20261110_samples（每个用户第一次戳额申请；窗口 2026-08-01 ~ 2026-11-10）
+--       sample_datetime = 戳额时间 credit_time
 -- 数据源：ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log.model_input
--- 关联键：样本 flow_id（借据号 loan_no）= 日志 scene_id（发标时点打点）
+-- 关联键：样本 flow_id（戳额流水）= 日志 scene_id（戳额时点打点）
 -- 模型：model_code = aus_wagego_new_risk_3rd_v1_0（其 model_input 带银行流水明细）
 -- scene_id 口径（2026-10-28 实测）：同一 model_code 在戳额、发标两个时点都会打日志，
---   发标调用的 scene_id = 借据号 loan_no（wagego_01 取模型分走的是后者），
---   戳额调用的 scene_id = 戳额流水。本文件用发标样本，按 loan_no 关联发标时点的日志。
+--   戳额调用的 scene_id = 戳额流水，发标调用的 scene_id = 借据号 loan_no；
+--   两套 id 在同一张日志表里并存，本文件用戳额样本，按戳额流水关联戳额时点的日志。
 -- 去重：同一 flow_id 可能多次调用模型，统一取 inserttime 最新的一次
 -- 说明：model_input 里的 raw_transactions、day_end_balances 分别展开成流水、余额两张中间表；
 --       银行卡信息直接拼在流水表上；数组为空则该样本不产出记录
 
 
 -- 银行流水明细：一行一笔交易，拼上对应银行卡的信息，金额保留原始正负号
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_all_user_bid_20260801_20261106_variable_illion_transaction_middle;
-CREATE TABLE model.tmp_eliam_wagego_all_user_bid_20260801_20261106_variable_illion_transaction_middle AS
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_20260801_20261110_variable_illion_transaction_middle;
+CREATE TABLE model.tmp_eliam_wagego_new_user_credit_20260801_20261110_variable_illion_transaction_middle AS
 WITH sample AS (
     SELECT
          flow_id
         ,user_id
         ,sample_datetime
-    FROM model.tmp_eliam_wagego_all_user_bid_20260801_20261106_samples
+    FROM model.tmp_eliam_wagego_new_user_credit_20260801_20261110_samples
 ),
 latest_log AS (
     SELECT
@@ -116,14 +116,14 @@ LEFT JOIN account acc
 
 
 -- 银行卡余额：一行一张卡一天的日终余额
-DROP TABLE IF EXISTS model.tmp_eliam_wagego_all_user_bid_20260801_20261106_balance_time_series_middle;
-CREATE TABLE model.tmp_eliam_wagego_all_user_bid_20260801_20261106_balance_time_series_middle AS
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_new_user_credit_20260801_20261110_balance_time_series_middle;
+CREATE TABLE model.tmp_eliam_wagego_new_user_credit_20260801_20261110_balance_time_series_middle AS
 WITH sample AS (
     SELECT
          flow_id
         ,user_id
         ,sample_datetime
-    FROM model.tmp_eliam_wagego_all_user_bid_20260801_20261106_samples
+    FROM model.tmp_eliam_wagego_new_user_credit_20260801_20261110_samples
 ),
 latest_log AS (
     SELECT
