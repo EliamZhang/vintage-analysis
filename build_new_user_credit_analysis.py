@@ -931,6 +931,76 @@ def _ft_data(sample: pd.DataFrame) -> dict | None:
             groups[key] = entry
         ft["windows"][str(w)] = groups
 
+    ft["bins"] = {}
+    for w in WINDOWS:
+        obs_col, ovd_col = f"y_fpd{w}_obs", f"y_fpd{w}_ovd"
+        base = sample[sample[obs_col] == 1]
+        segs = {
+            "ft": base[base["is_ft"]].dropna(subset=["new_score"]),
+            "non_ft": base[
+                base["strategy_type"].notna() & ~base["is_ft"]
+            ].dropna(subset=["new_score"]),
+        }
+        qs = {
+            key: _decile_of(seg["new_score"].to_numpy(float), NEW_DECILE_CUTS)
+            for key, seg in segs.items()
+        }
+        rows = []
+        for k in range(1, 11):
+            row = {"q": k}
+            for key, seg in segs.items():
+                cell = seg[qs[key] == k]
+                row[key] = {
+                    "n": int(len(cell)),
+                    "bad": int(cell[ovd_col].sum()),
+                    "rate": round(float(cell[ovd_col].mean() * 100), 2)
+                    if len(cell)
+                    else None,
+                }
+            rows.append(row)
+        ft["bins"][str(w)] = rows
+
+    bins15 = ft["bins"]["15"]
+    ft_n15 = sum(r["ft"]["n"] for r in bins15)
+    non_n15 = sum(r["non_ft"]["n"] for r in bins15)
+    ft15_rate = ft["windows"]["15"]["ft"]["rate"]
+    non15_rate = ft["windows"]["15"]["non_ft"]["rate"]
+    expected = None
+    if ft_n15 and non15_rate is not None:
+        parts = [
+            (r["ft"]["n"], r["non_ft"]["rate"])
+            for r in bins15
+            if r["ft"]["n"] and r["non_ft"]["rate"] is not None
+        ]
+        covered = sum(n for n, _ in parts)
+        if covered == ft_n15:
+            expected = sum(n * rate for n, rate in parts) / covered
+    gap = (
+        ft15_rate - non15_rate
+        if ft15_rate is not None and non15_rate is not None
+        else None
+    )
+    ft["bins_summary"] = {
+        "top2_ft": round(
+            sum(r["ft"]["n"] for r in bins15[-2:]) / ft_n15 * 100, 2
+        )
+        if ft_n15
+        else None,
+        "top2_non": round(
+            sum(r["non_ft"]["n"] for r in bins15[-2:]) / non_n15 * 100, 2
+        )
+        if non_n15
+        else None,
+        "expected_ft_rate": round(expected, 2) if expected is not None else None,
+        "residual": round(ft15_rate - expected, 2)
+        if expected is not None and ft15_rate is not None
+        else None,
+        "explained": round((expected - non15_rate) / gap * 100)
+        if expected is not None and gap not in (None, 0)
+        else None,
+    }
+    ft["bin_cuts"] = [float(v) for v in NEW_DECILE_CUTS]
+
     return ft
 
 
@@ -2732,6 +2802,36 @@ def ft_card(data) -> str:
         </tr>"""
             )
 
+    bin_rows = []
+    for r in ft["bins"]["15"]:
+        k = r["q"]
+        lo = NEW_DECILE_CUTS[k - 2] if k > 1 else None
+        hi = NEW_DECILE_CUTS[k - 1] if k < 10 else None
+        if lo is None:
+            label = f"≤ {fmt_num(hi, 4)}"
+        elif hi is None:
+            label = f"&gt; {fmt_num(lo, 4)}"
+        else:
+            label = f"{fmt_num(lo, 4)}–{fmt_num(hi, 4)}"
+        a, c = r["ft"], r["non_ft"]
+        diff = (
+            a["rate"] - c["rate"]
+            if a["rate"] is not None and c["rate"] is not None
+            else None
+        )
+        bin_rows.append(
+            f"""
+        <tr>
+          <td class="w">{k}</td>
+          <td>{label}</td>
+          <td>{fmt_int(a['n'])}</td>
+          <td class="strong">{fmt_pct(a['rate'])}</td>
+          <td>{fmt_int(c['n'])}</td>
+          <td>{fmt_pct(c['rate'])}</td>
+          <td>{fmt_signed(diff, 2) + 'pp' if diff is not None else '—'}</td>
+        </tr>"""
+        )
+
     ft15 = ft["windows"]["15"]["ft"]
     non15 = ft["windows"]["15"]["non_ft"]
     score_stats = ft["score_stats"]
@@ -2752,6 +2852,21 @@ def ft_card(data) -> str:
     ft_score = score_stats["ft"].get("mean")
     non_ft_score = score_stats["non_ft"].get("mean")
     ws = ft["weekly_summary"]
+    bs = ft["bins_summary"]
+    bin_gap = (
+        ft15["rate"] - non15["rate"]
+        if ft15["rate"] is not None and non15["rate"] is not None
+        else None
+    )
+    bin_note = ""
+    if bs["expected_ft_rate"] is not None and bin_gap is not None:
+        bin_note = (
+            f"<br><br><b>分箱对比：</b>FT 有 {fmt_pct(bs['top2_ft'])} 的样本落在第 9–10 档"
+            f"（非 FT {fmt_pct(bs['top2_non'])}）；按非 FT 各档坏率、FT 的分数结构折算，"
+            f"FT 期望坏率 {fmt_pct(bs['expected_ft_rate'])}，与实际 {fmt_pct(ft15['rate'])} 相差 "
+            f"{fmt_num(bs['residual'], 2)}pp，即两组 {fmt_num(bin_gap, 2)}pp 的坏率差中约 "
+            f"{fmt_int(bs['explained'])}% 由分数结构解释。"
+        )
     weekly_note = (
         f"<br><br><b>分周走势：</b>{fmt_int(ws['both'])} 个两组都有成熟样本的放款周里，"
         f"FT 坏率有 {fmt_int(ws['ft_higher'])} 周高于非 FT；"
@@ -2788,6 +2903,27 @@ def ft_card(data) -> str:
           <tbody>{''.join(group_rows)}</tbody>
         </table>
       </div>
+      <div class="subhead">FT vs 非 FT · 新模型分箱<span class="muted">（FPD15 成熟成交样本；固定切点与主报告十分位一致，同档可直接对比）</span></div>
+      <div class="chart-wrap">
+        <svg id="ftBinChart" viewBox="0 0 1000 340" role="img" aria-label="FT 与非 FT 新模型十分位坏率对比"></svg>
+        <div class="tip" id="ftBinTip"></div>
+      </div>
+      <div class="legend">
+        <span><i class="sq new"></i>FT</span>
+        <span><i class="sq old"></i>非 FT</span>
+        <span class="muted">横轴：第 1 档 = 分数最低（最安全）；柱高 = 该档笔数坏率</span>
+      </div>
+      <div class="table-wrap">
+        <table class="metrics">
+          <thead>
+            <tr>
+              <th>档位</th><th>新模型分数区间</th><th>FT 笔数</th><th>FT 坏率</th>
+              <th>非 FT 笔数</th><th>非 FT 坏率</th><th>差值</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(bin_rows)}</tbody>
+        </table>
+      </div>
       <div class="subhead">FT vs 非 FT · 按放款周<span class="muted">（FPD15 成熟成交样本；坏样本或好样本少于 {WEEK_MIN_BAD} 笔的周不计算 AUC）</span></div>
       <div class="table-wrap">
         <table class="metrics">
@@ -2799,6 +2935,16 @@ def ft_card(data) -> str:
           </thead>
           <tbody>{''.join(weekly_rows)}</tbody>
         </table>
+      </div>
+      <div class="subhead">FT vs 非 FT · 分周坏率走势<span class="muted">（FPD15 成熟成交样本；仅显示两组成熟笔数均 ≥ 30 的周）</span></div>
+      <div class="chart-wrap">
+        <svg id="ftWeekChart" viewBox="0 0 1000 300" role="img" aria-label="FT 与非 FT 分周 FPD15 坏率走势"></svg>
+        <div class="tip" id="ftWeekTip"></div>
+      </div>
+      <div class="legend">
+        <span><i class="linekey new"></i>FT</span>
+        <span><i class="linekey old"></i>非 FT</span>
+        <span class="muted">纵轴：该周成熟样本的 FPD15 笔数坏率</span>
       </div>
       <div class="subhead">新模型分数分布<span class="muted">（全部成交样本 · 分数越高风险越高）</span></div>
       <div class="table-wrap">
@@ -2823,12 +2969,14 @@ def ft_card(data) -> str:
           f"<br><br><b>客群结构：</b>新模型均分 FT {fmt_num(ft_score, 4)}、非 FT {fmt_num(non_ft_score, 4)}"
           "（分数越高风险越高）；均分差得越多，坏率差异里由客群结构解释的部分就越大，"
           "剩余部分才更可能来自策略本身。"
+          f"{bin_note}"
           "<br><br><b>使用提示：</b>FT 组样本量通常小于全样本，坏率和 AUC 的波动更大；"
           "若 FT 组成熟笔数不足，结论只作方向参考。"
       )}
       <p class="note">FT 判定：strategy_type ∈ {{{escape(', '.join(FT_TYPES))}}}；非 FT 为有决策记录但不在 FT 组；
       未匹配为决策表按 flow_id 关联不到该戳额流水。坏率 / AUC 用成熟样本、组内各自有分样本计算，
       坏样本或好样本不足时显示 —；分数分布用全部成交样本（含未成熟），只统计 FT / 非 FT 组中有新模型分的记录。
+      分箱对比沿用主报告的固定新模型切点，用 FPD15 成熟样本按组计算。
       本卡不剔除任何样本，也未改变报告主样本口径。</p>
     </section>
     """
@@ -4187,6 +4335,217 @@ function drawWeekly(w) {
   hit.addEventListener('blur', () => { tip.hide(); cross.setAttribute('opacity', 0); });
 }
 
+/* ---------- FT 分箱坏率对比 ---------- */
+function ftBinLabel(q) {
+  const cuts = DATA.ft.bin_cuts || [];
+  if (q === 1) return '≤ ' + cuts[0].toFixed(4);
+  if (q === 10) return '> ' + cuts[8].toFixed(4);
+  return cuts[q - 2].toFixed(4) + '–' + cuts[q - 1].toFixed(4);
+}
+
+function drawFtBins() {
+  if (!DATA.ft || !DATA.ft.bins) return;
+  const svg = document.getElementById('ftBinChart');
+  if (!svg) return;
+  const rows = DATA.ft.bins['15'] || [];
+  if (!rows.length) return;
+  const tip = tipCtl(svg, document.getElementById('ftBinTip'));
+  const W = 1000, H = 340, m = { l: 52, r: 16, t: 18, b: 50 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const nBins = rows.length;
+  const rawMax = Math.max.apply(null, rows.map(r => Math.max(r.ft.rate || 0, r.non_ft.rate || 0)));
+  const yMax = Math.max(10, Math.ceil(rawMax / 10) * 10);
+  const groupW = iw / nBins;
+  const barW = Math.min(22, groupW * 0.30);
+  const gap = 2;
+  const cx = q => m.l + (q - 0.5) * groupW;
+  const y = v => m.t + (1 - v / yMax) * ih;
+  clearSvg(svg);
+
+  axes(svg, {
+    W, H, m, x: v => v, y, xTicks: [],
+    yTicks: [0, 1, 2, 3, 4, 5].map(i => i * yMax / 5),
+    xFmt: t => '', yFmt: t => t.toFixed(0) + '%',
+    xLabel: '分档（1 = 分数最低）', yLabel: '笔数坏率'
+  });
+
+  const band = svgEl(svg, 'rect', {
+    x: m.l, y: m.t, width: 0, height: ih,
+    fill: 'var(--grid)', opacity: 0, 'pointer-events': 'none'
+  });
+
+  rows.forEach((r, i) => {
+    const q = i + 1;
+    svgEl(svg, 'text', {
+      x: cx(q), y: H - m.b + 20, 'text-anchor': 'middle',
+      fill: 'var(--muted)', 'font-size': 11.5
+    }, q);
+    [
+      { color: 'var(--c1)', d: r.ft, dx: -(barW + gap / 2) },
+      { color: 'var(--c2)', d: r.non_ft, dx: gap / 2 }
+    ].forEach(b => {
+      const bx = cx(q) + b.dx;
+      const by = y(b.d.rate || 0);
+      const bh = H - m.b - by;
+      const rr = Math.min(4, bh, barW / 2);
+      const d = bh <= 0 ? '' :
+        'M' + bx + ',' + (H - m.b) +
+        ' L' + bx + ',' + (by + rr) +
+        ' Q' + bx + ',' + by + ' ' + (bx + rr) + ',' + by +
+        ' L' + (bx + barW - rr) + ',' + by +
+        ' Q' + (bx + barW) + ',' + by + ' ' + (bx + barW) + ',' + (by + rr) +
+        ' L' + (bx + barW) + ',' + (H - m.b) + ' Z';
+      if (d) svgEl(svg, 'path', { d, fill: b.color });
+    });
+  });
+
+  // 每档直接标注坏率；同组两根柱的标注过近时，较高柱的标注再上移一行
+  rows.forEach((r, i) => {
+    const q = i + 1;
+    const items = [
+      { d: r.ft, dx: -(barW + gap / 2), ly: y(r.ft.rate || 0) - 7 },
+      { d: r.non_ft, dx: gap / 2, ly: y(r.non_ft.rate || 0) - 7 }
+    ];
+    if (Math.abs(items[0].ly - items[1].ly) < 14) {
+      const tall = items[0].ly <= items[1].ly ? items[0] : items[1];
+      const short = tall === items[0] ? items[1] : items[0];
+      tall.ly = short.ly - 14;
+    }
+    items.forEach(b => {
+      if (b.d.rate == null) return;
+      svgEl(svg, 'text', {
+        x: cx(q) + b.dx + barW / 2, y: b.ly, 'text-anchor': 'middle',
+        fill: 'var(--ink)', 'font-size': 10, 'font-weight': 600
+      }, fmtPct(b.d.rate));
+    });
+  });
+
+  const hit = svgEl(svg, 'rect', {
+    x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent', tabindex: 0
+  });
+  let active = nBins;
+  function show(q) {
+    active = q;
+    band.setAttribute('x', m.l + (q - 1) * groupW);
+    band.setAttribute('width', groupW);
+    band.setAttribute('opacity', 0.55);
+    const r = rows[q - 1];
+    tip.show({
+      title: '第 ' + q + ' 档 · 分数 ' + ftBinLabel(q),
+      rows: [
+        { value: fmtPct(r.ft.rate), name: 'FT n=' + fmtInt(r.ft.n) + ' · 坏 ' + fmtInt(r.ft.bad), color: 'var(--c1)' },
+        { value: fmtPct(r.non_ft.rate), name: '非 FT n=' + fmtInt(r.non_ft.n) + ' · 坏 ' + fmtInt(r.non_ft.bad), color: 'var(--c2)' }
+      ]
+    }, cx(q), y(Math.max(r.ft.rate || 0, r.non_ft.rate || 0)) - 6);
+  }
+  function clear() {
+    tip.hide();
+    band.setAttribute('width', 0);
+    band.setAttribute('opacity', 0);
+  }
+  function groupAt(clientX) {
+    const box = svg.getBoundingClientRect();
+    const ux = (clientX - box.left) / box.width * W;
+    return Math.min(nBins, Math.max(1, Math.floor((ux - m.l) / groupW) + 1));
+  }
+  hit.addEventListener('pointermove', e => show(groupAt(e.clientX)));
+  hit.addEventListener('pointerleave', clear);
+  hit.addEventListener('focus', () => show(active));
+  hit.addEventListener('blur', clear);
+}
+
+/* ---------- FT 分周坏率走势 ---------- */
+function drawFtWeekly() {
+  if (!DATA.ft || !DATA.ft.weekly) return;
+  const svg = document.getElementById('ftWeekChart');
+  if (!svg) return;
+  const MIN_N = 30;
+  const weeks = DATA.ft.weekly.filter(r =>
+    r.ft.rate != null && r.non_ft.rate != null &&
+    r.ft.n >= MIN_N && r.non_ft.n >= MIN_N
+  );
+  if (weeks.length < 2) return;
+  const tip = tipCtl(svg, document.getElementById('ftWeekTip'));
+  const W = 1000, H = 300, m = { l: 52, r: 16, t: 16, b: 52 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const n = weeks.length;
+  const x = i => m.l + i / (n - 1) * iw;
+  const rawMax = Math.max.apply(null, weeks.map(r => Math.max(r.ft.rate, r.non_ft.rate)));
+  const yMax = Math.max(10, Math.ceil(rawMax / 5) * 5);
+  const y = v => m.t + (1 - v / yMax) * ih;
+  clearSvg(svg);
+
+  axes(svg, {
+    W, H, m, x: v => v, y, xTicks: [],
+    yTicks: [0, 1, 2, 3, 4, 5].map(i => i * yMax / 5),
+    xFmt: t => '', yFmt: t => t.toFixed(0) + '%',
+    xLabel: '放款周（周一起；仅两组成熟笔数均 ≥ ' + MIN_N + ' 的周）', yLabel: '笔数坏率'
+  });
+  svgEl(svg, 'line', {
+    x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b,
+    stroke: 'var(--axis)', 'stroke-width': 1
+  });
+
+  weeks.forEach((r, i) => {
+    svgEl(svg, 'text', {
+      x: x(i), y: H - m.b + 20, 'text-anchor': 'middle',
+      fill: 'var(--muted)', 'font-size': 11
+    }, r.week.slice(5));
+  });
+
+  [
+    { key: 'ft', color: 'var(--c1)' },
+    { key: 'non_ft', color: 'var(--c2)' }
+  ].forEach(s => {
+    let d = '';
+    weeks.forEach((r, i) => {
+      d += (i ? 'L' : 'M') + x(i) + ',' + y(r[s.key].rate);
+    });
+    svgEl(svg, 'path', {
+      d, fill: 'none', stroke: s.color, 'stroke-width': 2,
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+    });
+    weeks.forEach((r, i) => {
+      svgEl(svg, 'circle', {
+        cx: x(i), cy: y(r[s.key].rate), r: 3.6, fill: s.color,
+        stroke: 'var(--surface)', 'stroke-width': 2
+      });
+    });
+  });
+
+  const cross = svgEl(svg, 'line', {
+    y1: m.t, y2: H - m.b, stroke: 'var(--axis)', 'stroke-width': 1,
+    opacity: 0, 'pointer-events': 'none'
+  });
+  const hit = svgEl(svg, 'rect', {
+    x: m.l - 12, y: m.t, width: iw + 24, height: ih,
+    fill: 'transparent', tabindex: 0
+  });
+  let last = 0;
+  function show(i) {
+    last = i;
+    const r = weeks[i];
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('opacity', 1);
+    tip.show({
+      title: r.week + ' 起 · FT 成熟 ' + fmtInt(r.ft.n) + ' 笔 / 非 FT ' + fmtInt(r.non_ft.n) + ' 笔',
+      rows: [
+        { value: fmtPct(r.ft.rate), name: 'FT', color: 'var(--c1)' },
+        { value: fmtPct(r.non_ft.rate), name: '非 FT', color: 'var(--c2)' }
+      ]
+    }, x(i), y(Math.max(r.ft.rate, r.non_ft.rate)) - 10);
+  }
+  function idxAt(clientX) {
+    const box = svg.getBoundingClientRect();
+    const ux = (clientX - box.left) / box.width * W;
+    const i = Math.round((ux - m.l) / iw * (n - 1));
+    return Math.min(n - 1, Math.max(0, i));
+  }
+  hit.addEventListener('pointermove', e => show(idxAt(e.clientX)));
+  hit.addEventListener('pointerleave', () => { tip.hide(); cross.setAttribute('opacity', 0); });
+  hit.addEventListener('focus', () => show(last));
+  hit.addEventListener('blur', () => { tip.hide(); cross.setAttribute('opacity', 0); });
+}
+
 /* ---------- 置入 / 置出 ---------- */
 function drawMoney(key) {
   const dec = DATA.windows['15'].models[key].deciles;
@@ -4297,6 +4656,8 @@ drawMoney('old');
 drawConversionMetric('convApplyChart', 'convApplyTip', 'apply_rate');
 drawConversionMetric('convDisburseChart', 'convDisburseTip', 'disburse_rate');
 drawOot();
+drawFtBins();
+drawFtWeekly();
 </script>
 </body>
 </html>
