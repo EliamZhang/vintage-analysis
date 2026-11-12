@@ -946,10 +946,15 @@ def _ft_data(sample: pd.DataFrame) -> dict | None:
             for key, seg in segs.items()
         }
         rows = []
-        for k in range(1, 11):
-            row = {"q": k}
+        for k in range(1, 6):
+            # 五分位 = 相邻两个十分位合并，切点不变
+            row = {
+                "q": k,
+                "lo": float(NEW_DECILE_CUTS[2 * k - 3]) if k > 1 else None,
+                "hi": float(NEW_DECILE_CUTS[2 * k - 1]) if k < 5 else None,
+            }
             for key, seg in segs.items():
-                cell = seg[qs[key] == k]
+                cell = seg[(qs[key] + 1) // 2 == k]
                 row[key] = {
                     "n": int(len(cell)),
                     "bad": int(cell[ovd_col].sum()),
@@ -981,13 +986,13 @@ def _ft_data(sample: pd.DataFrame) -> dict | None:
         else None
     )
     ft["bins_summary"] = {
-        "top2_ft": round(
-            sum(r["ft"]["n"] for r in bins15[-2:]) / ft_n15 * 100, 2
+        "top_ft": round(
+            sum(r["ft"]["n"] for r in bins15[-1:]) / ft_n15 * 100, 2
         )
         if ft_n15
         else None,
-        "top2_non": round(
-            sum(r["non_ft"]["n"] for r in bins15[-2:]) / non_n15 * 100, 2
+        "top_non": round(
+            sum(r["non_ft"]["n"] for r in bins15[-1:]) / non_n15 * 100, 2
         )
         if non_n15
         else None,
@@ -999,7 +1004,6 @@ def _ft_data(sample: pd.DataFrame) -> dict | None:
         if expected is not None and gap not in (None, 0)
         else None,
     }
-    ft["bin_cuts"] = [float(v) for v in NEW_DECILE_CUTS]
 
     return ft
 
@@ -2805,8 +2809,7 @@ def ft_card(data) -> str:
     bin_rows = []
     for r in ft["bins"]["15"]:
         k = r["q"]
-        lo = NEW_DECILE_CUTS[k - 2] if k > 1 else None
-        hi = NEW_DECILE_CUTS[k - 1] if k < 10 else None
+        lo, hi = r["lo"], r["hi"]
         if lo is None:
             label = f"≤ {fmt_num(hi, 4)}"
         elif hi is None:
@@ -2861,8 +2864,8 @@ def ft_card(data) -> str:
     bin_note = ""
     if bs["expected_ft_rate"] is not None and bin_gap is not None:
         bin_note = (
-            f"<br><br><b>分箱对比：</b>FT 有 {fmt_pct(bs['top2_ft'])} 的样本落在第 9–10 档"
-            f"（非 FT {fmt_pct(bs['top2_non'])}）；按非 FT 各档坏率、FT 的分数结构折算，"
+            f"<br><br><b>分箱对比：</b>FT 有 {fmt_pct(bs['top_ft'])} 的样本落在最高档"
+            f"（非 FT {fmt_pct(bs['top_non'])}）；按非 FT 各档坏率、FT 的分数结构折算，"
             f"FT 期望坏率 {fmt_pct(bs['expected_ft_rate'])}，与实际 {fmt_pct(ft15['rate'])} 相差 "
             f"{fmt_num(bs['residual'], 2)}pp，即两组 {fmt_num(bin_gap, 2)}pp 的坏率差中约 "
             f"{fmt_int(bs['explained'])}% 由分数结构解释。"
@@ -2903,14 +2906,14 @@ def ft_card(data) -> str:
           <tbody>{''.join(group_rows)}</tbody>
         </table>
       </div>
-      <div class="subhead">FT vs 非 FT · 新模型分箱<span class="muted">（FPD15 成熟成交样本；固定切点与主报告十分位一致，同档可直接对比）</span></div>
+      <div class="subhead">FT vs 非 FT · 新模型分箱<span class="muted">（FPD15 成熟成交样本；五分位 = 主报告固定十分位相邻两档合并，切点不变，同档可直接对比）</span></div>
       <div class="chart-wrap">
-        <svg id="ftBinChart" viewBox="0 0 1000 340" role="img" aria-label="FT 与非 FT 新模型十分位坏率对比"></svg>
+        <svg id="ftBinChart" viewBox="0 0 1000 340" role="img" aria-label="FT 与非 FT 新模型五分位坏率对比"></svg>
         <div class="tip" id="ftBinTip"></div>
       </div>
       <div class="legend">
-        <span><i class="sq new"></i>FT</span>
-        <span><i class="sq old"></i>非 FT</span>
+        <span><i class="sq ft"></i>FT</span>
+        <span><i class="sq nonft"></i>非 FT</span>
         <span class="muted">横轴：第 1 档 = 分数最低（最安全）；柱高 = 该档笔数坏率</span>
       </div>
       <div class="table-wrap">
@@ -2942,8 +2945,8 @@ def ft_card(data) -> str:
         <div class="tip" id="ftWeekTip"></div>
       </div>
       <div class="legend">
-        <span><i class="linekey new"></i>FT</span>
-        <span><i class="linekey old"></i>非 FT</span>
+        <span><i class="linekey ft"></i>FT</span>
+        <span><i class="linekey nonft"></i>非 FT</span>
         <span class="muted">纵轴：该周成熟样本的 FPD15 笔数坏率</span>
       </div>
       <div class="subhead">新模型分数分布<span class="muted">（全部成交样本 · 分数越高风险越高）</span></div>
@@ -2976,7 +2979,7 @@ def ft_card(data) -> str:
       <p class="note">FT 判定：strategy_type ∈ {{{escape(', '.join(FT_TYPES))}}}；非 FT 为有决策记录但不在 FT 组；
       未匹配为决策表按 flow_id 关联不到该戳额流水。坏率 / AUC 用成熟样本、组内各自有分样本计算，
       坏样本或好样本不足时显示 —；分数分布用全部成交样本（含未成熟），只统计 FT / 非 FT 组中有新模型分的记录。
-      分箱对比沿用主报告的固定新模型切点，用 FPD15 成熟样本按组计算。
+      分箱对比沿用主报告的固定新模型切点，按五分位（十分位相邻两档合并）用 FPD15 成熟样本按组计算。
       本卡不剔除任何样本，也未改变报告主样本口径。</p>
     </section>
     """
@@ -3135,6 +3138,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     --axis: #c3c2b7;
     --c1: #2a78d6;
     --c2: #eb6834;
+    /* FT / 非 FT 系列色：两模式通用，避开新旧模型的蓝、橙 */
+    --ft: #008300;
+    --nonft: #d55181;
     --keep: #dcdad2;
     --loss: #c0392b;
     --ring: rgba(11,11,11,0.10);
@@ -3297,12 +3303,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .sq.new { background: var(--c1); }
   .sq.old { background: var(--c2); }
+  .sq.ft { background: var(--ft); }
+  .sq.nonft { background: var(--nonft); }
   .linekey {
     display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--axis);
     margin-right: 6px; vertical-align: 3px;
   }
   .linekey.new { border-top-color: var(--c1); }
   .linekey.old { border-top-color: var(--c2); }
+  .linekey.ft { border-top-color: var(--ft); }
+  .linekey.nonft { border-top-color: var(--nonft); }
   .tip {
     position: absolute; z-index: 2; pointer-events: none; display: none;
     transform: translate(-50%, -115%);
@@ -4337,10 +4347,10 @@ function drawWeekly(w) {
 
 /* ---------- FT 分箱坏率对比 ---------- */
 function ftBinLabel(q) {
-  const cuts = DATA.ft.bin_cuts || [];
-  if (q === 1) return '≤ ' + cuts[0].toFixed(4);
-  if (q === 10) return '> ' + cuts[8].toFixed(4);
-  return cuts[q - 2].toFixed(4) + '–' + cuts[q - 1].toFixed(4);
+  const row = (DATA.ft.bins['15'] || [])[q - 1] || {};
+  if (row.lo == null) return '≤ ' + row.hi.toFixed(4);
+  if (row.hi == null) return '> ' + row.lo.toFixed(4);
+  return row.lo.toFixed(4) + '–' + row.hi.toFixed(4);
 }
 
 function drawFtBins() {
@@ -4381,8 +4391,8 @@ function drawFtBins() {
       fill: 'var(--muted)', 'font-size': 11.5
     }, q);
     [
-      { color: 'var(--c1)', d: r.ft, dx: -(barW + gap / 2) },
-      { color: 'var(--c2)', d: r.non_ft, dx: gap / 2 }
+      { color: 'var(--ft)', d: r.ft, dx: -(barW + gap / 2) },
+      { color: 'var(--nonft)', d: r.non_ft, dx: gap / 2 }
     ].forEach(b => {
       const bx = cx(q) + b.dx;
       const by = y(b.d.rate || 0);
@@ -4433,8 +4443,8 @@ function drawFtBins() {
     tip.show({
       title: '第 ' + q + ' 档 · 分数 ' + ftBinLabel(q),
       rows: [
-        { value: fmtPct(r.ft.rate), name: 'FT n=' + fmtInt(r.ft.n) + ' · 坏 ' + fmtInt(r.ft.bad), color: 'var(--c1)' },
-        { value: fmtPct(r.non_ft.rate), name: '非 FT n=' + fmtInt(r.non_ft.n) + ' · 坏 ' + fmtInt(r.non_ft.bad), color: 'var(--c2)' }
+        { value: fmtPct(r.ft.rate), name: 'FT n=' + fmtInt(r.ft.n) + ' · 坏 ' + fmtInt(r.ft.bad), color: 'var(--ft)' },
+        { value: fmtPct(r.non_ft.rate), name: '非 FT n=' + fmtInt(r.non_ft.n) + ' · 坏 ' + fmtInt(r.non_ft.bad), color: 'var(--nonft)' }
       ]
     }, cx(q), y(Math.max(r.ft.rate || 0, r.non_ft.rate || 0)) - 6);
   }
@@ -4494,8 +4504,8 @@ function drawFtWeekly() {
   });
 
   [
-    { key: 'ft', color: 'var(--c1)' },
-    { key: 'non_ft', color: 'var(--c2)' }
+    { key: 'ft', color: 'var(--ft)' },
+    { key: 'non_ft', color: 'var(--nonft)' }
   ].forEach(s => {
     let d = '';
     weeks.forEach((r, i) => {
@@ -4529,8 +4539,8 @@ function drawFtWeekly() {
     tip.show({
       title: r.week + ' 起 · FT 成熟 ' + fmtInt(r.ft.n) + ' 笔 / 非 FT ' + fmtInt(r.non_ft.n) + ' 笔',
       rows: [
-        { value: fmtPct(r.ft.rate), name: 'FT', color: 'var(--c1)' },
-        { value: fmtPct(r.non_ft.rate), name: '非 FT', color: 'var(--c2)' }
+        { value: fmtPct(r.ft.rate), name: 'FT', color: 'var(--ft)' },
+        { value: fmtPct(r.non_ft.rate), name: '非 FT', color: 'var(--nonft)' }
       ]
     }, x(i), y(Math.max(r.ft.rate, r.non_ft.rate)) - 10);
   }
