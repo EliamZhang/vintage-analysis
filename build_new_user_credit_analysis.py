@@ -1509,6 +1509,8 @@ def oot_card(data) -> str:
     meta = data["meta"]
     start = meta["start"]
     oot_start = meta["oot_start"]
+    train_start = meta["train_start"]
+    train_end_display = meta["train_end_display"]
     pre_end = (pd.Timestamp(oot_start) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     rows = []
     for w in WINDOWS:
@@ -1543,7 +1545,8 @@ def oot_card(data) -> str:
     oot_auc_old = oot15["models"]["old"]["auc"] * 100
     kept_gap = oot_cut_old["kept_rate"] - oot_cut_new["kept_rate"]
     oot_take = takeaway(
-        f"<b>区分能力：</b>OOT 后是模型没见过的测试时段（{escape(oot_start)} 起），"
+        f"<b>区分能力：</b>OOT 后是模型没见过的测试时段（{escape(oot_start)} 起，"
+        f"模型训练窗口为 {escape(train_start)} 至 {escape(train_end_display)}），"
         f"FPD15 成熟 {fmt_int(oot15['n'])} 笔。AUC 可以理解为“随机抽一个好客户和一个坏客户，"
         "模型给坏客户更高分的概率”；"
         f"新模型 {fmt_num(oot15['models']['new']['auc'])}，线上模型 {fmt_num(oot15['models']['old']['auc'])}，"
@@ -1562,7 +1565,7 @@ def oot_card(data) -> str:
     return f"""
     <section class="card" id="oot">
       <h2>OOT 后表现<span class="tag" title="主口径 = OOT 后（测试集），戳额时间不早于 {escape(oot_start)}；OOT 前 = 早于该切点">主口径 · OOT 后 vs OOT 前</span></h2>
-      <p class="desc">这是本报告的主口径：OOT 后是模型未见过的测试时段，最能反映上线后的真实区分度。OOT 后 / OOT 前 / 全样本三组都用原始分数、各自的成熟样本重新计算 AUC / KS，不混算。下图每行一组对照，蓝点越靠右区分度越高，右侧数字为 ΔAUC。</p>
+      <p class="desc">这是本报告的主口径：OOT 后是模型未见过的测试时段（模型训练窗口 {escape(train_start)} 至 {escape(train_end_display)}，OOT 自 {escape(oot_start)} 起），最能反映上线后的真实区分度。OOT 后 / OOT 前 / 全样本三组都用原始分数、各自的成熟样本重新计算 AUC / KS，不混算。下图每行一组对照，蓝点越靠右区分度越高，右侧数字为 ΔAUC。</p>
       <div class="chart-wrap">
         <svg id="ootChart" viewBox="0 0 1000 320" role="img" aria-label="OOT 后、OOT 前与全样本的 AUC 对比"></svg>
         <div class="tip" id="ootTip"></div>
@@ -1586,7 +1589,9 @@ def oot_card(data) -> str:
         </table>
       </div>
       <p class="note">OOT 按戳额时间 last_limit_time ≥ {escape(oot_start)} 划分，OOT 后为 {escape(oot_start)} 及以后，
-      OOT 前为 {escape(start)} 至 {escape(pre_end)}。各分段只统计已成熟样本，各模型 AUC 用各自有分样本计算；
+      OOT 前为 {escape(start)} 至 {escape(pre_end)}。新戳额模型训练窗口为 {escape(train_start)} 至 {escape(train_end_display)}，
+      即截至 OOT 切点前一日，OOT 时段不参与训练；线上模型为既有生产模型，训练窗口以模型侧口径为准。
+      各分段只统计已成熟样本，各模型 AUC 用各自有分样本计算；
       ΔAUC 用配对 DeLong 检验，仅取两模型都有分的样本。OOT 样本若尚未成熟，不计入对应窗口。</p>
     </section>
     """
@@ -3097,6 +3102,8 @@ def footer_html(data, generated_at, label_name, score_name, limit=None, limit_na
             OOT 前（切点之前）为 {escape(meta['start'])} 至 {escape(pre_end)}。
             OOT 后 / OOT 前分段的 AUC / KS / ΔAUC 见「OOT 后表现」卡，未成熟样本不计入对应窗口。</li>{limit_note}
         <li><b>模型口径</b>：新戳额模型 {escape(NEW_SCORE)}（戳额场景，{NEW_DESC}）；线上模型 {escape(OLD_SCORE)}（发标场景，{OLD_DESC}）。
+            新戳额模型训练窗口为 {escape(meta['train_start'])} 至 {escape(meta['train_end_display'])}（OOT 时段不参与训练），
+            线上模型为既有生产模型，训练窗口以模型侧口径为准。
             两者决策时点接近——中位 {fmt_days(meta['median_days'])}、75 分位 {fmt_days(meta['p75_days'])}内即放款，比较视为同点。
             线上模型有 {fmt_int(meta['old_missing'])} 笔缺失（含 -1 哨兵值），按缺失处理，不参与排序。</li>
         <li><b>坏率口径</b>：笔数坏率 = y_fpdN_ovd 之和 / y_fpdN_obs 之和；成熟条件为 due + N &lt; 观察日（{escape(meta['obs_dt'])}），
@@ -4687,6 +4694,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
       <h1>新客戳额风险模型效果评估报告</h1>
       <p class="sub">从区分度、决策收益到周度稳定性，评估新戳额模型相对线上模型的增量价值。
       首笔成交新客，戳额时间 {escape(meta['start'])} 至 {escape(meta['end_display'])}，观察日 {meta['obs_dt']}。
+      新戳额模型训练窗口 {escape(meta['train_start'])} 至 {escape(meta['train_end_display'])}。
       本报告以<b>OOT 后（测试集）</b>为主口径；未标注 OOT 的卡片为全样本成熟成交样本（含 OOT）参考口径。</p>
       <div class="models">
         <span><i class="dot new"></i><b>{NEW_NAME}</b><code>{escape(NEW_SCORE)}</code><span class="muted">戳额场景</span></span>
@@ -4694,6 +4702,7 @@ def build_html(data, generated_at: str, label_name: str, score_name: str,
       </div>
       <div class="chips">
         <span class="chip">主指标：OOT 后（测试集）</span>
+        <span class="chip" title="新戳额模型训练样本按戳额时间 {escape(meta['train_start'])} 至 {escape(meta['train_end_display'])}，不含 OOT 时段">训练窗口 {escape(meta['train_start'])} ~ {escape(meta['train_end_display'])}</span>
         <span class="chip">OOT 切点 {escape(meta['oot_start'])}</span>
         <span class="chip">OOT 成熟 FPD15 {fmt_int(data['windows']['15']['segments']['oot']['n'])} · FPD7 {fmt_int(data['windows']['7']['segments']['oot']['n'])} 笔</span>
         <span class="chip">样本 {fmt_int(meta['n_sample'])} 人（每人一笔）</span>
@@ -4801,6 +4810,9 @@ def main(argv=None):
     parser.add_argument("--start", default="2026-08-01", help="戳额起始日")
     parser.add_argument("--end", default="2026-10-24", help="戳额结束日（不含）")
     parser.add_argument("--oot-start", default="2026-10-03", help="OOT 起始日（按戳额时间）")
+    parser.add_argument("--train-start", default="2026-08-03", help="模型训练窗口起始日")
+    parser.add_argument("--train-end", default=None,
+                        help="模型训练窗口结束日（不含），默认等于 --oot-start")
     parser.add_argument("--reject", type=int, default=30, help="互换矩阵的拒绝比例 %")
     args = parser.parse_args(argv)
 
@@ -4832,6 +4844,11 @@ def main(argv=None):
     data["meta"]["start"] = args.start
     data["meta"]["end_display"] = (
         pd.Timestamp(args.end) - pd.Timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+    train_end = args.train_end or args.oot_start
+    data["meta"]["train_start"] = args.train_start
+    data["meta"]["train_end_display"] = (
+        pd.Timestamp(train_end) - pd.Timedelta(days=1)
     ).strftime("%Y-%m-%d")
     limit_data = None
     if limit_path.exists():
