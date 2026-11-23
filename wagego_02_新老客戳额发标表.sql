@@ -3,7 +3,7 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 -- 样本时间窗：2026-08-01 至 2026-11-16（今天），表名中的 _20260801_20261116 对应此窗口
 -- 新客戳额样本按戳额时间筛选，发标及发标成交样本按申请时间筛选
 -- 事件时间列统一命名为 sample_datetime
--- 戳额样本只保留 用户 / 戳额时间 / 戳额流水 三列，不挂 y 标签
+-- 戳额样本只保留 用户 / 戳额时间 / 戳额流水（全量戳额样本另加 credit_seq），不挂 y 标签
 -- 发标及发标成交样本末尾附带 19 个核心 y 标签，直接取自主表同名字段
 -- 新老客标签 user_type 也直接取自主表
 
@@ -50,6 +50,66 @@ SELECT
 FROM ranked
 WHERE rn = 1
   AND credit_time >= TO_DATE('2026-08-01')
+  AND credit_time <  TO_DATE('2026-11-17')
+;
+
+
+-- 全量戳额样本：窗口内所有用户的每一次戳额申请（不限第一次）
+-- credit_seq 为用户全历史第几次戳额，credit_seq = 1 即新客首戳表的口径
+DROP TABLE IF EXISTS model.tmp_eliam_wagego_all_user_credit_20260801_20261116_samples;
+CREATE TABLE model.tmp_eliam_wagego_all_user_credit_20260801_20261116_samples AS
+WITH credit AS (
+    -- 额度申请表：戳额申请主来源（biz_type = 400）
+    SELECT
+         a.borrower_id                                        AS user_id
+        ,CAST(a.inserttime AS TIMESTAMP)                      AS credit_time
+        ,a.flow_no                                            AS flow_id
+        ,1                                                    AS source_priority
+    FROM ods_ewa.aus_listing_tb_loan_limit_apply a
+    WHERE CAST(a.isactive AS INT) = 1
+      AND CAST(a.biz_type AS INT) = 400
+    UNION ALL
+    -- 风控事件表：同一笔戳额的事件镜像（biz_id = 10000）
+    SELECT
+         e.user_id
+        ,CAST(e.inserttime AS TIMESTAMP)
+        ,e.flow_id
+        ,2
+    FROM ods_ewa.aus_ewa_risk_risk_event_task e
+    WHERE CAST(e.is_active AS INT) = 1
+      AND CAST(e.biz_id AS STRING) = '10000'
+),
+dedup AS (
+    -- 同一用户同一秒视为同一笔戳额，申请表优先
+    SELECT
+         user_id
+        ,credit_time
+        ,flow_id
+        ,ROW_NUMBER() OVER (
+             PARTITION BY user_id, credit_time
+             ORDER BY source_priority, flow_id
+         )                                                    AS rn_dedup
+    FROM credit
+),
+seq AS (
+    SELECT
+         user_id
+        ,credit_time
+        ,flow_id
+        ,ROW_NUMBER() OVER (
+             PARTITION BY user_id
+             ORDER BY credit_time, flow_id
+         )                                                    AS credit_seq
+    FROM dedup
+    WHERE rn_dedup = 1
+)
+SELECT
+     user_id
+    ,credit_time                                          AS sample_datetime
+    ,flow_id
+    ,credit_seq
+FROM seq
+WHERE credit_time >= TO_DATE('2026-08-01')
   AND credit_time <  TO_DATE('2026-11-17')
 ;
 
