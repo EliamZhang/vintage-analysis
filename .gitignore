@@ -7,5 +7,7 @@ vintage_data.zip
 vintage_data.zip.tmp
 model_analysis_data.zip
 model_analysis_data.zip.tmp
+bid_model_analysis_data.zip
+bid_model_analysis_data.zip.tmp
 __pycache__/
 同步数据/

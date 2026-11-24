@@ -211,15 +211,15 @@
       <p class="eyebrow">WAGEGO · 新老客发标样本</p>
       <h1>新老客发标风险模型效果评估报告</h1>
       <p class="sub">在发标全量样本（含未成交申请）上评估新发标模型的排序能力，并按新客 / 老客拆分。
-      申请时间 2026-09-02 至 2026-11-14，固定十分位分箱。</p>
+      申请时间 2026-08-05 至 2026-11-16，固定十分位分箱。</p>
       <div class="models">
         <span><i class="dot model"></i><b>新发标模型</b><code>aus_wagego_bid_20261123_v1_0_txn_lgb_score</code><span class="muted">发标交易流水 LGB 模型</span></span>
       </div>
       <div class="chips">
-        <span class="chip">申请 100 笔 · 有分 100 笔</span>
-        <span class="chip">新客 49 · 老客 51 笔</span>
-        <span class="chip">FPD15 成熟 45 · FPD7 成熟 62 笔</span>
-        <span class="chip">月份 2026-09 ~ 2026-11</span>
+        <span class="chip">申请 72,163 笔 · 有分 72,163 笔</span>
+        <span class="chip">新客 31,627 · 老客 40,536 笔</span>
+        <span class="chip">FPD15 成熟 30,174 · FPD7 成熟 37,844 笔</span>
+        <span class="chip">月份 2026-08 ~ 2026-11</span>
         <span class="chip">固定十分位分箱</span>
         <span class="chip">笔数坏率</span>
       </div>
@@ -229,37 +229,37 @@
 <div class="kpis">
       <div class="kpi">
         <span class="label">FPD15 AUC（全体）</span>
-        <b>0.442</b>
-        <span class="sub">95% CI 0.000 – 1.000</span>
+        <b>0.774</b>
+        <span class="sub">95% CI 0.764 – 0.783</span>
       </div>
       <div class="kpi">
         <span class="label">FPD15 KS（全体）</span>
-        <b>0.500</b>
-        <span class="sub">成熟 45 笔</span>
+        <b>0.414</b>
+        <span class="sub">成熟 30,174 笔</span>
       </div>
       <div class="kpi">
         <span class="label">FPD15 坏率（全体）</span>
-        <b>4.44%</b>
-        <span class="sub">坏样本 2 笔</span>
+        <b>7.42%</b>
+        <span class="sub">坏样本 2,239 笔</span>
       </div>
       <div class="kpi">
         <span class="label">新客 FPD15 AUC</span>
-        <b>0.909</b>
-        <span class="sub">成熟 23 笔 · 坏率 4.35%</span>
+        <b>0.780</b>
+        <span class="sub">成熟 14,228 笔 · 坏率 9.90%</span>
       </div>
       <div class="kpi">
         <span class="label">老客 FPD15 AUC</span>
-        <b>0.000</b>
-        <span class="sub">成熟 22 笔 · 坏率 4.55%</span>
+        <b>0.750</b>
+        <span class="sub">成熟 15,946 笔 · 坏率 5.21%</span>
       </div>
 </div>
 
 
     <section class="card" id="metrics">
       <h2>核心指标<span class="tag" title="AUC / KS / 坏率均在成熟样本上计算">成熟样本</span></h2>
-      <p class="desc">按客群拆分 FPD7 / FPD15 的区分度与坏率。全体 FPD15 AUC 0.442
-      （KS 0.500，坏率 4.44%）；
-      新客 AUC 0.909、老客 AUC 0.000。</p>
+      <p class="desc">按客群拆分 FPD7 / FPD15 的区分度与坏率。全体 FPD15 AUC 0.774
+      （KS 0.414，坏率 7.42%）；
+      新客 AUC 0.780、老客 AUC 0.750。</p>
       
       <div class="table-wrap">
         <table class="metrics">
@@ -273,61 +273,61 @@
         <tr>
           <td class="w">FPD15</td>
           <td>全部</td>
-          <td>45</td>
-          <td>2</td>
-          <td>4.44%</td>
-          <td class="strong">0.442<span class="n">[0.000, 1.000]</span></td>
-          <td>0.500</td>
+          <td>30,174</td>
+          <td>2,239</td>
+          <td>7.42%</td>
+          <td class="strong">0.774<span class="n">[0.764, 0.783]</span></td>
+          <td>0.414</td>
         </tr>
         <tr>
           <td class="w">FPD15</td>
           <td>新客</td>
-          <td>23</td>
-          <td>1</td>
-          <td>4.35%</td>
-          <td class="strong">0.909</td>
-          <td>0.909</td>
+          <td>14,228</td>
+          <td>1,409</td>
+          <td>9.90%</td>
+          <td class="strong">0.780<span class="n">[0.768, 0.792]</span></td>
+          <td>0.427</td>
         </tr>
         <tr>
           <td class="w">FPD15</td>
           <td>老客</td>
-          <td>22</td>
-          <td>1</td>
-          <td>4.55%</td>
-          <td class="strong">0.000</td>
-          <td>1.000</td>
+          <td>15,946</td>
+          <td>830</td>
+          <td>5.21%</td>
+          <td class="strong">0.750<span class="n">[0.734, 0.766]</span></td>
+          <td>0.384</td>
         </tr>
         <tr>
           <td class="w">FPD7</td>
           <td>全部</td>
-          <td>62</td>
-          <td>5</td>
-          <td>8.06%</td>
-          <td class="strong">0.495<span class="n">[0.165, 0.824]</span></td>
-          <td>0.190</td>
+          <td>37,844</td>
+          <td>3,991</td>
+          <td>10.55%</td>
+          <td class="strong">0.739<span class="n">[0.731, 0.747]</span></td>
+          <td>0.355</td>
         </tr>
         <tr>
           <td class="w">FPD7</td>
           <td>新客</td>
-          <td>28</td>
-          <td>1</td>
-          <td>3.57%</td>
-          <td class="strong">0.926</td>
-          <td>0.926</td>
+          <td>16,599</td>
+          <td>2,268</td>
+          <td>13.66%</td>
+          <td class="strong">0.753<span class="n">[0.742, 0.763]</span></td>
+          <td>0.379</td>
         </tr>
         <tr>
           <td class="w">FPD7</td>
           <td>老客</td>
-          <td>34</td>
-          <td>4</td>
-          <td>11.76%</td>
-          <td class="strong">0.408<span class="n">[0.074, 0.743]</span></td>
-          <td>0.233</td>
+          <td>21,245</td>
+          <td>1,723</td>
+          <td>8.11%</td>
+          <td class="strong">0.713<span class="n">[0.701, 0.726]</span></td>
+          <td>0.323</td>
         </tr></tbody>
         </table>
       </div>
     
-      <div class="takeaway"><span class="takeaway-label">解读</span><div><b>全体：</b>FPD15 AUC 0.442（95% CI 0.000–1.000），KS 0.500；FPD7 AUC 0.495，坏率 8.06%。<br><br><b>分客群：</b>新客 FPD15 AUC 0.909、坏率 4.35%；老客 FPD15 AUC 0.000、坏率 4.55%。若两客群 AUC 差异明显，分客群阈值或分客群建模更合适；坏率差异则主要反映客群风险水位。</div></div>
+      <div class="takeaway"><span class="takeaway-label">解读</span><div><b>全体：</b>FPD15 AUC 0.774（95% CI 0.764–0.783），KS 0.414；FPD7 AUC 0.739，坏率 10.55%。<br><br><b>分客群：</b>新客 FPD15 AUC 0.780、坏率 9.90%；老客 FPD15 AUC 0.750、坏率 5.21%。若两客群 AUC 差异明显，分客群阈值或分客群建模更合适；坏率差异则主要反映客群风险水位。</div></div>
     </section>
     
 <section class="card" id="roc">
@@ -395,112 +395,112 @@
         <tr>
           <td class="w">1</td>
           <td class="soft">0.010165 – 0.020952</td>
-          <td>2</td>
-          <td>50.00%</td>
-          <td class="lift">11.25×</td>
-          <td>0</td>
-          <td>—</td>
-          <td>2</td>
-          <td>50.00%</td>
+          <td>2,999</td>
+          <td>0.83%</td>
+          <td class="lift">0.11×</td>
+          <td>1,241</td>
+          <td>1.05%</td>
+          <td>1,758</td>
+          <td>0.68%</td>
         </tr>
         <tr>
           <td class="w">2</td>
           <td class="soft">0.020966 – 0.027090</td>
-          <td>8</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>2</td>
-          <td>0.00%</td>
-          <td>6</td>
-          <td>0.00%</td>
+          <td>2,859</td>
+          <td>1.50%</td>
+          <td class="lift">0.20×</td>
+          <td>1,203</td>
+          <td>1.50%</td>
+          <td>1,656</td>
+          <td>1.51%</td>
         </tr>
         <tr>
           <td class="w">3</td>
           <td class="soft">0.027103 – 0.033932</td>
-          <td>6</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>3</td>
-          <td>0.00%</td>
-          <td>3</td>
-          <td>0.00%</td>
+          <td>3,019</td>
+          <td>1.95%</td>
+          <td class="lift">0.26×</td>
+          <td>1,358</td>
+          <td>1.99%</td>
+          <td>1,661</td>
+          <td>1.93%</td>
         </tr>
         <tr>
           <td class="w">4</td>
           <td class="soft">0.033934 – 0.041510</td>
-          <td>4</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>2</td>
-          <td>0.00%</td>
-          <td>2</td>
-          <td>0.00%</td>
+          <td>2,792</td>
+          <td>2.79%</td>
+          <td class="lift">0.38×</td>
+          <td>1,200</td>
+          <td>3.33%</td>
+          <td>1,592</td>
+          <td>2.39%</td>
         </tr>
         <tr>
           <td class="w">5</td>
           <td class="soft">0.041524 – 0.051446</td>
-          <td>2</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>1</td>
-          <td>0.00%</td>
-          <td>1</td>
-          <td>0.00%</td>
+          <td>3,038</td>
+          <td>3.79%</td>
+          <td class="lift">0.51×</td>
+          <td>1,376</td>
+          <td>5.01%</td>
+          <td>1,662</td>
+          <td>2.77%</td>
         </tr>
         <tr>
           <td class="w">6</td>
           <td class="soft">0.051456 – 0.064469</td>
-          <td>5</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>4</td>
-          <td>0.00%</td>
-          <td>1</td>
-          <td>0.00%</td>
+          <td>3,024</td>
+          <td>5.06%</td>
+          <td class="lift">0.68×</td>
+          <td>1,417</td>
+          <td>6.21%</td>
+          <td>1,607</td>
+          <td>4.04%</td>
         </tr>
         <tr>
           <td class="w">7</td>
           <td class="soft">0.064471 – 0.083412</td>
-          <td>5</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>4</td>
-          <td>0.00%</td>
-          <td>1</td>
-          <td>0.00%</td>
+          <td>3,014</td>
+          <td>7.33%</td>
+          <td class="lift">0.99×</td>
+          <td>1,440</td>
+          <td>9.03%</td>
+          <td>1,574</td>
+          <td>5.78%</td>
         </tr>
         <tr>
           <td class="w">8</td>
           <td class="soft">0.083495 – 0.109672</td>
-          <td>1</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>1</td>
-          <td>0.00%</td>
-          <td>0</td>
-          <td>—</td>
+          <td>2,981</td>
+          <td>9.93%</td>
+          <td class="lift">1.34×</td>
+          <td>1,459</td>
+          <td>11.79%</td>
+          <td>1,522</td>
+          <td>8.15%</td>
         </tr>
         <tr>
           <td class="w">9</td>
           <td class="soft">0.109698 – 0.157077</td>
-          <td>7</td>
-          <td>14.29%</td>
-          <td class="lift">3.21×</td>
-          <td>4</td>
-          <td>25.00%</td>
-          <td>3</td>
-          <td>0.00%</td>
+          <td>3,018</td>
+          <td>13.49%</td>
+          <td class="lift">1.82×</td>
+          <td>1,560</td>
+          <td>16.09%</td>
+          <td>1,458</td>
+          <td>10.70%</td>
         </tr>
         <tr>
           <td class="w">10</td>
           <td class="soft">0.157099 – 0.398999</td>
-          <td>5</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>2</td>
-          <td>0.00%</td>
-          <td>3</td>
-          <td>0.00%</td>
+          <td>3,430</td>
+          <td>24.55%</td>
+          <td class="lift">3.31×</td>
+          <td>1,974</td>
+          <td>30.45%</td>
+          <td>1,456</td>
+          <td>16.55%</td>
         </tr></tbody>
         </table>
       </div>
@@ -521,117 +521,117 @@
         <tr>
           <td class="w">1</td>
           <td class="soft">0.010165 – 0.020952</td>
-          <td>5</td>
-          <td>20.00%</td>
-          <td class="lift">2.48×</td>
-          <td>1</td>
-          <td>0.00%</td>
-          <td>4</td>
-          <td>25.00%</td>
+          <td>3,838</td>
+          <td>1.90%</td>
+          <td class="lift">0.18×</td>
+          <td>1,478</td>
+          <td>2.03%</td>
+          <td>2,360</td>
+          <td>1.82%</td>
         </tr>
         <tr>
           <td class="w">2</td>
           <td class="soft">0.020966 – 0.027090</td>
-          <td>10</td>
-          <td>10.00%</td>
-          <td class="lift">1.24×</td>
-          <td>3</td>
-          <td>0.00%</td>
-          <td>7</td>
-          <td>14.29%</td>
+          <td>3,659</td>
+          <td>3.22%</td>
+          <td class="lift">0.31×</td>
+          <td>1,437</td>
+          <td>2.99%</td>
+          <td>2,222</td>
+          <td>3.38%</td>
         </tr>
         <tr>
           <td class="w">3</td>
           <td class="soft">0.027103 – 0.033932</td>
-          <td>7</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>4</td>
-          <td>0.00%</td>
-          <td>3</td>
-          <td>0.00%</td>
+          <td>3,777</td>
+          <td>4.13%</td>
+          <td class="lift">0.39×</td>
+          <td>1,569</td>
+          <td>4.53%</td>
+          <td>2,208</td>
+          <td>3.85%</td>
         </tr>
         <tr>
           <td class="w">4</td>
           <td class="soft">0.033934 – 0.041510</td>
-          <td>5</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>2</td>
-          <td>0.00%</td>
-          <td>3</td>
-          <td>0.00%</td>
+          <td>3,511</td>
+          <td>5.16%</td>
+          <td class="lift">0.49×</td>
+          <td>1,420</td>
+          <td>6.13%</td>
+          <td>2,091</td>
+          <td>4.50%</td>
         </tr>
         <tr>
           <td class="w">5</td>
           <td class="soft">0.041524 – 0.051446</td>
-          <td>2</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>1</td>
-          <td>0.00%</td>
-          <td>1</td>
-          <td>0.00%</td>
+          <td>3,827</td>
+          <td>6.90%</td>
+          <td class="lift">0.65×</td>
+          <td>1,602</td>
+          <td>8.80%</td>
+          <td>2,225</td>
+          <td>5.53%</td>
         </tr>
         <tr>
           <td class="w">6</td>
           <td class="soft">0.051456 – 0.064469</td>
-          <td>8</td>
-          <td>12.50%</td>
-          <td class="lift">1.55×</td>
-          <td>5</td>
-          <td>0.00%</td>
-          <td>3</td>
-          <td>33.33%</td>
+          <td>3,834</td>
+          <td>8.74%</td>
+          <td class="lift">0.83×</td>
+          <td>1,685</td>
+          <td>10.80%</td>
+          <td>2,149</td>
+          <td>7.12%</td>
         </tr>
         <tr>
           <td class="w">7</td>
           <td class="soft">0.064471 – 0.083412</td>
-          <td>7</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>4</td>
-          <td>0.00%</td>
-          <td>3</td>
-          <td>0.00%</td>
+          <td>3,811</td>
+          <td>10.42%</td>
+          <td class="lift">0.99×</td>
+          <td>1,695</td>
+          <td>12.09%</td>
+          <td>2,116</td>
+          <td>9.07%</td>
         </tr>
         <tr>
           <td class="w">8</td>
           <td class="soft">0.083495 – 0.109672</td>
-          <td>4</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>2</td>
-          <td>0.00%</td>
-          <td>2</td>
-          <td>0.00%</td>
+          <td>3,718</td>
+          <td>13.80%</td>
+          <td class="lift">1.31×</td>
+          <td>1,712</td>
+          <td>17.00%</td>
+          <td>2,006</td>
+          <td>11.07%</td>
         </tr>
         <tr>
           <td class="w">9</td>
           <td class="soft">0.109698 – 0.157077</td>
-          <td>8</td>
-          <td>25.00%</td>
-          <td class="lift">3.10×</td>
-          <td>4</td>
-          <td>25.00%</td>
-          <td>4</td>
-          <td>25.00%</td>
+          <td>3,716</td>
+          <td>18.60%</td>
+          <td class="lift">1.76×</td>
+          <td>1,795</td>
+          <td>21.62%</td>
+          <td>1,921</td>
+          <td>15.77%</td>
         </tr>
         <tr>
           <td class="w">10</td>
           <td class="soft">0.157099 – 0.398999</td>
-          <td>6</td>
-          <td>0.00%</td>
-          <td class="lift">0.00×</td>
-          <td>2</td>
-          <td>0.00%</td>
-          <td>4</td>
-          <td>0.00%</td>
+          <td>4,153</td>
+          <td>30.41%</td>
+          <td class="lift">2.88×</td>
+          <td>2,206</td>
+          <td>37.62%</td>
+          <td>1,947</td>
+          <td>22.24%</td>
         </tr></tbody>
         </table>
       </div>
     
-      <div class="takeaway"><span class="takeaway-label">解读</span><div><b>头尾差：</b>FPD15 第 10 档坏率 0.00%、第 1 档 50.00%，约 0.0 倍；全体坏率 4.44%。分箱坏率应随档位单调上行；若中间档出现明显倒挂，需要结合分档样本量与分数分布判断是噪声还是模型结构问题。</div></div>
+      <div class="takeaway"><span class="takeaway-label">解读</span><div><b>头尾差：</b>FPD15 第 10 档坏率 24.55%、第 1 档 0.83%，约 29.6 倍；全体坏率 7.42%。分箱坏率应随档位单调上行；若中间档出现明显倒挂，需要结合分档样本量与分数分布判断是噪声还是模型结构问题。</div></div>
     </section>
     
 
@@ -665,7 +665,7 @@
             <tr><th rowspan="2">月份</th><th rowspan="2">申请笔数</th><th colspan="4" class="group">FPD15</th><th colspan="4" class="group">FPD7</th></tr>
             <tr><th>成熟</th><th>坏</th><th>坏率</th><th>AUC</th><th>成熟</th><th>坏</th><th>坏率</th><th>AUC</th></tr>
           </thead>
-          <tbody><tr><td class="w">2026-09</td><td>15</td><td>15</td><td>1</td><td>6.67%</td><td class="strong">—</td><td>15</td><td>1</td><td>6.67%</td><td class="strong">—</td></tr><tr><td class="w">2026-10</td><td>46</td><td>30</td><td>1</td><td>3.33%</td><td class="strong">—</td><td>44</td><td>4</td><td>9.09%</td><td class="strong">—</td></tr><tr><td class="w">2026-11</td><td>18</td><td>0</td><td>0</td><td>—</td><td class="strong">—</td><td>3</td><td>0</td><td>0.00%</td><td class="strong">—</td></tr></tbody>
+          <tbody><tr><td class="w">2026-08</td><td>163</td><td>163</td><td>17</td><td>10.43%</td><td class="strong">0.784</td><td>163</td><td>20</td><td>12.27%</td><td class="strong">0.755</td></tr><tr><td class="w">2026-09</td><td>9,501</td><td>9,501</td><td>773</td><td>8.14%</td><td class="strong">0.778</td><td>9,501</td><td>1,113</td><td>11.71%</td><td class="strong">0.749</td></tr><tr><td class="w">2026-10</td><td>29,479</td><td>20,510</td><td>1,449</td><td>7.06%</td><td class="strong">0.770</td><td>26,885</td><td>2,713</td><td>10.09%</td><td class="strong">0.734</td></tr><tr><td class="w">2026-11</td><td>16,092</td><td>0</td><td>0</td><td>—</td><td class="strong">—</td><td>1,295</td><td>145</td><td>11.20%</td><td class="strong">0.756</td></tr></tbody>
         </table>
       </div>
     
@@ -698,102 +698,102 @@
         <tr>
           <td class="w">1</td>
           <td class="soft">0.010165 – 0.020952</td>
-          <td>2</td>
-          <td>4.08%</td>
-          <td>5</td>
-          <td>9.80%</td>
-          <td>7</td>
-          <td>7.00%</td>
+          <td>2,765</td>
+          <td>8.74%</td>
+          <td>4,295</td>
+          <td>10.60%</td>
+          <td>7,060</td>
+          <td>9.78%</td>
         </tr>
         <tr>
           <td class="w">2</td>
           <td class="soft">0.020966 – 0.027090</td>
-          <td>5</td>
-          <td>10.20%</td>
-          <td>8</td>
-          <td>15.69%</td>
-          <td>13</td>
-          <td>13.00%</td>
+          <td>2,675</td>
+          <td>8.46%</td>
+          <td>3,958</td>
+          <td>9.76%</td>
+          <td>6,633</td>
+          <td>9.19%</td>
         </tr>
         <tr>
           <td class="w">3</td>
           <td class="soft">0.027103 – 0.033932</td>
-          <td>4</td>
-          <td>8.16%</td>
-          <td>4</td>
-          <td>7.84%</td>
-          <td>8</td>
-          <td>8.00%</td>
+          <td>3,004</td>
+          <td>9.50%</td>
+          <td>4,074</td>
+          <td>10.05%</td>
+          <td>7,078</td>
+          <td>9.81%</td>
         </tr>
         <tr>
           <td class="w">4</td>
           <td class="soft">0.033934 – 0.041510</td>
-          <td>5</td>
-          <td>10.20%</td>
-          <td>5</td>
-          <td>9.80%</td>
-          <td>10</td>
-          <td>10.00%</td>
+          <td>2,745</td>
+          <td>8.68%</td>
+          <td>3,793</td>
+          <td>9.36%</td>
+          <td>6,538</td>
+          <td>9.06%</td>
         </tr>
         <tr>
           <td class="w">5</td>
           <td class="soft">0.041524 – 0.051446</td>
-          <td>2</td>
-          <td>4.08%</td>
-          <td>3</td>
-          <td>5.88%</td>
-          <td>5</td>
-          <td>5.00%</td>
+          <td>3,061</td>
+          <td>9.68%</td>
+          <td>4,183</td>
+          <td>10.32%</td>
+          <td>7,244</td>
+          <td>10.04%</td>
         </tr>
         <tr>
           <td class="w">6</td>
           <td class="soft">0.051456 – 0.064469</td>
-          <td>7</td>
-          <td>14.29%</td>
-          <td>5</td>
-          <td>9.80%</td>
-          <td>12</td>
-          <td>12.00%</td>
+          <td>3,147</td>
+          <td>9.95%</td>
+          <td>4,249</td>
+          <td>10.48%</td>
+          <td>7,396</td>
+          <td>10.25%</td>
         </tr>
         <tr>
           <td class="w">7</td>
           <td class="soft">0.064471 – 0.083412</td>
-          <td>6</td>
-          <td>12.24%</td>
-          <td>4</td>
-          <td>7.84%</td>
-          <td>10</td>
-          <td>10.00%</td>
+          <td>3,386</td>
+          <td>10.71%</td>
+          <td>4,320</td>
+          <td>10.66%</td>
+          <td>7,706</td>
+          <td>10.68%</td>
         </tr>
         <tr>
           <td class="w">8</td>
           <td class="soft">0.083495 – 0.109672</td>
-          <td>4</td>
-          <td>8.16%</td>
-          <td>3</td>
-          <td>5.88%</td>
-          <td>7</td>
-          <td>7.00%</td>
+          <td>3,273</td>
+          <td>10.35%</td>
+          <td>3,914</td>
+          <td>9.66%</td>
+          <td>7,187</td>
+          <td>9.96%</td>
         </tr>
         <tr>
           <td class="w">9</td>
           <td class="soft">0.109698 – 0.157077</td>
-          <td>7</td>
-          <td>14.29%</td>
-          <td>5</td>
-          <td>9.80%</td>
-          <td>12</td>
-          <td>12.00%</td>
+          <td>3,480</td>
+          <td>11.00%</td>
+          <td>3,870</td>
+          <td>9.55%</td>
+          <td>7,350</td>
+          <td>10.19%</td>
         </tr>
         <tr>
           <td class="w">10</td>
           <td class="soft">0.157099 – 0.398999</td>
-          <td>7</td>
-          <td>14.29%</td>
-          <td>9</td>
-          <td>17.65%</td>
-          <td>16</td>
-          <td>16.00%</td>
+          <td>4,091</td>
+          <td>12.94%</td>
+          <td>3,880</td>
+          <td>9.57%</td>
+          <td>7,971</td>
+          <td>11.05%</td>
         </tr></tbody>
         </table>
       </div>
@@ -804,9 +804,9 @@
     <footer class="foot">
       <ul class="notes">
         <li><b>样本口径</b>：wagego_02 的新老客发标全量样本（all_user_bid，含未成交申请）叠加新发标模型分，
-            共 100 笔申请、有分 100 笔；申请时间 2026-09-02 至 2026-11-14。
-            新客 49 笔、老客 51 笔。
-            Y 只对放款成功的申请成熟：FPD15 成熟 45 笔、FPD7 成熟 62 笔。</li>
+            共 72,163 笔申请、有分 72,163 笔；申请时间 2026-08-05 至 2026-11-16。
+            新客 31,627 笔、老客 40,536 笔。
+            Y 只对放款成功的申请成熟：FPD15 成熟 30,174 笔、FPD7 成熟 37,844 笔。</li>
         <li><b>客群口径</b>：新客 / 老客取自主表 user_type；全部口径包含 user_type 缺失的 0 笔（若有）。</li>
         <li><b>坏率口径</b>：笔数坏率 = y_fpdN_ovd 之和 / 非空标签笔数；未成熟（标签为空）不计入对应窗口。
             AUC 用 midrank 法处理并列分数，95% 置信区间用 DeLong 法；KS 为成熟样本上的最大 TPR−FPR。</li>
@@ -814,13 +814,13 @@
             分月 AUC 仅在当月坏样本与好样本各 ≥ 5 笔时计算，其余月份显示为空。</li>
         <li><b>模型</b>：aus_wagego_bid_20261123_v1_0_txn_lgb_score（发标交易流水 LGB 模型）；报告为单模型评估，无新旧模型对比。</li>
         <li><b>数据源</b>：wagego_07_新老客发标模型分分析.sql 块 1（table_tmp_eliam_wagego_all_user_bid_v1_0_txn_lgb_20260801_20261116.csv）；
-            生成脚本 build_bid_model_analysis.py；生成时间 2026-11-24 11:19。</li>
+            生成脚本 build_bid_model_analysis.py；生成时间 2026-11-24 12:47。</li>
       </ul>
     </footer>
     
 </main>
 <script>
-const DATA = {"meta":{"n":100,"n_scored":100,"n_new":49,"n_old":51,"n_unknown":0,"score_col":"aus_wagego_bid_20261123_v1_0_txn_lgb_score","start":"2026-09-02","end_display":"2026-11-14","months":["2026-09","2026-10","2026-11"],"min_bad":5},"windows":{"15":{"label":"FPD15","groups":{"ALL":{"n_obs":45,"bad":2,"good":43,"rate":4.44,"auc":0.4419,"ks":0.5,"auc_lo":0,"auc_hi":1},"New":{"n_obs":23,"bad":1,"good":22,"rate":4.35,"auc":0.9091,"ks":0.9091,"auc_lo":null,"auc_hi":null},"Old":{"n_obs":22,"bad":1,"good":21,"rate":4.55,"auc":0.0,"ks":1.0,"auc_lo":null,"auc_hi":null}},"roc":{"ALL":[[0.0,0.0],[2.33,0.0],[4.65,0.0],[6.98,0.0],[9.3,0.0],[11.63,0.0],[11.63,50.0],[13.95,50.0],[16.28,50.0],[18.6,50.0],[20.93,50.0],[23.26,50.0],[25.58,50.0],[27.91,50.0],[30.23,50.0],[32.56,50.0],[34.88,50.0],[37.21,50.0],[39.53,50.0],[41.86,50.0],[44.19,50.0],[46.51,50.0],[48.84,50.0],[51.16,50.0],[53.49,50.0],[55.81,50.0],[58.14,50.0],[60.47,50.0],[62.79,50.0],[65.12,50.0],[67.44,50.0],[69.77,50.0],[72.09,50.0],[74.42,50.0],[76.74,50.0],[79.07,50.0],[81.4,50.0],[83.72,50.0],[86.05,50.0],[88.37,50.0],[90.7,50.0],[93.02,50.0],[95.35,50.0],[97.67,50.0],[100.0,50.0],[100.0,100.0],[100.0,100.0]],"New":[[0.0,0.0],[4.55,0.0],[9.09,0.0],[9.09,100.0],[13.64,100.0],[18.18,100.0],[22.73,100.0],[27.27,100.0],[31.82,100.0],[36.36,100.0],[40.91,100.0],[45.45,100.0],[50.0,100.0],[54.55,100.0],[59.09,100.0],[63.64,100.0],[68.18,100.0],[72.73,100.0],[77.27,100.0],[81.82,100.0],[86.36,100.0],[90.91,100.0],[95.45,100.0],[100.0,100.0],[100.0,100.0]],"Old":[[0.0,0.0],[4.76,0.0],[9.52,0.0],[14.29,0.0],[19.05,0.0],[23.81,0.0],[28.57,0.0],[33.33,0.0],[38.1,0.0],[42.86,0.0],[47.62,0.0],[52.38,0.0],[57.14,0.0],[61.9,0.0],[66.67,0.0],[71.43,0.0],[76.19,0.0],[80.95,0.0],[85.71,0.0],[90.48,0.0],[95.24,0.0],[100.0,0.0],[100.0,100.0],[100.0,100.0]]},"deciles":{"ALL":[{"q":1,"n":2,"bad":1,"rate":50.0,"lift":11.25,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.016624,"score_max":0.016829},{"q":2,"n":8,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.021358,"score_max":0.027034},{"q":3,"n":6,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.028057,"score_max":0.031683},{"q":4,"n":4,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.034669,"score_max":0.039136},{"q":5,"n":2,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.042676,"score_max":0.045283},{"q":6,"n":5,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.052609,"score_max":0.063501},{"q":7,"n":5,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.066413,"score_max":0.078854},{"q":8,"n":1,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.102994,"score_max":0.102994},{"q":9,"n":7,"bad":1,"rate":14.29,"lift":3.21,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.111605,"score_max":0.156063},{"q":10,"n":5,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.164507,"score_max":0.29368}],"New":[{"q":1,"n":0,"bad":0,"rate":null,"lift":null,"rule_min":0.010165,"rule_max":0.020952,"score_min":null,"score_max":null},{"q":2,"n":2,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.024012,"score_max":0.025493},{"q":3,"n":3,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.028743,"score_max":0.031683},{"q":4,"n":2,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.034669,"score_max":0.039136},{"q":5,"n":1,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.045283,"score_max":0.045283},{"q":6,"n":4,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.052609,"score_max":0.061012},{"q":7,"n":4,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.069177,"score_max":0.078854},{"q":8,"n":1,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.102994,"score_max":0.102994},{"q":9,"n":4,"bad":1,"rate":25.0,"lift":5.75,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.133195,"score_max":0.156063},{"q":10,"n":2,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.164507,"score_max":0.220217}],"Old":[{"q":1,"n":2,"bad":1,"rate":50.0,"lift":11.0,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.016624,"score_max":0.016829},{"q":2,"n":6,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.021358,"score_max":0.027034},{"q":3,"n":3,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.028057,"score_max":0.031468},{"q":4,"n":2,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.035166,"score_max":0.037222},{"q":5,"n":1,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.042676,"score_max":0.042676},{"q":6,"n":1,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.063501,"score_max":0.063501},{"q":7,"n":1,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.066413,"score_max":0.066413},{"q":8,"n":0,"bad":0,"rate":null,"lift":null,"rule_min":0.083495,"rule_max":0.109672,"score_min":null,"score_max":null},{"q":9,"n":3,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.111605,"score_max":0.136704},{"q":10,"n":3,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.212187,"score_max":0.29368}]}},"7":{"label":"FPD7","groups":{"ALL":{"n_obs":62,"bad":5,"good":57,"rate":8.06,"auc":0.4947,"ks":0.1895,"auc_lo":0.1653,"auc_hi":0.8241},"New":{"n_obs":28,"bad":1,"good":27,"rate":3.57,"auc":0.9259,"ks":0.9259,"auc_lo":null,"auc_hi":null},"Old":{"n_obs":34,"bad":4,"good":30,"rate":11.76,"auc":0.4083,"ks":0.2333,"auc_lo":0.0739,"auc_hi":0.7428}},"roc":{"ALL":[[0.0,0.0],[1.75,0.0],[3.51,0.0],[5.26,0.0],[7.02,0.0],[8.77,0.0],[10.53,0.0],[10.53,20.0],[12.28,20.0],[14.04,20.0],[15.79,20.0],[17.54,20.0],[19.3,20.0],[21.05,20.0],[21.05,40.0],[22.81,40.0],[24.56,40.0],[26.32,40.0],[28.07,40.0],[29.82,40.0],[31.58,40.0],[33.33,40.0],[35.09,40.0],[36.84,40.0],[38.6,40.0],[40.35,40.0],[42.11,40.0],[43.86,40.0],[45.61,40.0],[45.61,60.0],[47.37,60.0],[49.12,60.0],[50.88,60.0],[52.63,60.0],[54.39,60.0],[56.14,60.0],[57.89,60.0],[59.65,60.0],[61.4,60.0],[63.16,60.0],[64.91,60.0],[66.67,60.0],[68.42,60.0],[70.18,60.0],[71.93,60.0],[73.68,60.0],[75.44,60.0],[77.19,60.0],[78.95,60.0],[78.95,80.0],[80.7,80.0],[82.46,80.0],[84.21,80.0],[85.96,80.0],[87.72,80.0],[89.47,80.0],[91.23,80.0],[92.98,80.0],[94.74,80.0],[96.49,80.0],[96.49,100.0],[98.25,100.0],[100.0,100.0],[100.0,100.0]],"New":[[0.0,0.0],[3.7,0.0],[7.41,0.0],[7.41,100.0],[11.11,100.0],[14.81,100.0],[18.52,100.0],[22.22,100.0],[25.93,100.0],[29.63,100.0],[33.33,100.0],[37.04,100.0],[40.74,100.0],[44.44,100.0],[48.15,100.0],[51.85,100.0],[55.56,100.0],[59.26,100.0],[62.96,100.0],[66.67,100.0],[70.37,100.0],[74.07,100.0],[77.78,100.0],[81.48,100.0],[85.19,100.0],[88.89,100.0],[92.59,100.0],[96.3,100.0],[100.0,100.0],[100.0,100.0]],"Old":[[0.0,0.0],[3.33,0.0],[6.67,0.0],[10.0,0.0],[13.33,0.0],[16.67,0.0],[20.0,0.0],[23.33,0.0],[23.33,25.0],[26.67,25.0],[30.0,25.0],[33.33,25.0],[36.67,25.0],[40.0,25.0],[43.33,25.0],[43.33,50.0],[46.67,50.0],[50.0,50.0],[53.33,50.0],[56.67,50.0],[60.0,50.0],[63.33,50.0],[66.67,50.0],[70.0,50.0],[73.33,50.0],[73.33,75.0],[76.67,75.0],[80.0,75.0],[83.33,75.0],[86.67,75.0],[90.0,75.0],[93.33,75.0],[96.67,75.0],[96.67,100.0],[100.0,100.0],[100.0,100.0]]},"deciles":{"ALL":[{"q":1,"n":5,"bad":1,"rate":20.0,"lift":2.48,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.012745,"score_max":0.018173},{"q":2,"n":10,"bad":1,"rate":10.0,"lift":1.24,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.021358,"score_max":0.027034},{"q":3,"n":7,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.028057,"score_max":0.031683},{"q":4,"n":5,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.034669,"score_max":0.039136},{"q":5,"n":2,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.042676,"score_max":0.045283},{"q":6,"n":8,"bad":1,"rate":12.5,"lift":1.55,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.05155,"score_max":0.063501},{"q":7,"n":7,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.066413,"score_max":0.083099},{"q":8,"n":4,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.098287,"score_max":0.105675},{"q":9,"n":8,"bad":2,"rate":25.0,"lift":3.1,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.111605,"score_max":0.156063},{"q":10,"n":6,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.157873,"score_max":0.29368}],"New":[{"q":1,"n":1,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.01434,"score_max":0.01434},{"q":2,"n":3,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.022177,"score_max":0.025493},{"q":3,"n":4,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.028647,"score_max":0.031683},{"q":4,"n":2,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.034669,"score_max":0.039136},{"q":5,"n":1,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.045283,"score_max":0.045283},{"q":6,"n":5,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.052609,"score_max":0.061012},{"q":7,"n":4,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.069177,"score_max":0.078854},{"q":8,"n":2,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.102994,"score_max":0.105675},{"q":9,"n":4,"bad":1,"rate":25.0,"lift":7.0,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.133195,"score_max":0.156063},{"q":10,"n":2,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.164507,"score_max":0.220217}],"Old":[{"q":1,"n":4,"bad":1,"rate":25.0,"lift":2.12,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.012745,"score_max":0.018173},{"q":2,"n":7,"bad":1,"rate":14.29,"lift":1.21,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.021358,"score_max":0.027034},{"q":3,"n":3,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.028057,"score_max":0.031468},{"q":4,"n":3,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.035166,"score_max":0.038813},{"q":5,"n":1,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.042676,"score_max":0.042676},{"q":6,"n":3,"bad":1,"rate":33.33,"lift":2.83,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.05155,"score_max":0.063501},{"q":7,"n":3,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.066413,"score_max":0.083099},{"q":8,"n":2,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.098287,"score_max":0.102509},{"q":9,"n":4,"bad":1,"rate":25.0,"lift":2.12,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.111605,"score_max":0.136704},{"q":10,"n":4,"bad":0,"rate":0.0,"lift":0.0,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.157873,"score_max":0.29368}]}}},"dist":{"total":100,"groups":{"ALL":[{"q":1,"n":7,"share":7.0,"rule_min":0.010165,"rule_max":0.020952},{"q":2,"n":13,"share":13.0,"rule_min":0.020966,"rule_max":0.02709},{"q":3,"n":8,"share":8.0,"rule_min":0.027103,"rule_max":0.033932},{"q":4,"n":10,"share":10.0,"rule_min":0.033934,"rule_max":0.04151},{"q":5,"n":5,"share":5.0,"rule_min":0.041524,"rule_max":0.051446},{"q":6,"n":12,"share":12.0,"rule_min":0.051456,"rule_max":0.064469},{"q":7,"n":10,"share":10.0,"rule_min":0.064471,"rule_max":0.083412},{"q":8,"n":7,"share":7.0,"rule_min":0.083495,"rule_max":0.109672},{"q":9,"n":12,"share":12.0,"rule_min":0.109698,"rule_max":0.157077},{"q":10,"n":16,"share":16.0,"rule_min":0.157099,"rule_max":0.398999}],"New":[{"q":1,"n":2,"share":4.08,"rule_min":0.010165,"rule_max":0.020952},{"q":2,"n":5,"share":10.2,"rule_min":0.020966,"rule_max":0.02709},{"q":3,"n":4,"share":8.16,"rule_min":0.027103,"rule_max":0.033932},{"q":4,"n":5,"share":10.2,"rule_min":0.033934,"rule_max":0.04151},{"q":5,"n":2,"share":4.08,"rule_min":0.041524,"rule_max":0.051446},{"q":6,"n":7,"share":14.29,"rule_min":0.051456,"rule_max":0.064469},{"q":7,"n":6,"share":12.24,"rule_min":0.064471,"rule_max":0.083412},{"q":8,"n":4,"share":8.16,"rule_min":0.083495,"rule_max":0.109672},{"q":9,"n":7,"share":14.29,"rule_min":0.109698,"rule_max":0.157077},{"q":10,"n":7,"share":14.29,"rule_min":0.157099,"rule_max":0.398999}],"Old":[{"q":1,"n":5,"share":9.8,"rule_min":0.010165,"rule_max":0.020952},{"q":2,"n":8,"share":15.69,"rule_min":0.020966,"rule_max":0.02709},{"q":3,"n":4,"share":7.84,"rule_min":0.027103,"rule_max":0.033932},{"q":4,"n":5,"share":9.8,"rule_min":0.033934,"rule_max":0.04151},{"q":5,"n":3,"share":5.88,"rule_min":0.041524,"rule_max":0.051446},{"q":6,"n":5,"share":9.8,"rule_min":0.051456,"rule_max":0.064469},{"q":7,"n":4,"share":7.84,"rule_min":0.064471,"rule_max":0.083412},{"q":8,"n":3,"share":5.88,"rule_min":0.083495,"rule_max":0.109672},{"q":9,"n":5,"share":9.8,"rule_min":0.109698,"rule_max":0.157077},{"q":10,"n":9,"share":17.65,"rule_min":0.157099,"rule_max":0.398999}]}},"monthly":[{"key":"2026-09","label":"2026-09","n":15,"windows":{"15":{"n_obs":15,"bad":1,"rate":6.67,"auc":null},"7":{"n_obs":15,"bad":1,"rate":6.67,"auc":null}}},{"key":"2026-10","label":"2026-10","n":46,"windows":{"15":{"n_obs":30,"bad":1,"rate":3.33,"auc":null},"7":{"n_obs":44,"bad":4,"rate":9.09,"auc":null}}},{"key":"2026-11","label":"2026-11","n":18,"windows":{"15":{"n_obs":0,"bad":0,"rate":null,"auc":null},"7":{"n_obs":3,"bad":0,"rate":0.0,"auc":null}}}]};
+const DATA = {"meta":{"n":72163,"n_scored":72163,"n_new":31627,"n_old":40536,"n_unknown":0,"score_col":"aus_wagego_bid_20261123_v1_0_txn_lgb_score","start":"2026-08-05","end_display":"2026-11-16","months":["2026-08","2026-09","2026-10","2026-11"],"min_bad":5},"windows":{"15":{"label":"FPD15","groups":{"ALL":{"n_obs":30174,"bad":2239,"good":27935,"rate":7.42,"auc":0.7737,"ks":0.4142,"auc_lo":0.764,"auc_hi":0.7833},"New":{"n_obs":14228,"bad":1409,"good":12819,"rate":9.9,"auc":0.7803,"ks":0.4269,"auc_lo":0.7683,"auc_hi":0.7924},"Old":{"n_obs":15946,"bad":830,"good":15116,"rate":5.21,"auc":0.7499,"ks":0.3841,"auc_lo":0.7335,"auc_hi":0.7663}},"roc":{"ALL":[[0.0,0.0],[0.31,2.86],[0.7,4.64],[1.08,6.74],[1.44,8.89],[1.79,11.17],[2.16,13.4],[2.59,14.74],[3.0,16.44],[3.39,18.27],[3.78,20.05],[4.22,21.39],[4.63,22.96],[5.03,24.65],[5.46,26.08],[5.87,27.65],[6.32,28.72],[6.76,30.06],[7.19,31.58],[7.65,32.51],[8.07,33.94],[8.5,35.37],[8.91,36.94],[9.38,38.01],[9.79,39.57],[10.25,40.46],[10.7,41.85],[11.12,43.32],[11.56,44.57],[12.04,45.24],[12.51,46.05],[12.96,47.25],[13.44,47.97],[13.93,48.68],[14.39,49.58],[14.9,50.33],[15.39,50.96],[15.87,51.67],[16.35,52.43],[16.8,53.46],[17.29,54.13],[17.78,54.67],[18.28,55.43],[18.76,56.1],[19.27,56.59],[19.75,57.39],[20.23,58.28],[20.72,59.0],[21.19,59.94],[21.65,60.88],[22.14,61.63],[22.62,62.35],[23.11,62.8],[23.62,63.24],[24.1,63.96],[24.58,64.76],[25.09,65.12],[25.58,65.79],[26.07,66.46],[26.56,67.13],[27.04,67.8],[27.54,68.38],[28.06,68.74],[28.55,69.41],[29.03,70.17],[29.51,70.84],[30.02,71.28],[30.54,71.55],[31.04,71.95],[31.53,72.67],[32.01,73.25],[32.51,73.87],[33.01,74.27],[33.52,74.81],[34.03,75.21],[34.54,75.48],[35.06,75.93],[35.55,76.55],[36.06,77.0],[36.54,77.62],[37.04,78.12],[37.55,78.47],[38.06,78.79],[38.58,79.23],[39.08,79.59],[39.58,79.99],[40.09,80.26],[40.62,80.53],[41.12,81.02],[41.62,81.42],[42.13,81.73],[42.63,82.22],[43.15,82.4],[43.67,82.63],[44.18,82.98],[44.69,83.25],[45.2,83.74],[45.72,84.1],[46.23,84.41],[46.75,84.68],[47.27,84.95],[47.77,85.4],[48.29,85.66],[48.83,85.84],[49.34,86.38],[49.86,86.65],[50.37,87.09],[50.89,87.23],[51.42,87.27],[51.93,87.58],[52.46,87.72],[52.97,88.21],[53.5,88.39],[54.01,88.61],[54.53,88.97],[55.06,89.19],[55.58,89.46],[56.1,89.73],[56.63,89.82],[57.17,89.86],[57.71,90.08],[58.21,90.67],[58.74,90.8],[59.29,90.89],[59.81,91.11],[60.33,91.38],[60.84,91.74],[61.37,91.87],[61.88,92.23],[62.41,92.36],[62.94,92.59],[63.47,92.63],[64.01,92.76],[64.55,92.94],[65.08,93.03],[65.6,93.26],[66.13,93.48],[66.64,93.79],[67.16,94.02],[67.7,94.1],[68.23,94.24],[68.77,94.37],[69.28,94.69],[69.81,94.91],[70.34,94.91],[70.87,94.91],[71.39,95.13],[71.91,95.31],[72.44,95.53],[72.97,95.67],[73.5,95.8],[74.04,95.8],[74.57,95.94],[75.1,96.11],[75.61,96.34],[76.14,96.47],[76.7,96.47],[77.25,96.65],[77.82,96.78],[78.37,96.87],[78.91,96.92],[79.45,97.05],[79.97,97.23],[80.5,97.32],[81.04,97.45],[81.56,97.68],[82.1,97.81],[82.64,97.86],[83.19,97.99],[83.74,97.99],[84.27,98.21],[84.81,98.3],[85.35,98.3],[85.89,98.44],[86.43,98.48],[86.96,98.57],[87.51,98.62],[88.05,98.66],[88.58,98.84],[89.13,98.84],[89.67,98.88],[90.21,98.97],[90.74,99.11],[91.29,99.2],[91.84,99.29],[92.38,99.37],[92.93,99.42],[93.46,99.46],[94.0,99.51],[94.56,99.51],[95.1,99.6],[95.64,99.6],[96.17,99.69],[96.72,99.69],[97.25,99.82],[97.79,99.82],[98.32,99.87],[98.88,99.91],[99.43,100.0],[100.0,100.0]],"New":[[0.0,0.0],[0.26,2.7],[0.59,4.68],[1.01,6.03],[1.34,8.02],[1.68,10.01],[2.02,11.99],[2.39,13.7],[2.7,15.97],[3.12,17.25],[3.49,18.95],[3.89,20.37],[4.21,22.5],[4.64,23.7],[5.06,24.91],[5.47,26.33],[5.85,27.89],[6.24,29.45],[6.61,31.16],[7.01,32.58],[7.44,33.71],[7.9,34.56],[8.31,35.98],[8.74,37.12],[9.21,37.97],[9.6,39.46],[10.02,40.67],[10.43,42.02],[10.87,43.15],[11.28,44.43],[11.76,45.14],[12.2,46.2],[12.67,47.34],[13.07,48.76],[13.56,49.4],[14.01,50.32],[14.49,51.03],[14.95,51.95],[15.44,52.52],[15.91,53.3],[16.39,54.01],[16.9,54.51],[17.4,54.93],[17.9,55.57],[18.39,56.14],[18.83,57.2],[19.3,57.98],[19.79,58.62],[20.27,59.33],[20.75,60.04],[21.22,60.82],[21.74,61.18],[22.2,62.03],[22.67,62.88],[23.17,63.38],[23.67,63.88],[24.14,64.73],[24.61,65.44],[25.11,66.0],[25.6,66.57],[26.11,67.07],[26.62,67.42],[27.07,68.49],[27.57,68.99],[28.08,69.41],[28.57,70.05],[29.07,70.62],[29.55,71.26],[30.04,71.89],[30.55,72.32],[31.06,72.75],[31.52,73.6],[32.02,74.17],[32.52,74.66],[33.01,75.3],[33.52,75.73],[34.03,76.15],[34.48,77.15],[35.0,77.43],[35.52,77.86],[36.02,78.28],[36.56,78.57],[37.09,78.78],[37.59,79.28],[38.07,79.99],[38.59,80.34],[39.11,80.62],[39.62,81.12],[40.14,81.41],[40.68,81.62],[41.2,81.97],[41.72,82.26],[42.25,82.54],[42.76,82.97],[43.3,83.11],[43.83,83.32],[44.32,84.03],[44.86,84.17],[45.35,84.74],[45.89,84.95],[46.42,85.17],[46.97,85.24],[47.48,85.66],[48.0,86.02],[48.51,86.52],[49.03,86.8],[49.57,87.01],[50.09,87.3],[50.6,87.72],[51.15,87.79],[51.66,88.22],[52.17,88.64],[52.7,88.93],[53.23,89.14],[53.75,89.5],[54.3,89.57],[54.82,89.92],[55.37,89.99],[55.86,90.56],[56.4,90.77],[56.92,91.06],[57.45,91.34],[58.0,91.41],[58.53,91.7],[59.04,92.12],[59.58,92.26],[60.13,92.33],[60.67,92.48],[61.18,92.9],[61.72,93.04],[62.27,93.19],[62.8,93.4],[63.31,93.83],[63.83,94.11],[64.37,94.39],[64.91,94.46],[65.46,94.61],[66.0,94.68],[66.56,94.75],[67.09,94.96],[67.63,95.1],[68.17,95.24],[68.71,95.46],[69.25,95.6],[69.8,95.67],[70.34,95.81],[70.88,95.95],[71.43,96.1],[71.97,96.17],[72.53,96.17],[73.08,96.24],[73.63,96.31],[74.18,96.38],[74.72,96.59],[75.26,96.66],[75.82,96.74],[76.37,96.74],[76.92,96.88],[77.46,97.02],[77.99,97.3],[78.53,97.37],[79.09,97.44],[79.62,97.66],[80.17,97.66],[80.72,97.8],[81.26,97.87],[81.82,97.94],[82.36,98.01],[82.92,98.08],[83.45,98.3],[84.01,98.3],[84.55,98.37],[85.12,98.37],[85.65,98.51],[86.2,98.65],[86.75,98.65],[87.32,98.65],[87.87,98.65],[88.42,98.79],[88.96,98.86],[89.51,99.01],[90.06,99.01],[90.61,99.08],[91.15,99.22],[91.7,99.29],[92.26,99.29],[92.81,99.36],[93.36,99.43],[93.9,99.57],[94.46,99.57],[95.01,99.65],[95.57,99.65],[96.12,99.72],[96.68,99.72],[97.23,99.72],[97.78,99.79],[98.34,99.79],[98.89,99.93],[99.45,99.93],[100.0,100.0]],"Old":[[0.0,0.0],[0.37,2.77],[0.81,4.34],[1.19,6.75],[1.61,8.8],[2.08,10.12],[2.5,11.93],[2.93,13.61],[3.39,15.06],[3.82,16.63],[4.27,17.95],[4.71,19.4],[5.21,20.12],[5.64,21.69],[6.09,23.13],[6.58,23.86],[7.0,25.66],[7.41,27.71],[7.91,28.67],[8.37,30.0],[8.77,32.05],[9.22,33.73],[9.66,35.3],[10.12,36.39],[10.59,37.23],[11.05,38.31],[11.52,39.64],[11.99,40.72],[12.48,41.33],[12.96,42.89],[13.45,43.61],[13.91,44.7],[14.38,45.66],[14.87,46.39],[15.37,46.99],[15.88,47.23],[16.38,47.83],[16.87,48.55],[17.38,48.92],[17.88,49.76],[18.32,51.2],[18.81,52.17],[19.28,53.37],[19.73,54.58],[20.21,55.66],[20.71,56.14],[21.2,56.75],[21.69,57.35],[22.19,57.95],[22.71,58.19],[23.18,59.16],[23.67,60.0],[24.15,60.84],[24.65,61.2],[25.14,62.05],[25.64,62.41],[26.14,62.89],[26.61,63.86],[27.11,64.34],[27.62,64.7],[28.14,64.82],[28.65,65.06],[29.14,65.54],[29.61,66.39],[30.09,67.35],[30.58,67.71],[31.07,68.55],[31.56,69.16],[32.08,69.4],[32.61,69.52],[33.12,70.24],[33.61,70.96],[34.06,72.17],[34.54,72.77],[35.04,73.25],[35.55,73.61],[36.05,74.22],[36.56,74.7],[37.04,75.3],[37.54,75.54],[38.07,76.02],[38.57,76.39],[39.06,76.87],[39.57,77.11],[40.05,77.71],[40.55,77.95],[41.08,78.19],[41.57,78.67],[42.07,78.92],[42.6,79.4],[43.11,79.64],[43.59,80.24],[44.11,80.6],[44.61,80.72],[45.11,81.33],[45.63,81.45],[46.18,81.57],[46.68,82.17],[47.18,82.65],[47.67,83.13],[48.18,83.25],[48.71,83.37],[49.21,83.61],[49.74,83.73],[50.25,83.98],[50.76,84.22],[51.29,84.34],[51.79,84.7],[52.3,85.18],[52.82,85.54],[53.33,85.66],[53.86,85.66],[54.39,85.66],[54.92,85.9],[55.44,86.14],[55.94,86.87],[56.46,87.11],[57.0,87.11],[57.5,87.47],[58.0,87.71],[58.51,87.95],[59.04,88.07],[59.55,88.31],[60.06,88.8],[60.58,89.16],[61.1,89.16],[61.62,89.16],[62.14,89.4],[62.68,89.52],[63.2,89.64],[63.71,89.88],[64.21,90.24],[64.69,90.84],[65.2,91.2],[65.73,91.33],[66.23,91.57],[66.77,91.69],[67.29,91.69],[67.78,92.41],[68.29,92.77],[68.81,92.77],[69.33,92.77],[69.83,93.25],[70.33,93.49],[70.84,93.86],[71.34,94.22],[71.86,94.22],[72.39,94.34],[72.93,94.46],[73.43,94.7],[73.96,94.82],[74.48,94.94],[75.03,94.94],[75.6,95.06],[76.16,95.3],[76.7,95.3],[77.22,95.42],[77.77,95.66],[78.27,95.9],[78.79,96.14],[79.31,96.27],[79.81,96.51],[80.31,96.87],[80.85,96.99],[81.39,97.11],[81.91,97.35],[82.45,97.35],[82.98,97.59],[83.51,97.71],[84.05,97.71],[84.57,98.07],[85.09,98.19],[85.61,98.19],[86.14,98.31],[86.68,98.31],[87.21,98.31],[87.75,98.55],[88.28,98.55],[88.82,98.55],[89.36,98.55],[89.88,98.8],[90.4,98.92],[90.96,99.04],[91.47,99.28],[92.02,99.28],[92.55,99.28],[93.07,99.28],[93.62,99.28],[94.17,99.28],[94.68,99.4],[95.21,99.4],[95.72,99.64],[96.28,99.64],[96.79,99.88],[97.31,99.88],[97.83,99.88],[98.36,99.88],[98.91,99.88],[99.45,100.0],[100.0,100.0]]},"deciles":{"ALL":[{"q":1,"n":2999,"bad":25,"rate":0.83,"lift":0.11,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.010165,"score_max":0.02095},{"q":2,"n":2859,"bad":43,"rate":1.5,"lift":0.2,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.020952,"score_max":0.02709},{"q":3,"n":3019,"bad":59,"rate":1.95,"lift":0.26,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.027095,"score_max":0.033932},{"q":4,"n":2792,"bad":78,"rate":2.79,"lift":0.38,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.033934,"score_max":0.041506},{"q":5,"n":3038,"bad":115,"rate":3.79,"lift":0.51,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.04151,"score_max":0.051445},{"q":6,"n":3024,"bad":153,"rate":5.06,"lift":0.68,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.051446,"score_max":0.064466},{"q":7,"n":3014,"bad":221,"rate":7.33,"lift":0.99,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.064469,"score_max":0.083412},{"q":8,"n":2981,"bad":296,"rate":9.93,"lift":1.34,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.083417,"score_max":0.109664},{"q":9,"n":3018,"bad":407,"rate":13.49,"lift":1.82,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.109672,"score_max":0.157077},{"q":10,"n":3430,"bad":842,"rate":24.55,"lift":3.31,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.157099,"score_max":0.441488}],"New":[{"q":1,"n":1241,"bad":13,"rate":1.05,"lift":0.11,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.01049,"score_max":0.020945},{"q":2,"n":1203,"bad":18,"rate":1.5,"lift":0.15,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.020952,"score_max":0.02709},{"q":3,"n":1358,"bad":27,"rate":1.99,"lift":0.2,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.027102,"score_max":0.033922},{"q":4,"n":1200,"bad":40,"rate":3.33,"lift":0.34,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.033934,"score_max":0.041506},{"q":5,"n":1376,"bad":69,"rate":5.01,"lift":0.51,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.04151,"score_max":0.051422},{"q":6,"n":1417,"bad":88,"rate":6.21,"lift":0.63,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.051446,"score_max":0.064464},{"q":7,"n":1440,"bad":130,"rate":9.03,"lift":0.91,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.064469,"score_max":0.083412},{"q":8,"n":1459,"bad":172,"rate":11.79,"lift":1.19,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.083417,"score_max":0.109664},{"q":9,"n":1560,"bad":251,"rate":16.09,"lift":1.62,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.109707,"score_max":0.15706},{"q":10,"n":1974,"bad":601,"rate":30.45,"lift":3.07,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.157099,"score_max":0.441488}],"Old":[{"q":1,"n":1758,"bad":12,"rate":0.68,"lift":0.13,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.010165,"score_max":0.02095},{"q":2,"n":1656,"bad":25,"rate":1.51,"lift":0.29,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.020954,"score_max":0.027088},{"q":3,"n":1661,"bad":32,"rate":1.93,"lift":0.37,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.027095,"score_max":0.033932},{"q":4,"n":1592,"bad":38,"rate":2.39,"lift":0.46,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.033948,"score_max":0.041506},{"q":5,"n":1662,"bad":46,"rate":2.77,"lift":0.53,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.041515,"score_max":0.051445},{"q":6,"n":1607,"bad":65,"rate":4.04,"lift":0.78,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.051457,"score_max":0.064466},{"q":7,"n":1574,"bad":91,"rate":5.78,"lift":1.11,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.064471,"score_max":0.08341},{"q":8,"n":1522,"bad":124,"rate":8.15,"lift":1.57,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.083425,"score_max":0.109578},{"q":9,"n":1458,"bad":156,"rate":10.7,"lift":2.06,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.109672,"score_max":0.157077},{"q":10,"n":1456,"bad":241,"rate":16.55,"lift":3.18,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.1571,"score_max":0.388298}]}},"7":{"label":"FPD7","groups":{"ALL":{"n_obs":37844,"bad":3991,"good":33853,"rate":10.55,"auc":0.7391,"ks":0.3549,"auc_lo":0.7311,"auc_hi":0.7471},"New":{"n_obs":16599,"bad":2268,"good":14331,"rate":13.66,"auc":0.7527,"ks":0.3786,"auc_lo":0.7422,"auc_hi":0.7631},"Old":{"n_obs":21245,"bad":1723,"good":19522,"rate":8.11,"auc":0.7134,"ks":0.3233,"auc_lo":0.7009,"auc_hi":0.726}},"roc":{"ALL":[[0.0,0.0],[0.32,2.05],[0.68,3.76],[1.04,5.34],[1.38,7.14],[1.72,9.05],[2.09,10.65],[2.48,12.1],[2.87,13.58],[3.2,15.46],[3.63,16.59],[4.02,18.02],[4.4,19.47],[4.81,20.75],[5.2,22.15],[5.64,23.2],[6.05,24.46],[6.45,25.81],[6.91,26.69],[7.31,28.01],[7.72,29.32],[8.11,30.72],[8.56,31.7],[8.98,32.85],[9.42,33.83],[9.87,34.9],[10.27,36.23],[10.69,37.38],[11.15,38.14],[11.61,38.94],[12.02,40.22],[12.49,40.97],[12.96,41.67],[13.41,42.62],[13.89,43.52],[14.38,44.12],[14.84,44.85],[15.31,45.68],[15.74,46.71],[16.22,47.38],[16.72,47.91],[17.22,48.51],[17.68,49.41],[18.16,50.09],[18.62,50.96],[19.09,51.72],[19.57,52.44],[20.05,53.22],[20.5,54.05],[20.99,54.72],[21.46,55.4],[21.95,55.95],[22.46,56.4],[22.93,57.08],[23.43,57.65],[23.94,58.06],[24.42,58.73],[24.9,59.41],[25.39,60.04],[25.87,60.74],[26.37,61.29],[26.89,61.71],[27.36,62.42],[27.86,62.99],[28.35,63.47],[28.85,64.07],[29.37,64.42],[29.87,64.9],[30.34,65.6],[30.85,66.02],[31.34,66.65],[31.85,67.08],[32.34,67.73],[32.83,68.25],[33.34,68.6],[33.85,69.13],[34.36,69.58],[34.87,69.98],[35.37,70.48],[35.86,70.98],[36.38,71.39],[36.9,71.71],[37.41,72.21],[37.91,72.69],[38.4,73.16],[38.92,73.62],[39.44,74.09],[39.9,74.77],[40.41,75.22],[40.92,75.6],[41.43,76.05],[41.94,76.4],[42.47,76.7],[42.95,77.22],[43.47,77.55],[43.98,78.08],[44.5,78.4],[45.04,78.63],[45.55,79.03],[46.08,79.28],[46.59,79.73],[47.12,80.03],[47.66,80.28],[48.18,80.71],[48.7,81.06],[49.21,81.53],[49.73,81.86],[50.25,82.13],[50.77,82.46],[51.31,82.64],[51.81,83.16],[52.34,83.44],[52.85,83.76],[53.37,84.14],[53.88,84.57],[54.42,84.77],[54.95,85.07],[55.46,85.39],[56.0,85.62],[56.54,85.87],[57.04,86.37],[57.57,86.7],[58.12,86.85],[58.64,87.15],[59.18,87.4],[59.7,87.75],[60.22,88.02],[60.74,88.32],[61.26,88.62],[61.79,88.93],[62.31,89.2],[62.86,89.33],[63.4,89.55],[63.93,89.8],[64.46,89.95],[65.0,90.23],[65.52,90.58],[66.06,90.78],[66.61,90.93],[67.15,91.05],[67.69,91.28],[68.21,91.56],[68.73,91.93],[69.28,92.06],[69.81,92.23],[70.35,92.41],[70.88,92.61],[71.41,92.83],[71.94,93.16],[72.47,93.36],[73.02,93.41],[73.58,93.54],[74.11,93.79],[74.63,94.06],[75.17,94.24],[75.74,94.26],[76.27,94.54],[76.84,94.81],[77.4,94.94],[77.94,95.04],[78.5,95.21],[79.04,95.39],[79.58,95.51],[80.12,95.72],[80.64,96.02],[81.2,96.09],[81.75,96.22],[82.29,96.44],[82.85,96.49],[83.38,96.67],[83.94,96.87],[84.48,97.04],[85.03,97.27],[85.57,97.44],[86.11,97.54],[86.67,97.72],[87.23,97.8],[87.76,97.97],[88.32,98.05],[88.87,98.15],[89.41,98.3],[89.96,98.37],[90.51,98.52],[91.08,98.62],[91.63,98.8],[92.18,98.87],[92.73,99.07],[93.29,99.12],[93.84,99.2],[94.41,99.25],[94.96,99.35],[95.51,99.42],[96.05,99.55],[96.62,99.57],[97.16,99.77],[97.72,99.82],[98.27,99.85],[98.84,99.9],[99.41,99.97],[100.0,100.0]],"New":[[0.0,0.0],[0.26,2.03],[0.57,3.7],[0.94,5.11],[1.26,6.7],[1.59,8.29],[1.88,10.14],[2.18,11.9],[2.54,13.36],[2.9,14.73],[3.27,16.09],[3.61,17.64],[3.95,19.14],[4.34,20.33],[4.7,21.78],[5.05,23.19],[5.42,24.56],[5.8,25.84],[6.18,27.07],[6.59,28.22],[7.02,29.14],[7.41,30.38],[7.84,31.35],[8.23,32.5],[8.63,33.69],[9.04,34.79],[9.41,36.07],[9.82,37.21],[10.27,38.01],[10.75,38.67],[11.19,39.73],[11.58,40.92],[11.99,42.06],[12.47,42.68],[12.92,43.52],[13.36,44.44],[13.8,45.28],[14.28,45.94],[14.77,46.56],[15.23,47.31],[15.73,47.84],[16.22,48.37],[16.69,49.12],[17.16,49.82],[17.56,50.93],[18.02,51.72],[18.53,52.2],[18.99,52.91],[19.44,53.79],[19.91,54.45],[20.38,55.25],[20.82,56.08],[21.29,56.79],[21.81,57.23],[22.25,58.11],[22.69,59.04],[23.19,59.48],[23.67,60.14],[24.16,60.76],[24.67,61.2],[25.14,61.86],[25.62,62.57],[26.12,63.05],[26.61,63.62],[27.1,64.2],[27.61,64.64],[28.1,65.26],[28.62,65.61],[29.11,66.18],[29.57,67.02],[30.07,67.5],[30.57,68.03],[31.07,68.52],[31.57,69.0],[32.07,69.58],[32.54,70.24],[33.05,70.72],[33.56,71.21],[34.07,71.65],[34.58,72.09],[35.11,72.44],[35.63,72.8],[36.15,73.19],[36.64,73.77],[37.16,74.16],[37.72,74.29],[38.23,74.74],[38.76,75.09],[39.28,75.53],[39.84,75.66],[40.35,76.15],[40.87,76.5],[41.36,77.07],[41.9,77.38],[42.4,77.82],[42.89,78.44],[43.42,78.75],[43.93,79.23],[44.45,79.63],[44.98,79.94],[45.51,80.29],[46.01,80.78],[46.51,81.26],[47.03,81.7],[47.55,82.05],[48.12,82.19],[48.65,82.5],[49.19,82.76],[49.7,83.2],[50.22,83.6],[50.74,83.99],[51.27,84.3],[51.79,84.7],[52.31,85.1],[52.86,85.27],[53.41,85.49],[53.96,85.71],[54.46,86.24],[54.98,86.64],[55.5,87.04],[56.03,87.3],[56.58,87.52],[57.13,87.7],[57.65,88.1],[58.17,88.54],[58.7,88.8],[59.25,89.07],[59.75,89.55],[60.29,89.81],[60.83,90.08],[61.37,90.34],[61.88,90.83],[62.4,91.18],[62.95,91.4],[63.51,91.58],[64.04,91.89],[64.57,92.2],[65.14,92.28],[65.69,92.46],[66.23,92.77],[66.77,92.99],[67.34,93.08],[67.91,93.17],[68.45,93.39],[69.03,93.43],[69.58,93.61],[70.11,93.96],[70.65,94.22],[71.22,94.31],[71.77,94.44],[72.33,94.62],[72.89,94.75],[73.43,95.06],[73.99,95.15],[74.56,95.24],[75.14,95.28],[75.71,95.33],[76.24,95.63],[76.78,95.9],[77.34,96.03],[77.92,96.08],[78.43,96.52],[79.0,96.6],[79.56,96.74],[80.13,96.78],[80.7,96.91],[81.28,96.91],[81.84,97.05],[82.39,97.22],[82.97,97.27],[83.52,97.44],[84.1,97.44],[84.68,97.49],[85.22,97.75],[85.79,97.84],[86.34,97.97],[86.91,98.1],[87.47,98.19],[88.04,98.28],[88.61,98.41],[89.15,98.63],[89.74,98.63],[90.3,98.72],[90.87,98.77],[91.45,98.85],[92.02,98.85],[92.58,99.03],[93.15,99.07],[93.71,99.21],[94.29,99.25],[94.86,99.34],[95.42,99.47],[95.99,99.56],[96.56,99.6],[97.13,99.69],[97.69,99.82],[98.27,99.82],[98.85,99.91],[99.42,99.96],[100.0,100.0]],"Old":[[0.0,0.0],[0.38,1.8],[0.79,3.25],[1.18,4.88],[1.54,7.02],[1.99,8.3],[2.4,9.75],[2.79,11.38],[3.23,12.65],[3.66,13.93],[4.08,15.15],[4.51,16.37],[4.97,17.41],[5.42,18.46],[5.84,19.85],[6.33,20.55],[6.72,22.17],[7.11,23.8],[7.59,24.84],[8.04,25.89],[8.44,27.45],[8.89,28.55],[9.31,30.01],[9.74,31.22],[10.21,31.98],[10.64,33.14],[11.08,34.42],[11.56,35.23],[12.01,36.16],[12.44,37.78],[12.93,38.42],[13.4,39.23],[13.86,40.05],[14.32,40.98],[14.81,41.56],[15.34,41.85],[15.83,42.6],[16.3,43.41],[16.79,44.05],[17.29,44.69],[17.74,45.73],[18.23,46.43],[18.71,47.3],[19.17,48.11],[19.65,48.93],[20.14,49.45],[20.64,49.85],[21.11,50.61],[21.62,51.07],[22.14,51.36],[22.62,52.06],[23.11,52.81],[23.58,53.69],[24.06,54.38],[24.54,55.19],[25.06,55.48],[25.55,56.01],[26.04,56.7],[26.53,57.17],[27.04,57.69],[27.55,57.98],[28.06,58.5],[28.53,59.14],[29.03,59.55],[29.51,60.36],[30.02,60.88],[30.47,61.75],[30.95,62.39],[31.46,62.8],[31.96,63.44],[32.5,63.73],[32.98,64.42],[33.44,65.24],[33.93,65.82],[34.44,66.28],[34.95,66.69],[35.45,67.27],[35.94,67.85],[36.43,68.43],[36.94,68.78],[37.44,69.53],[37.92,70.17],[38.42,70.57],[38.94,70.92],[39.43,71.45],[39.92,71.91],[40.46,72.03],[40.95,72.61],[41.47,73.13],[41.99,73.42],[42.5,73.82],[43.01,74.17],[43.51,74.64],[44.03,74.87],[44.53,75.33],[45.05,75.57],[45.63,75.74],[46.13,76.2],[46.65,76.49],[47.13,77.13],[47.66,77.37],[48.16,77.95],[48.67,78.18],[49.19,78.47],[49.69,78.99],[50.22,79.22],[50.74,79.34],[51.24,79.8],[51.74,80.38],[52.25,80.85],[52.78,81.02],[53.31,81.14],[53.83,81.37],[54.38,81.54],[54.88,82.01],[55.4,82.36],[55.92,82.7],[56.46,82.94],[56.97,83.23],[57.49,83.34],[58.01,83.58],[58.53,83.81],[59.05,84.16],[59.55,84.62],[60.07,85.03],[60.58,85.26],[61.12,85.32],[61.64,85.61],[62.18,85.78],[62.7,86.01],[63.22,86.3],[63.72,86.77],[64.22,87.23],[64.74,87.52],[65.28,87.7],[65.81,87.87],[66.33,88.22],[66.86,88.39],[67.35,88.91],[67.89,89.09],[68.4,89.32],[68.93,89.44],[69.44,89.84],[69.96,90.02],[70.47,90.54],[70.97,90.89],[71.5,90.95],[72.05,91.12],[72.59,91.35],[73.11,91.58],[73.63,91.82],[74.18,91.87],[74.71,92.16],[75.29,92.34],[75.82,92.63],[76.36,92.69],[76.9,92.98],[77.43,93.21],[77.95,93.5],[78.47,93.73],[78.98,94.08],[79.49,94.43],[80.03,94.54],[80.56,94.72],[81.09,95.07],[81.63,95.24],[82.15,95.47],[82.69,95.71],[83.23,95.76],[83.77,96.11],[84.32,96.34],[84.83,96.58],[85.36,96.75],[85.89,96.98],[86.44,97.1],[86.97,97.16],[87.52,97.27],[88.05,97.5],[88.59,97.74],[89.12,97.85],[89.65,98.03],[90.2,98.2],[90.75,98.37],[91.28,98.55],[91.83,98.61],[92.35,98.9],[92.88,98.96],[93.44,99.01],[94.0,99.07],[94.54,99.19],[95.08,99.25],[95.6,99.42],[96.16,99.48],[96.7,99.71],[97.22,99.83],[97.77,99.83],[98.32,99.88],[98.88,99.88],[99.43,99.94],[100.0,100.0]]},"deciles":{"ALL":[{"q":1,"n":3838,"bad":73,"rate":1.9,"lift":0.18,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.010165,"score_max":0.02095},{"q":2,"n":3659,"bad":118,"rate":3.22,"lift":0.31,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.020952,"score_max":0.02709},{"q":3,"n":3777,"bad":156,"rate":4.13,"lift":0.39,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.027095,"score_max":0.033932},{"q":4,"n":3511,"bad":181,"rate":5.16,"lift":0.49,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.033934,"score_max":0.041506},{"q":5,"n":3827,"bad":264,"rate":6.9,"lift":0.65,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.04151,"score_max":0.051445},{"q":6,"n":3834,"bad":335,"rate":8.74,"lift":0.83,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.051446,"score_max":0.064466},{"q":7,"n":3811,"bad":397,"rate":10.42,"lift":0.99,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.064469,"score_max":0.083412},{"q":8,"n":3718,"bad":513,"rate":13.8,"lift":1.31,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.083417,"score_max":0.109671},{"q":9,"n":3716,"bad":691,"rate":18.6,"lift":1.76,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.109672,"score_max":0.157077},{"q":10,"n":4153,"bad":1263,"rate":30.41,"lift":2.88,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.157091,"score_max":0.441488}],"New":[{"q":1,"n":1478,"bad":30,"rate":2.03,"lift":0.15,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.01049,"score_max":0.020948},{"q":2,"n":1437,"bad":43,"rate":2.99,"lift":0.22,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.020952,"score_max":0.02709},{"q":3,"n":1569,"bad":71,"rate":4.53,"lift":0.33,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.027102,"score_max":0.033922},{"q":4,"n":1420,"bad":87,"rate":6.13,"lift":0.45,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.033934,"score_max":0.041506},{"q":5,"n":1602,"bad":141,"rate":8.8,"lift":0.64,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.04151,"score_max":0.051422},{"q":6,"n":1685,"bad":182,"rate":10.8,"lift":0.79,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.051446,"score_max":0.064464},{"q":7,"n":1695,"bad":205,"rate":12.09,"lift":0.89,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.064469,"score_max":0.083412},{"q":8,"n":1712,"bad":291,"rate":17.0,"lift":1.24,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.083417,"score_max":0.109671},{"q":9,"n":1795,"bad":388,"rate":21.62,"lift":1.58,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.109707,"score_max":0.15706},{"q":10,"n":2206,"bad":830,"rate":37.62,"lift":2.75,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.157099,"score_max":0.441488}],"Old":[{"q":1,"n":2360,"bad":43,"rate":1.82,"lift":0.22,"rule_min":0.010165,"rule_max":0.020952,"score_min":0.010165,"score_max":0.02095},{"q":2,"n":2222,"bad":75,"rate":3.38,"lift":0.42,"rule_min":0.020966,"rule_max":0.02709,"score_min":0.020952,"score_max":0.027089},{"q":3,"n":2208,"bad":85,"rate":3.85,"lift":0.47,"rule_min":0.027103,"rule_max":0.033932,"score_min":0.027095,"score_max":0.033932},{"q":4,"n":2091,"bad":94,"rate":4.5,"lift":0.55,"rule_min":0.033934,"rule_max":0.04151,"score_min":0.033934,"score_max":0.041506},{"q":5,"n":2225,"bad":123,"rate":5.53,"lift":0.68,"rule_min":0.041524,"rule_max":0.051446,"score_min":0.041515,"score_max":0.051445},{"q":6,"n":2149,"bad":153,"rate":7.12,"lift":0.88,"rule_min":0.051456,"rule_max":0.064469,"score_min":0.051457,"score_max":0.064466},{"q":7,"n":2116,"bad":192,"rate":9.07,"lift":1.12,"rule_min":0.064471,"rule_max":0.083412,"score_min":0.064471,"score_max":0.08341},{"q":8,"n":2006,"bad":222,"rate":11.07,"lift":1.36,"rule_min":0.083495,"rule_max":0.109672,"score_min":0.083425,"score_max":0.109654},{"q":9,"n":1921,"bad":303,"rate":15.77,"lift":1.94,"rule_min":0.109698,"rule_max":0.157077,"score_min":0.109672,"score_max":0.157077},{"q":10,"n":1947,"bad":433,"rate":22.24,"lift":2.74,"rule_min":0.157099,"rule_max":0.398999,"score_min":0.157091,"score_max":0.388298}]}}},"dist":{"total":72163,"groups":{"ALL":[{"q":1,"n":7060,"share":9.78,"rule_min":0.010165,"rule_max":0.020952},{"q":2,"n":6633,"share":9.19,"rule_min":0.020966,"rule_max":0.02709},{"q":3,"n":7078,"share":9.81,"rule_min":0.027103,"rule_max":0.033932},{"q":4,"n":6538,"share":9.06,"rule_min":0.033934,"rule_max":0.04151},{"q":5,"n":7244,"share":10.04,"rule_min":0.041524,"rule_max":0.051446},{"q":6,"n":7396,"share":10.25,"rule_min":0.051456,"rule_max":0.064469},{"q":7,"n":7706,"share":10.68,"rule_min":0.064471,"rule_max":0.083412},{"q":8,"n":7187,"share":9.96,"rule_min":0.083495,"rule_max":0.109672},{"q":9,"n":7350,"share":10.19,"rule_min":0.109698,"rule_max":0.157077},{"q":10,"n":7971,"share":11.05,"rule_min":0.157099,"rule_max":0.398999}],"New":[{"q":1,"n":2765,"share":8.74,"rule_min":0.010165,"rule_max":0.020952},{"q":2,"n":2675,"share":8.46,"rule_min":0.020966,"rule_max":0.02709},{"q":3,"n":3004,"share":9.5,"rule_min":0.027103,"rule_max":0.033932},{"q":4,"n":2745,"share":8.68,"rule_min":0.033934,"rule_max":0.04151},{"q":5,"n":3061,"share":9.68,"rule_min":0.041524,"rule_max":0.051446},{"q":6,"n":3147,"share":9.95,"rule_min":0.051456,"rule_max":0.064469},{"q":7,"n":3386,"share":10.71,"rule_min":0.064471,"rule_max":0.083412},{"q":8,"n":3273,"share":10.35,"rule_min":0.083495,"rule_max":0.109672},{"q":9,"n":3480,"share":11.0,"rule_min":0.109698,"rule_max":0.157077},{"q":10,"n":4091,"share":12.94,"rule_min":0.157099,"rule_max":0.398999}],"Old":[{"q":1,"n":4295,"share":10.6,"rule_min":0.010165,"rule_max":0.020952},{"q":2,"n":3958,"share":9.76,"rule_min":0.020966,"rule_max":0.02709},{"q":3,"n":4074,"share":10.05,"rule_min":0.027103,"rule_max":0.033932},{"q":4,"n":3793,"share":9.36,"rule_min":0.033934,"rule_max":0.04151},{"q":5,"n":4183,"share":10.32,"rule_min":0.041524,"rule_max":0.051446},{"q":6,"n":4249,"share":10.48,"rule_min":0.051456,"rule_max":0.064469},{"q":7,"n":4320,"share":10.66,"rule_min":0.064471,"rule_max":0.083412},{"q":8,"n":3914,"share":9.66,"rule_min":0.083495,"rule_max":0.109672},{"q":9,"n":3870,"share":9.55,"rule_min":0.109698,"rule_max":0.157077},{"q":10,"n":3880,"share":9.57,"rule_min":0.157099,"rule_max":0.398999}]}},"monthly":[{"key":"2026-08","label":"2026-08","n":163,"windows":{"15":{"n_obs":163,"bad":17,"rate":10.43,"auc":0.7836},"7":{"n_obs":163,"bad":20,"rate":12.27,"auc":0.7549}}},{"key":"2026-09","label":"2026-09","n":9501,"windows":{"15":{"n_obs":9501,"bad":773,"rate":8.14,"auc":0.7785},"7":{"n_obs":9501,"bad":1113,"rate":11.71,"auc":0.7486}}},{"key":"2026-10","label":"2026-10","n":29479,"windows":{"15":{"n_obs":20510,"bad":1449,"rate":7.06,"auc":0.7704},"7":{"n_obs":26885,"bad":2713,"rate":10.09,"auc":0.7336}}},{"key":"2026-11","label":"2026-11","n":16092,"windows":{"15":{"n_obs":0,"bad":0,"rate":null,"auc":null},"7":{"n_obs":1295,"bad":145,"rate":11.2,"auc":0.7563}}}]};
 const NS = 'http://www.w3.org/2000/svg';
 const fmtPct = (v, d) => (v == null ? '—' : v.toFixed(d == null ? 2 : d) + '%');
 const fmtInt = n => (n == null ? '—' : n.toLocaleString('en-US'));
