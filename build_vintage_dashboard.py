@@ -40,6 +40,10 @@ MODEL_META = (
     ("online", "线上模型", "var(--ink-2)"),
     ("credit", "新戳额模型", "var(--ink-2)"),
 )
+APPLY_SCORE_META = (
+    ("bid_3rd_v1_0", "现行 bid 分"),
+    ("credit_20261028_v1_0", "新戳额分"),
+)
 SEGMENT_META = (
     ("ALL", "整体", "var(--ink-2)"),
     ("New", "新客", "var(--c1)"),
@@ -59,11 +63,15 @@ OPTIONAL_FILES = (
     "vintage_08_weekly_auc.csv",
     "vintage_11a_credit_score_coverage.csv",
     "vintage_11b_credit_score_dist.csv",
+    "vintage_11c_credit_sample_new_model_coverage.csv",
+    "vintage_11d_credit_sample_new_model_dist.csv",
     "vintage_12_new_user_funnel.csv",
     "vintage_13a_credit_model_coverage.csv",
     "vintage_13b_credit_model_quintile.csv",
     "vintage_13c_credit_model_quintile_week.csv",
     "vintage_14_credit_model_weekly_auc.csv",
+    "vintage_15_apply_score_coverage.csv",
+    "vintage_16_apply_score_quintile_week.csv",
 )
 
 
@@ -376,6 +384,23 @@ def score_range_text(q, upper):
     return f"{upper[q - 2]:.6f}–{upper[q - 1]:.6f}"
 
 
+def psi_between(rows, base_rows):
+    cur_total = sum(row["obs"] for row in rows)
+    base_total = sum(row["obs"] for row in base_rows)
+    if not cur_total or not base_total:
+        return None
+    if any(row["obs"] <= 0 for row in rows) or any(
+        row["obs"] <= 0 for row in base_rows
+    ):
+        return None
+    total = 0.0
+    for row, base_row in zip(rows, base_rows):
+        cur_share = row["obs"] / cur_total
+        base_share = base_row["obs"] / base_total
+        total += (cur_share - base_share) * math.log(cur_share / base_share)
+    return total
+
+
 def build_credit_dist(raw):
     coverage_rows = raw.get("vintage_11a_credit_score_coverage.csv")
     dist_rows = raw.get("vintage_11b_credit_score_dist.csv")
@@ -470,6 +495,149 @@ def build_credit_dist(raw):
             for week in weeks
             if (coverage[week]["scored"] or 0) < CREDIT_WEEK_MIN_OBS
         ],
+    }
+
+
+def build_credit_new_dist(raw):
+    """新戳额模型分在新客戳额全量样本上的覆盖与 5 档周度分布（块 11c/11d）。"""
+    coverage_rows = raw.get("vintage_11c_credit_sample_new_model_coverage.csv")
+    dist_rows = raw.get("vintage_11d_credit_sample_new_model_dist.csv")
+    if not coverage_rows or not dist_rows:
+        return None
+
+    coverage = {}
+    for row in coverage_rows:
+        week = (row.get("week_start") or "").strip()
+        if not week:
+            continue
+        coverage[week] = {
+            "sample": to_int(row.get("sample_cnt")),
+            "scored": to_int(row.get("scored_cnt")),
+            "missing": to_int(row.get("missing_cnt")),
+            "pct": to_float(row.get("coverage_pct")),
+        }
+
+    counts = {}
+    for row in dist_rows:
+        week = (row.get("week_start") or "").strip()
+        q = to_int(row.get("q"))
+        if week not in coverage or q is None or not 1 <= q <= 5:
+            continue
+        counts.setdefault(week, {})[q] = to_int(row.get("obs_cnt")) or 0
+
+    if "ALL" not in coverage or "ALL" not in counts:
+        return None
+
+    def bin_rows(week):
+        source = counts.get(week) or {}
+        rows = [{"q": q, "obs": source.get(q, 0)} for q in range(1, 6)]
+        total = sum(row["obs"] for row in rows)
+        for row in rows:
+            row["share"] = round(row["obs"] / total * 100, 2) if total else 0.0
+        return rows
+
+    weeks = sorted(week for week in coverage if week != "ALL" and counts.get(week))
+    all_rows = bin_rows("ALL")
+    weekly = {week: bin_rows(week) for week in weeks}
+    return {
+        "weeks": weeks,
+        "coverage": coverage,
+        "allCoverage": coverage["ALL"],
+        "tables": {
+            5: {
+                "all": all_rows,
+                "weeks": weekly,
+                "psi": {week: psi_between(weekly[week], all_rows) for week in weeks},
+            }
+        },
+        "unscoredWeeks": sorted(
+            week
+            for week in coverage
+            if week != "ALL"
+            and not counts.get(week)
+            and (coverage[week]["sample"] or 0) > 0
+        ),
+        "lowWeeks": [
+            week
+            for week in weeks
+            if (coverage[week]["scored"] or 0) < CREDIT_WEEK_MIN_OBS
+        ],
+    }
+
+
+def build_apply_score(raw):
+    """支用（发标申请）样本两套模型分的覆盖与 5 档周度分布（块 15/16）。"""
+    coverage_rows = raw.get("vintage_15_apply_score_coverage.csv")
+    dist_rows = raw.get("vintage_16_apply_score_quintile_week.csv")
+    if not coverage_rows or not dist_rows:
+        return None
+
+    coverage = {}
+    for row in coverage_rows:
+        week = (row.get("week_start") or "").strip()
+        if not week:
+            continue
+        coverage[week] = {
+            "apply": to_int(row.get("apply_cnt")),
+            "bidScored": to_int(row.get("bid_scored_cnt")),
+            "bidPct": to_float(row.get("bid_coverage_pct")),
+            "newScored": to_int(row.get("new_scored_cnt")),
+            "newPct": to_float(row.get("new_coverage_pct")),
+        }
+    if "ALL" not in coverage:
+        return None
+
+    counts = {}
+    for row in dist_rows:
+        version = (row.get("score_version") or "").strip()
+        segment = (row.get("segment") or "ALL").strip()
+        week = (row.get("week_start") or "").strip()
+        q = to_int(row.get("q"))
+        if (
+            version not in {key for key, _ in APPLY_SCORE_META}
+            or not week
+            or q is None
+            or not 1 <= q <= 5
+        ):
+            continue
+        counts.setdefault((version, segment), {}).setdefault(week, {})[q] = (
+            to_int(row.get("obs_cnt")) or 0
+        )
+
+    def bin_rows(source):
+        source = source or {}
+        rows = [{"q": q, "obs": source.get(q, 0)} for q in range(1, 6)]
+        total = sum(row["obs"] for row in rows)
+        for row in rows:
+            row["share"] = round(row["obs"] / total * 100, 2) if total else 0.0
+        return rows
+
+    segments = {}
+    all_weeks = set()
+    for seg_key, _, _ in SEGMENT_META:
+        versions = {}
+        for version, _ in APPLY_SCORE_META:
+            by_week = counts.get((version, seg_key)) or {}
+            weeks = sorted(
+                week
+                for week in by_week
+                if week != "ALL" and sum(by_week[week].values()) > 0
+            )
+            all_weeks.update(weeks)
+            all_rows = bin_rows(by_week.get("ALL"))
+            weekly = {week: bin_rows(by_week[week]) for week in weeks}
+            versions[version] = {
+                "weeks": weeks,
+                "all": all_rows,
+                "weeksShare": weekly,
+                "psi": {week: psi_between(weekly[week], all_rows) for week in weeks},
+            }
+        segments[seg_key] = versions
+
+    return {
+        "coverage": coverage,
+        "segments": segments,
+        "weeks": sorted(all_weeks),
     }
 
 
@@ -1088,6 +1256,8 @@ def build_data(raw):
         "segments": segments,
         "creditModel": credit_model,
         "creditDist": build_credit_dist(raw),
+        "creditNewDist": build_credit_new_dist(raw),
+        "applyScore": build_apply_score(raw),
         "funnel": build_new_user_funnel(raw),
     }
 
@@ -1098,7 +1268,7 @@ def header_html():
   <div class="hero-copy">
     <p class="eyebrow">WAGEGO · RISK MONITORING</p>
     <h1>WageGo 风险监控看板</h1>
-    <p class="sub">按放款周看首期逾期率（FPD），并按模型分分档拆分；新客视图另看全量戳额样本的模型分分布。除标注“金额”外，坏率均为笔数口径。</p>
+    <p class="sub">按放款周看首期逾期率（FPD），并按模型分分档拆分；整体看全量，新客视图另看戳额样本的模型分分布与出额转化漏斗，新老客视图均展示支用申请样本的模型分分布。除标注“金额”外，坏率均为笔数口径。</p>
   </div>
 </header>
 """
@@ -1545,8 +1715,8 @@ def score_week_table(view):
 """
 
 
-def credit_dist_table(view, bins):
-    upper = SCORE_BIN_UPPER if bins == 5 else CREDIT_SCORE_DECILE_UPPER
+def credit_dist_table(view, bins, upper=None):
+    upper = upper or (SCORE_BIN_UPPER if bins == 5 else CREDIT_SCORE_DECILE_UPPER)
     table = view["tables"][bins]
     weeks = view["weeks"]
     header = "".join(
@@ -1698,8 +1868,8 @@ def funnel_card_html(data):
         + "。",
     )
     return f"""
-<section class="card">
-  <h2>新客出额转化漏斗<span class="tag" title="固定展示新客出额样本，不随顶部客群切换">固定口径</span><span class="tag" title="出额审批通过率、借款申请审核通过率与成交率；均为用户级口径">业务指标</span></h2>
+<section class="card" data-seg-panel="New" hidden>
+  <h2>新客出额转化漏斗<span class="tag" title="仅在新客视图展示">仅新客视图</span><span class="tag" title="出额审批通过率、借款申请审核通过率与成交率；均为用户级口径">业务指标</span></h2>
   {scope}
   <p class="desc">从戳额申请到借款申请的转化漏斗；出额审批通过率看出额环节，借款审核通过率与成交率看借款环节。</p>
   <div class="kpis">{kpi_html}</div>
@@ -1719,46 +1889,39 @@ def funnel_card_html(data):
 
 def credit_dist_card_html(data):
     view = data.get("creditDist")
-    if not view:
+    new_view = data.get("creditNewDist")
+    if not view and not new_view:
         return ""
-    all_cov = view["allCoverage"]
-    weeks = view["weeks"]
-    week_text = f"{weeks[0]} ~ {weeks[-1]}" if weeks else "—"
-    scope = scope_meta_html(
-        f"戳额周（周一）{week_text}；样本覆盖全历史，不设起止时间窗，随数据同步滚动。",
-        "额度申请表（isactive=1、biz_type=400）优先，风控事件表"
-        "（is_active=1、biz_id=10000）兜底 → 每个 user_id 取全历史最早 credit_time 一条 → "
-        "用戳额 flow_id 关联模型日志（model_code=aus_wagego_new_risk_3rd_v1_0）取最新分 → "
-        "负分 / 无日志算缺分，分档只算有分用户。此样本不按 user_type 过滤，"
-        "“新客”由每个用户的首次戳额定义。",
-    )
-    low_text = (
-        f"{'、'.join(week[5:] for week in view['lowWeeks'])} 有分样本少于 "
-        f"{CREDIT_WEEK_MIN_OBS}，灰显仅参考。"
-        if view["lowWeeks"]
-        else ""
-    )
-    unscored_text = (
-        f"另有 {len(view['unscoredWeeks'])} 个周无有分样本"
-        f"（{view['unscoredWeeks'][0]} ~ {view['unscoredWeeks'][-1]}），未列入表格。"
-        if view["unscoredWeeks"]
-        else ""
-    )
-    note = (
-        "样本为每个用户全历史首次戳额申请（额度申请表优先、风控事件兜底），不设时间窗；"
-        "分数取戳额时点线上模型日志最新一条，负分按缺分处理。"
-        f"全量 {fmt_int(all_cov.get('sample'))} 人中 {fmt_int(all_cov.get('scored'))} 人有分"
-        f"（{fmt_rate(all_cov.get('pct'))}）；表内为戳额周（周一开始）{week_text}，"
-        "分母为当周有分用户。"
-        "分数越高档位越高；5 档为固定 10 档相邻两档合并。"
-        "PSI 以全量分布为基线：&lt;0.10 稳定，0.10–0.25 关注，≥0.25 预警。"
-        f"{low_text}{unscored_text}"
-    )
-    return f"""
-<section class="card" data-seg-panel="New" hidden>
-  <h2>新客戳额模型分分布{TAG_CREDIT}</h2>
-  {scope}
-  <p class="desc">按戳额时点的线上模型分，展示全历史新客首次戳额样本按戳额周（周一开始）的 5 档 / 10 档分布；不依赖放款和 FPD 成熟度，用于监控进件客群的分数结构。该卡片仅在“新客”视图展示。</p>
+
+    online_panel = ""
+    if view:
+        all_cov = view["allCoverage"]
+        weeks = view["weeks"]
+        week_text = f"{weeks[0]} ~ {weeks[-1]}" if weeks else "—"
+        low_text = (
+            f"{'、'.join(week[5:] for week in view['lowWeeks'])} 有分样本少于 "
+            f"{CREDIT_WEEK_MIN_OBS}，灰显仅参考。"
+            if view["lowWeeks"]
+            else ""
+        )
+        unscored_text = (
+            f"另有 {len(view['unscoredWeeks'])} 个周无有分样本"
+            f"（{view['unscoredWeeks'][0]} ~ {view['unscoredWeeks'][-1]}），未列入表格。"
+            if view["unscoredWeeks"]
+            else ""
+        )
+        note = (
+            "样本为每个用户全历史首次戳额申请（额度申请表优先、风控事件兜底），不设时间窗；"
+            "分数取戳额时点线上模型日志最新一条，负分按缺分处理。"
+            f"全量 {fmt_int(all_cov.get('sample'))} 人中 {fmt_int(all_cov.get('scored'))} 人有分"
+            f"（{fmt_rate(all_cov.get('pct'))}）；表内为戳额周（周一开始）{week_text}，"
+            "分母为当周有分用户。"
+            "分数越高档位越高；5 档为固定 10 档相邻两档合并。"
+            "PSI 以全量分布为基线：&lt;0.10 稳定，0.10–0.25 关注，≥0.25 预警。"
+            f"{low_text}{unscored_text}"
+        )
+        online_panel = f"""
+<div data-credit-model-panel="online">
   <div class="chart-head">
     <div class="seg" role="group" aria-label="分档粒度">
       <button type="button" class="on" data-credit-bins="5" aria-pressed="true">5档</button>
@@ -1768,6 +1931,191 @@ def credit_dist_card_html(data):
   <div data-credit-table="5">{credit_dist_table(view, 5)}</div>
   <div data-credit-table="10" hidden>{credit_dist_table(view, 10)}</div>
   <p class="note">{note}</p>
+</div>
+"""
+
+    new_panel = ""
+    if new_view:
+        new_cov = new_view["allCoverage"]
+        new_weeks = new_view["weeks"]
+        new_week_text = f"{new_weeks[0]} ~ {new_weeks[-1]}" if new_weeks else "—"
+        new_note = (
+            "新戳额模型分（new_wagego_credit_v1_0）在同一新客戳额全量样本上的固定 5 档分布；"
+            f"离线打分覆盖 2026-08-01 ~ 2026-10-23，全量 {fmt_int(new_cov.get('sample'))} 人中 "
+            f"{fmt_int(new_cov.get('scored'))} 人有分（{fmt_rate(new_cov.get('pct'))}）；"
+            f"表内戳额周 {new_week_text}。"
+            "10 月下旬之后的新分需等线上日志接入，周覆盖会出现缺口。"
+            "分数越高档位越高；PSI 以全量分布为基线：&lt;0.10 稳定，0.10–0.25 关注，≥0.25 预警。"
+        )
+        new_hidden = " hidden" if view else ""
+        new_panel = f"""
+<div data-credit-model-panel="credit"{new_hidden}>
+  {credit_dist_table(new_view, 5, upper=CREDIT_MODEL_BIN_UPPER)}
+  <p class="note">{new_note}</p>
+</div>
+"""
+
+    toggle = ""
+    if view and new_view:
+        toggle = """
+  <div class="chart-head">
+    <div class="seg" role="group" aria-label="模型版本">
+      <button type="button" class="on" data-credit-model-version="online" aria-pressed="true">线上模型</button>
+      <button type="button" data-credit-model-version="credit" aria-pressed="false">新戳额模型</button>
+    </div>
+  </div>"""
+
+    scope = scope_meta_html(
+        "戳额周（周一）；样本覆盖全历史，不设起止时间窗，随数据同步滚动。"
+        "线上模型分取戳额时点模型日志；新戳额模型分取离线打分样本（2026-08-01 ~ 2026-10-23）。",
+        "额度申请表（isactive=1、biz_type=400）优先，风控事件表"
+        "（is_active=1、biz_id=10000）兜底 → 每个 user_id 取全历史最早 credit_time 一条。"
+        "此样本不按 user_type 过滤，“新客”由每个用户的首次戳额定义。",
+    )
+    return f"""
+<section class="card" data-seg-panel="New" hidden>
+  <h2>新客戳额模型分分布{TAG_CREDIT}</h2>
+  {scope}
+  <p class="desc">展示全历史新客首次戳额样本按戳额周（周一开始）的模型分分布，可切换线上模型与新戳额模型；不依赖放款和 FPD 成熟度，用于监控进件客群的分数结构。该卡片仅在“新客”视图展示。</p>
+  {toggle}
+  {online_panel}
+  {new_panel}
+</section>
+"""
+
+
+def apply_score_table(view, coverage, version):
+    upper = SCORE_BIN_UPPER if version == "bid_3rd_v1_0" else CREDIT_MODEL_BIN_UPPER
+    scored_key = "bidScored" if version == "bid_3rd_v1_0" else "newScored"
+    pct_key = "bidPct" if version == "bid_3rd_v1_0" else "newPct"
+    weeks = view["weeks"]
+    header = "".join(f"<th title='{week}'>{week[5:]}</th>" for week in weeks)
+
+    def cov(week, key):
+        return (coverage.get(week) or {}).get(key)
+
+    def dim_class(week):
+        return " dim" if (cov(week, scored_key) or 0) < CREDIT_WEEK_MIN_OBS else ""
+
+    rows = []
+    for row in view["all"]:
+        cells = [
+            f"<td>{row['q']}档</td>",
+            f"<td class='range'>{score_range_text(row['q'], upper)}</td>",
+            f"<td class='num'><b>{fmt_rate(row['share'])}</b></td>",
+        ]
+        for week in weeks:
+            week_row = view["weeksShare"][week][row["q"] - 1]
+            cells.append(f"<td class='num{dim_class(week)}'>{fmt_rate(week_row['share'])}</td>")
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+
+    def summary_row(label, all_value, value_fn):
+        cells = [
+            f"<td>{label}</td>",
+            "<td class='range'>—</td>",
+            f"<td class='num'>{all_value}</td>",
+        ]
+        for week in weeks:
+            cells.append(f"<td class='num{dim_class(week)}'>{value_fn(week)}</td>")
+        rows.append(f"<tr>{''.join(cells)}</tr>")
+
+    summary_row(
+        "申请样本", fmt_int(cov("ALL", "apply")), lambda week: fmt_int(cov(week, "apply"))
+    )
+    summary_row(
+        "有分样本",
+        fmt_int(cov("ALL", scored_key)),
+        lambda week: fmt_int(cov(week, scored_key)),
+    )
+    summary_row(
+        "有分率", fmt_rate(cov("ALL", pct_key)), lambda week: fmt_rate(cov(week, pct_key))
+    )
+
+    psi_cells = [
+        "<td>PSI（vs 全期）</td>",
+        "<td class='range'>—</td>",
+        "<td class='num dim'>—</td>",
+    ]
+    for week in weeks:
+        value = view["psi"].get(week)
+        scored = cov(week, scored_key) or 0
+        if value is None:
+            psi_cells.append("<td class='num dim'>—</td>")
+            continue
+        level = "alert" if value >= 0.25 else "watch" if value >= 0.1 else ""
+        cls = (
+            "num dim"
+            if scored < CREDIT_WEEK_MIN_OBS
+            else (f"num {level}" if level else "num")
+        )
+        psi_cells.append(
+            f"<td class='{cls}' title='全期分布为基线；&lt;0.10 稳定，0.10–0.25 关注，≥0.25 预警'>"
+            f"{value:.2f}</td>"
+        )
+    rows.append(f"<tr>{''.join(psi_cells)}</tr>")
+
+    return f"""
+<div class="table-wrap">
+<div class="subhead">分档 × 申请周（周一开始）</div>
+<table class="compact">
+  <thead><tr><th>档位</th><th>分数区间</th><th>全期</th>{header}</tr></thead>
+  <tbody>{''.join(rows)}</tbody>
+</table>
+</div>
+"""
+
+
+def apply_score_card_html(data):
+    view = data.get("applyScore")
+    if not view:
+        return ""
+    weeks = view["weeks"]
+    week_text = f"{weeks[0]} ~ {weeks[-1]}" if weeks else "—"
+    all_cov = view["coverage"].get("ALL") or {}
+    scope = scope_meta_html(
+        f"申请周（周一）{week_text}；分档汇总为全期，分档 × 周表按申请周。",
+        "样本 = Y 标签主表全部借款申请（apply_time 非空），含未成交申请，不要求 FPD 成熟；"
+        "现行 bid 分取主表申请时点分；新戳额分取发标时点模型日志（LN 流水）并以离线发标打分兜底；"
+        "无成熟标签，只监控分数结构与覆盖，不计算坏率。",
+    )
+    blocks = []
+    for seg_key, seg_name, seg_color in SEGMENT_META:
+        versions = view["segments"][seg_key]
+        toggles = "".join(
+            f'<button type="button" class="{"on" if index == 0 else ""}" '
+            f'data-apply-score-version="{version}" '
+            f'aria-pressed="{"true" if index == 0 else "false"}">{label}</button>'
+            for index, (version, label) in enumerate(APPLY_SCORE_META)
+        )
+        panels = []
+        for index, (version, _) in enumerate(APPLY_SCORE_META):
+            hidden = "" if index == 0 else " hidden"
+            panels.append(
+                f'<div data-apply-score-panel="{version}"{hidden}>'
+                f'{apply_score_table(versions[version], view["coverage"], version)}</div>'
+            )
+        note = (
+            "支用样本无 FPD 成熟标签，只监控分数分布与覆盖，不计算坏率。"
+            f"全期覆盖：现行 bid 分 {fmt_rate(all_cov.get('bidPct'))}，"
+            f"新戳额分 {fmt_rate(all_cov.get('newPct'))}（整体口径）。"
+            "1档最低分，5档最高分；两套分沿用各自成交监控的固定切点。"
+            "PSI 以全期分布为基线：&lt;0.10 稳定，0.10–0.25 关注，≥0.25 预警。"
+            "新戳额分 2026-11-07 ~ 11-11 线上与离线均无分，该段周覆盖偏低。"
+        )
+        blocks.append(
+            seg_panel(
+                seg_key,
+                f'<div class="chart-head"><div class="seg" role="group" aria-label="模型版本">{toggles}</div></div>'
+                + "".join(panels)
+                + f'<p class="note">{note}</p>',
+            )
+        )
+    return f"""
+<section class="card">
+  <h2>支用（发标申请）模型分分布<span class="tag" title="样本为全部借款申请，含未成交与未成熟申请">样本：支用申请</span></h2>
+  {scope}
+  <p class="desc">按申请周监控支用申请客群的分数结构，同时对比现行 bid 分与新戳额分；整体、新客、老客视图分别展示对应客群。</p>
+  {''.join(blocks)}
 </section>
 """
 
@@ -2561,6 +2909,7 @@ __WEEK_CARD__
 __SCORE_CARD__
 __CREDIT_DIST_CARD__
 __STABILITY_CARD__
+__APPLY_SCORE_CARD__
 __QUALITY_CARD__
 __FUNNEL_CARD__
 __FOOTER__
@@ -2971,6 +3320,34 @@ creditBinButtons.forEach(button => {
   });
 });
 
+const creditModelButtons = document.querySelectorAll('[data-credit-model-version]');
+creditModelButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    creditModelButtons.forEach(item => {
+      const active = item === button;
+      item.classList.toggle('on', active);
+      item.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-credit-model-panel]').forEach(panel => {
+      panel.hidden = panel.dataset.creditModelPanel !== button.dataset.creditModelVersion;
+    });
+  });
+});
+
+const applyScoreButtons = document.querySelectorAll('[data-apply-score-version]');
+applyScoreButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    applyScoreButtons.forEach(item => {
+      const active = item.dataset.applyScoreVersion === button.dataset.applyScoreVersion;
+      item.classList.toggle('on', active);
+      item.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-apply-score-panel]').forEach(panel => {
+      panel.hidden = panel.dataset.applyScorePanel !== button.dataset.applyScoreVersion;
+    });
+  });
+});
+
 function renderScoreChartFor(credit) {
   const curves = credit ? DATA.creditScoreCurves : DATA.scoreCurves;
   if (!curves || !curves.ALL) return;
@@ -3281,6 +3658,7 @@ def render_html(data, generated_at, input_name, generated_iso):
         "__SCORE_CARD__": score_card_html(data),
         "__CREDIT_DIST_CARD__": credit_dist_card_html(data),
         "__STABILITY_CARD__": stability_card_html(data),
+        "__APPLY_SCORE_CARD__": apply_score_card_html(data),
         "__QUALITY_CARD__": quality_card_html(data),
         "__FOOTER__": footer_html(data, generated_at, input_name),
         "__DATA_JSON__": data_json,
