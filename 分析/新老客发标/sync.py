@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """同步新老客发标模型分分析输入：执行 wagego_07_新老客发标模型分分析.sql。
 
-产出：同步数据/ 下的发标全量样本 + 新发标模型分，以及 bid_model_analysis_data.zip。
-只服务新老客发标模型分分析；新客戳额分析见 sync_new_user_credit_analysis.py，
-监控看板见 sync_vintage.py。共用层仅 sync_common.py。
+产出：数据/新老客发标/ 下的发标全量样本 + 新发标模型分，以及数据/新老客发标/bid_model_analysis_data.zip。
+只服务新老客发标模型分分析；新客戳额分析见 分析/新客戳额/sync.py，
+监控看板见 分析/vintage看板/sync.py。共用层仅 sync_common.py。
 """
 
 from __future__ import annotations
@@ -12,9 +12,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from sync_common import (
-    RAW_DIR,
-    RAW_DIR_NAME,
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+
+from sync_common import (  # noqa: E402
     export_sql_blocks,
     load_query_fn,
     split_statements,
@@ -28,13 +30,15 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 
-PROJECT_DIR = Path(__file__).resolve().parent
-SQL_FILE = PROJECT_DIR / "wagego_07_新老客发标模型分分析.sql"
-ZIP_FILE = PROJECT_DIR / "bid_model_analysis_data.zip"
-FAILED_FILE = PROJECT_DIR / "bid_model_analysis_sync_failed.csv"
+ANALYSIS_DIR = Path(__file__).resolve().parent
+SQL_FILE = ANALYSIS_DIR / "wagego_07_新老客发标模型分分析.sql"
+RAW_DIR = PROJECT_DIR / "数据" / "新老客发标"
+RAW_DIR_NAME = "数据/新老客发标"
+ZIP_FILE = RAW_DIR / "bid_model_analysis_data.zip"
+FAILED_FILE = RAW_DIR / "bid_model_analysis_sync_failed.csv"
 
 # 块号 → 输出文件。顺序必须与 SQL 中的 SELECT 一一对应。
-# 文件名是 build_bid_model_analysis.py 的默认输入名，导出时保持同名。
+# 文件名是本目录 build.py 的默认输入名，导出时保持同名。
 QUERY_SPECS = (
     {
         "id": "1",
@@ -49,7 +53,7 @@ def build_queries():
     if len(statements) != len(QUERY_SPECS):
         raise ValueError(
             f"SQL 查询数 {len(statements)} 与 QUERY_SPECS 的 {len(QUERY_SPECS)} 条不一致；"
-            "请同步更新 sync_bid_model_analysis.py 的块号/文件名"
+            "请同步更新 分析/新老客发标/sync.py 的块号/文件名"
         )
     return [
         {**spec, "sql": statement, "table": table_name_from_sql(statement)}
@@ -95,7 +99,12 @@ def main(argv=None):
         return 2
 
     succeeded, failed = export_sql_blocks(
-        queries, query_fn, zip_path=ZIP_FILE, failed_path=FAILED_FILE
+        queries,
+        query_fn,
+        raw_dir=RAW_DIR,
+        raw_dir_name=RAW_DIR_NAME,
+        zip_path=ZIP_FILE,
+        failed_path=FAILED_FILE,
     )
 
     print(f"\n成功：{len(succeeded)} / 本次失败：{len(failed)}")

@@ -19,9 +19,10 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-PROJECT_DIR = Path(__file__).resolve().parent
-DEFAULT_INPUT = PROJECT_DIR / "vintage_data.zip"
-DEFAULT_OUTPUT = PROJECT_DIR / "vintage_监控看板.html"
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+ANALYSIS_DIR = Path(__file__).resolve().parent
+DEFAULT_INPUT = PROJECT_DIR / "数据" / "vintage看板" / "vintage_data.zip"
+DEFAULT_OUTPUT = ANALYSIS_DIR / "vintage_监控看板.html"
 
 WINDOWS = (1, 3, 7, 14, 15, 30)
 WINDOW_LABELS = {1: "FPD1", 3: "FPD3", 7: "FPD7", 14: "FPD14", 15: "FPD15", 30: "FPD30"}
@@ -126,7 +127,7 @@ def read_csvs(input_path: Path):
         }
     elif input_path.is_file() and input_path.suffix.lower() == ".zip":
         with zipfile.ZipFile(input_path) as archive:
-            # 只读看板需要的块结果（zip 由 sync_vintage.py 生成）
+            # 只读看板需要的块结果（zip 由 分析/vintage看板/sync.py 生成）
             files = {
                 Path(name).name: archive.read(name)
                 for name in archive.namelist()
@@ -626,7 +627,7 @@ def build_data(raw):
     if not all(week_rows_by_seg.get(seg) for seg in ("ALL", "New", "Old")):
         raise ValueError(
             "vintage_04_week.csv 缺少 ALL / New / Old 分组；"
-            "请重新执行 sync_vintage.py 同步块 4"
+            "请重新执行 分析/vintage看板/sync.py 同步块 4"
         )
     week_rows = week_rows_by_seg["ALL"]
 
@@ -682,7 +683,7 @@ def build_data(raw):
     if not all(score_week_by_seg.get(seg) for seg in ("ALL", "New", "Old")):
         raise ValueError(
             "vintage_06_score_quintile_week.csv 缺少 ALL / New / Old 分组；"
-            "请重新执行 sync_vintage.py 同步块 6"
+            "请重新执行 分析/vintage看板/sync.py 同步块 6"
         )
     score_week = score_week_by_seg["ALL"]
     score_week_weeks = score_week_week_list(score_week, chart_weeks)
@@ -703,7 +704,7 @@ def build_data(raw):
     if not all(weekly_auc_by_seg.get(seg) for seg in ("ALL", "New", "Old")):
         raise ValueError(
             "vintage_08_weekly_auc.csv 缺少 ALL / New / Old 分组；"
-            "请重新执行 sync_vintage.py 同步块 8"
+            "请重新执行 分析/vintage看板/sync.py 同步块 8"
         )
     auc_windows = [
         window
@@ -1970,7 +1971,7 @@ def footer_html(data, generated_at, input_name):
     <li>新老客：user_type 按首笔放款。分客群 FPD14 周度值与金额坏率未单独同步，新客 / 老客视图不展示 FPD14 金额与周度列。</li>
     <li>客群切换：顶部“整体 / 新客 / 老客”按钮联动 FPD 曲线、周度表、分档表与排序力表；新客 / 老客视图以所选客群实线对比整体虚线。数据质量卡固定为整体口径。</li>
     <li>模型分：按新客风险 1.0 固定阈值切 5 档（{bin_text}），1档最低分、5档最高分；分数越高越坏。固定阈值下各档样本占比不等。</li>
-    <li>数据源：{escape(input_name)}（{data['csvCount']} 个 CSV）；生成脚本：build_vintage_dashboard.py；生成时间：{escape(generated_at)}。</li>
+    <li>数据源：{escape(input_name)}（{data['csvCount']} 个 CSV）；生成脚本：分析/vintage看板/build.py；生成时间：{escape(generated_at)}。</li>
   </ul>
 </footer>
 """
@@ -2913,6 +2914,7 @@ def main(argv=None):
     generated_at = generated_dt.strftime("%Y-%m-%d %H:%M %Z")
     generated_iso = generated_dt.isoformat(timespec="seconds")
     html = render_html(data, generated_at, input_path.name, generated_iso)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")
     print(f"已生成：{output_path}")
     print(f"图表周：{data['chartWeeks'][0]['week']} ~ {data['latestWeek']['week']}（{len(data['chartWeeks'])} 周）")

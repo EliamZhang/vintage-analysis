@@ -4,11 +4,11 @@
 样本：wagego_07 同步的发标全量样本（wagego_02 的 all_user_bid，含未成交申请）
       + 新发标模型分 aus_wagego_bid_20261123_v1_0_txn_lgb_score。
 分箱：模型侧固定十分位切点（见 BID_DECILE_*），不随样本等笔数切档。
-完全独立于 build_new_user_credit_analysis.py；共用层仅 sync_common.py。
+完全独立于 分析/新客戳额/build.py；共用层仅 sync_common.py。
 
 用法：
-    python build_bid_model_analysis.py
-    python build_bid_model_analysis.py --sample-csv 样例.xlsx --output 输出.html
+    python 分析/新老客发标/build.py
+    python 分析/新老客发标/build.py --sample-csv 样例.xlsx --output 输出.html
 """
 
 from __future__ import annotations
@@ -30,15 +30,16 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-PROJECT_DIR = Path(__file__).resolve().parent
-RAW_DIR = PROJECT_DIR / "同步数据"
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+ANALYSIS_DIR = Path(__file__).resolve().parent
+RAW_DIR = PROJECT_DIR / "数据" / "新老客发标"
 
 SAMPLE_NAME = "table_tmp_eliam_wagego_all_user_bid_v1_0_txn_lgb_20260801_20261116.csv"
 
 
 def _input_path(name: str) -> Path:
-    """优先用同步脚本输出到 同步数据/ 的文件，其次用项目根目录的手工导出。"""
-    for folder in (RAW_DIR, PROJECT_DIR):
+    """优先用同步脚本输出到 数据/新老客发标/ 的文件，其次用本目录的手工导出。"""
+    for folder in (RAW_DIR, ANALYSIS_DIR):
         path = folder / name
         if path.exists():
             return path
@@ -46,7 +47,7 @@ def _input_path(name: str) -> Path:
 
 
 DEFAULT_SAMPLE = _input_path(SAMPLE_NAME)
-DEFAULT_OUTPUT = PROJECT_DIR / "新老客发标_模型分分析.html"
+DEFAULT_OUTPUT = ANALYSIS_DIR / "新老客发标_模型分分析.html"
 
 MODEL_NAME = "aus_wagego_bid_20261123_v1_0_txn_lgb_score"
 MODEL_SHORT = "新发标模型"
@@ -631,7 +632,7 @@ def footer_html(data, generated_at: str, sample_name: str) -> str:
             分月 AUC 仅在当月坏样本与好样本各 ≥ {fmt_int(meta['min_bad'])} 笔时计算，其余月份显示为空。</li>
         <li><b>模型</b>：{escape(MODEL_NAME)}（{escape(MODEL_DESC)}）；报告为单模型评估，无新旧模型对比。</li>
         <li><b>数据源</b>：wagego_07_新老客发标模型分分析.sql 块 1（{escape(sample_name)}）；
-            生成脚本 build_bid_model_analysis.py；生成时间 {escape(generated_at)}。</li>
+            生成脚本 分析/新老客发标/build.py；生成时间 {escape(generated_at)}。</li>
       </ul>
     </footer>
     """
@@ -1439,6 +1440,7 @@ def main(argv=None):
     html = build_html(data, generated_at, path.name)
 
     output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(html, encoding="utf-8")
 
     meta = data["meta"]

@@ -3,12 +3,12 @@
 -- 数据源：
 --   1) 发标全量样本（wagego_02 的 all_user_bid，含未成交申请）叠加新发标模型分；
 --      Y 标签 y_fpd7_ovd / y_fpd15_ovd 只对放款成功的申请成熟
--- 说明：查询顺序与 sync_bid_model_analysis.py 的 QUERY_SPECS 一一对应；
---       输出文件名由 QUERY_SPECS 指定，供 build_bid_model_analysis.py 直接读取。
+-- 说明：查询顺序与 分析/新老客发标/sync.py 的 QUERY_SPECS 一一对应；
+--       输出文件名由 QUERY_SPECS 指定，供 分析/新老客发标/build.py 直接读取。
 
 
 -- ============================================================
--- 块 1：发标全量样本 + 新发标模型分（build_bid_model_analysis.py --sample-csv）
+-- 块 1：发标全量样本 + 新发标模型分（分析/新老客发标/build.py --sample-csv）
 -- 模型分列：aus_wagego_bid_20261123_v1_0_txn_lgb_score
 -- 样本列：user_id / sample_datetime / flow_id / user_type / sample_month / sample_quarter
 -- ============================================================

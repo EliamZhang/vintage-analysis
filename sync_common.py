@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """同步脚本共用层：路径、SQL 文件解析、Hive 查询执行、CSV 落盘与打包。
 
-两个同步入口各自负责一条链路的 SQL 文件与输出清单，共用这里的执行与落盘逻辑：
-    sync_vintage.py                   监控看板的 13 个 vintage 聚合查询
-    sync_new_user_credit_analysis.py  新客戳额模型分分析的底表
+三个同步入口各自负责一条链路的 SQL 文件与输出清单，共用这里的执行与落盘逻辑：
+    分析/vintage看板/sync.py     监控看板的 14 个 vintage 聚合查询
+    分析/新客戳额/sync.py        新客戳额模型分分析的底表
+    分析/新老客发标/sync.py      新老客发标模型分分析的底表
 查询语句只写在对应的 .sql 文件里，本模块和入口脚本都不拼接业务 SQL。
 数据库连接由外部 hive_config.query_to_df(sql) 提供，本模块不负责建连。
 """
@@ -25,8 +26,6 @@ if hasattr(sys.stderr, "reconfigure"):
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
-RAW_DIR = PROJECT_DIR / "同步数据"
-RAW_DIR_NAME = "同步数据"
 
 _BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", flags=re.S)
 _LINE_COMMENT_RE = re.compile(r"--[^\n]*")
@@ -94,18 +93,19 @@ def write_failures(failed, path):
     print(f"\n失败清单：{path.resolve()}")
 
 
-def export_sql_blocks(blocks, query_fn, *, zip_path, failed_path):
+def export_sql_blocks(blocks, query_fn, *, raw_dir, raw_dir_name, zip_path, failed_path):
     """执行 SQL 块并逐块落盘；blocks 需含 id/title/table/file/sql。返回 (成功, 失败)。"""
     succeeded = []
     failed = []
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    raw_dir = Path(raw_dir)
+    raw_dir.mkdir(parents=True, exist_ok=True)
 
     for block in blocks:
-        path = RAW_DIR / block["file"]
-        print(f"\n[{block['id']}] {block['title']} | {block['table']} → {RAW_DIR_NAME}/{block['file']}")
+        path = raw_dir / block["file"]
+        print(f"\n[{block['id']}] {block['title']} | {block['table']} → {raw_dir_name}/{block['file']}")
         try:
             rows, columns = run_query_to_csv(block["sql"], path, query_fn)
-            succeeded.append((path, f"{RAW_DIR_NAME}/{block['file']}"))
+            succeeded.append((path, f"{raw_dir_name}/{block['file']}"))
             print(f"成功 | {rows} 行 × {len(columns)} 列 | {path}")
         except Exception as exc:
             failed.append(
@@ -114,20 +114,21 @@ def export_sql_blocks(blocks, query_fn, *, zip_path, failed_path):
             print(f"失败 | {exc}")
 
     write_failures(failed, failed_path)
-    zip_outputs(succeeded, zip_path)
+    zip_outputs(succeeded, zip_path, raw_dir_name)
     return succeeded, failed
 
 
-def zip_outputs(outputs, zip_path):
+def zip_outputs(outputs, zip_path, root_name):
     """outputs: [(本地路径, zip 内路径)]；没有成功结果时不更新 zip。"""
     if not outputs:
         print(f"\n本次没有可打包的成功结果，未更新 {Path(zip_path).name}")
         return
 
     zip_path = Path(zip_path)
+    zip_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = zip_path.with_suffix(".zip.tmp")
     with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(f"{RAW_DIR_NAME}/", "")
+        archive.writestr(f"{root_name}/", "")
         for path, arcname in outputs:
             archive.write(path, arcname)
     temporary.replace(zip_path)
