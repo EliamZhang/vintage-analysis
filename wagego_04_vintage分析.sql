@@ -1174,3 +1174,478 @@ SELECT
 FROM agg
 ORDER BY week_start
 ;
+
+
+-- ============================================================
+-- 新戳额模型（new_wagego_credit_v1_0）监控块
+--   分数来源拼接：
+--     历史段  model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 的
+--             aus_new_wagego_credit_20261028_v1_0_txn_lgb_score（2026-08-01 ~ 2026-11-06）
+--     线上段  ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log
+--             model_code = 'new_wagego_credit_v1_0'，发标时点 scene_id = 'LN%'（2026-11-12 起）
+--   2026-11-07 ~ 2026-11-11 两侧都无分，覆盖率会出现缺口。
+--   负分按缺分处理；分档用新戳额模型的固定十分位切点，5 档取 20/40/60/80 分位：
+--     0.048595 / 0.073145 / 0.103095 / 0.153057
+-- ============================================================
+
+
+-- ============================================================
+-- 块 13a：新戳额模型分覆盖（FPD15 成熟样本）
+-- ============================================================
+WITH credit_log AS (
+    SELECT
+         r.scene_id
+        ,CAST(GET_JSON_OBJECT(r.model_output,
+              '$.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score') AS DOUBLE) AS credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY r.scene_id
+            ORDER BY CAST(r.start_time AS TIMESTAMP) DESC, CAST(r.inserttime AS TIMESTAMP) DESC
+        ) AS rn
+    FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log r
+    WHERE r.model_code = 'new_wagego_credit_v1_0'
+      AND r.scene_id LIKE 'LN%'
+),
+credit_raw AS (
+    SELECT
+         u.flow_id
+        ,u.credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY u.flow_id ORDER BY u.source_priority
+        ) AS rn
+    FROM (
+        SELECT r.scene_id AS flow_id, r.credit_score, 1 AS source_priority
+        FROM credit_log r
+        WHERE r.rn = 1
+        UNION ALL
+        SELECT
+             b.flow_id
+            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,2 AS source_priority
+        FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
+        WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
+    ) u
+),
+credit_map AS (
+    SELECT flow_id, credit_score
+    FROM credit_raw
+    WHERE rn = 1
+      AND credit_score > 0
+),
+base AS (
+    SELECT
+         t.loan_no
+        ,cm.credit_score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    LEFT JOIN credit_map cm
+           ON CAST(t.loan_no AS STRING) = CAST(cm.flow_id AS STRING)
+    WHERE t.y_fpd15_obs = 1
+)
+SELECT
+     COUNT(*)                                                        AS obs_cnt
+    ,COUNT(credit_score)                                             AS scored_cnt
+    ,SUM(CASE WHEN credit_score IS NULL THEN 1 ELSE 0 END)           AS missing_cnt
+    ,ROUND(CAST(COUNT(credit_score) AS DOUBLE) / COUNT(*) * 100, 2)  AS coverage_pct
+FROM base
+;
+
+
+-- ============================================================
+-- 块 13b：新戳额模型分固定 5 箱 × 新老客（FPD15 成熟样本）
+--   第1箱=最低分，第5箱=最高分；按新戳额模型固定阈值切分
+-- ============================================================
+WITH credit_log AS (
+    SELECT
+         r.scene_id
+        ,CAST(GET_JSON_OBJECT(r.model_output,
+              '$.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score') AS DOUBLE) AS credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY r.scene_id
+            ORDER BY CAST(r.start_time AS TIMESTAMP) DESC, CAST(r.inserttime AS TIMESTAMP) DESC
+        ) AS rn
+    FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log r
+    WHERE r.model_code = 'new_wagego_credit_v1_0'
+      AND r.scene_id LIKE 'LN%'
+),
+credit_raw AS (
+    SELECT
+         u.flow_id
+        ,u.credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY u.flow_id ORDER BY u.source_priority
+        ) AS rn
+    FROM (
+        SELECT r.scene_id AS flow_id, r.credit_score, 1 AS source_priority
+        FROM credit_log r
+        WHERE r.rn = 1
+        UNION ALL
+        SELECT
+             b.flow_id
+            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,2 AS source_priority
+        FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
+        WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
+    ) u
+),
+credit_map AS (
+    SELECT flow_id, credit_score
+    FROM credit_raw
+    WHERE rn = 1
+      AND credit_score > 0
+),
+base AS (
+    SELECT
+         t.loan_no
+        ,t.user_type
+        ,t.y_fpd15_ovd                                               AS label
+        ,cm.credit_score                                             AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    JOIN credit_map cm
+      ON CAST(t.loan_no AS STRING) = CAST(cm.flow_id AS STRING)
+    WHERE t.y_fpd15_obs = 1
+),
+scored AS (
+    SELECT
+         b.loan_no
+        ,b.user_type
+        ,b.label
+        ,b.score
+        ,CASE
+             WHEN b.score <= 0.048595 THEN 1
+             WHEN b.score <= 0.073145 THEN 2
+             WHEN b.score <= 0.103095 THEN 3
+             WHEN b.score <= 0.153057 THEN 4
+             ELSE 5
+         END                                                          AS q
+    FROM base b
+)
+SELECT
+     'ALL'                                                           AS segment
+    ,q
+    ,MIN(score)                                                      AS score_min
+    ,MAX(score)                                                      AS score_max
+    ,ROUND(AVG(score), 4)                                            AS score_avg
+    ,COUNT(*)                                                        AS obs_cnt
+    ,SUM(label)                                                      AS bad_cnt
+    ,ROUND(CAST(SUM(label) AS DOUBLE) / COUNT(*) * 100, 2)           AS bad_rate_pct
+FROM scored
+GROUP BY q
+UNION ALL
+SELECT
+     user_type                                                       AS segment
+    ,q
+    ,MIN(score)                                                      AS score_min
+    ,MAX(score)                                                      AS score_max
+    ,ROUND(AVG(score), 4)                                            AS score_avg
+    ,COUNT(*)                                                        AS obs_cnt
+    ,SUM(label)                                                      AS bad_cnt
+    ,ROUND(CAST(SUM(label) AS DOUBLE) / COUNT(*) * 100, 2)           AS bad_rate_pct
+FROM scored
+GROUP BY user_type, q
+ORDER BY CASE segment WHEN 'ALL' THEN 0 WHEN 'New' THEN 1 ELSE 2 END, q
+;
+
+
+-- ============================================================
+-- 块 13c：新戳额模型分固定 5 箱 × 放款周
+--   输出 ALL / New / Old 三组
+-- ============================================================
+WITH credit_log AS (
+    SELECT
+         r.scene_id
+        ,CAST(GET_JSON_OBJECT(r.model_output,
+              '$.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score') AS DOUBLE) AS credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY r.scene_id
+            ORDER BY CAST(r.start_time AS TIMESTAMP) DESC, CAST(r.inserttime AS TIMESTAMP) DESC
+        ) AS rn
+    FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log r
+    WHERE r.model_code = 'new_wagego_credit_v1_0'
+      AND r.scene_id LIKE 'LN%'
+),
+credit_raw AS (
+    SELECT
+         u.flow_id
+        ,u.credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY u.flow_id ORDER BY u.source_priority
+        ) AS rn
+    FROM (
+        SELECT r.scene_id AS flow_id, r.credit_score, 1 AS source_priority
+        FROM credit_log r
+        WHERE r.rn = 1
+        UNION ALL
+        SELECT
+             b.flow_id
+            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,2 AS source_priority
+        FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
+        WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
+    ) u
+),
+credit_map AS (
+    SELECT flow_id, credit_score
+    FROM credit_raw
+    WHERE rn = 1
+      AND credit_score > 0
+),
+base AS (
+    SELECT
+         t.loan_no
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
+        ,t.user_type
+        ,t.y_fpd15_ovd                                               AS label
+        ,cm.credit_score                                             AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    JOIN credit_map cm
+      ON CAST(t.loan_no AS STRING) = CAST(cm.flow_id AS STRING)
+    WHERE t.y_fpd15_obs = 1
+),
+scored AS (
+    SELECT
+         b.loan_no
+        ,b.week_start
+        ,b.user_type
+        ,b.label
+        ,b.score
+        ,CASE
+             WHEN b.score <= 0.048595 THEN 1
+             WHEN b.score <= 0.073145 THEN 2
+             WHEN b.score <= 0.103095 THEN 3
+             WHEN b.score <= 0.153057 THEN 4
+             ELSE 5
+         END                                                          AS q
+    FROM base b
+    WHERE b.week_start IS NOT NULL
+),
+agg AS (
+    SELECT
+         week_start
+        ,user_type
+        ,q
+        ,COUNT(*)                                                    AS obs_cnt
+        ,SUM(label)                                                  AS bad_cnt
+        ,ROUND(CAST(SUM(label) AS DOUBLE) / COUNT(*) * 100, 2)       AS bad_rate_pct
+    FROM scored
+    GROUP BY week_start, user_type, q
+)
+SELECT
+     week_start
+    ,'ALL'                                                           AS user_type
+    ,q
+    ,COUNT(*)                                                        AS obs_cnt
+    ,SUM(label)                                                      AS bad_cnt
+    ,ROUND(CAST(SUM(label) AS DOUBLE) / COUNT(*) * 100, 2)           AS bad_rate_pct
+FROM scored
+GROUP BY week_start, q
+UNION ALL
+SELECT
+     week_start
+    ,user_type
+    ,q
+    ,obs_cnt
+    ,bad_cnt
+    ,bad_rate_pct
+FROM agg
+ORDER BY week_start, user_type, q
+;
+
+
+-- ============================================================
+-- 块 14：新戳额模型周度排序力（FPD1 / FPD3 / FPD7 / FPD15 成熟样本）
+--   AUC / Gini / KS 算法与块 8 一致；输出 window_days × user_type
+-- ============================================================
+WITH credit_log AS (
+    SELECT
+         r.scene_id
+        ,CAST(GET_JSON_OBJECT(r.model_output,
+              '$.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score') AS DOUBLE) AS credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY r.scene_id
+            ORDER BY CAST(r.start_time AS TIMESTAMP) DESC, CAST(r.inserttime AS TIMESTAMP) DESC
+        ) AS rn
+    FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log r
+    WHERE r.model_code = 'new_wagego_credit_v1_0'
+      AND r.scene_id LIKE 'LN%'
+),
+credit_raw AS (
+    SELECT
+         u.flow_id
+        ,u.credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY u.flow_id ORDER BY u.source_priority
+        ) AS rn
+    FROM (
+        SELECT r.scene_id AS flow_id, r.credit_score, 1 AS source_priority
+        FROM credit_log r
+        WHERE r.rn = 1
+        UNION ALL
+        SELECT
+             b.flow_id
+            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,2 AS source_priority
+        FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
+        WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
+    ) u
+),
+credit_map AS (
+    SELECT flow_id, credit_score
+    FROM credit_raw
+    WHERE rn = 1
+      AND credit_score > 0
+),
+base AS (
+    SELECT
+         1                                                           AS window_days
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd1_ovd                                                AS label
+        ,cm.credit_score                                             AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    JOIN credit_map cm
+      ON CAST(t.loan_no AS STRING) = CAST(cm.flow_id AS STRING)
+    WHERE t.y_fpd1_obs = 1
+      AND t.disburse_time IS NOT NULL
+    UNION ALL
+    SELECT
+         3                                                           AS window_days
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd3_ovd                                                AS label
+        ,cm.credit_score                                             AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    JOIN credit_map cm
+      ON CAST(t.loan_no AS STRING) = CAST(cm.flow_id AS STRING)
+    WHERE t.y_fpd3_obs = 1
+      AND t.disburse_time IS NOT NULL
+    UNION ALL
+    SELECT
+         7                                                           AS window_days
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd7_ovd                                                AS label
+        ,cm.credit_score                                             AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    JOIN credit_map cm
+      ON CAST(t.loan_no AS STRING) = CAST(cm.flow_id AS STRING)
+    WHERE t.y_fpd7_obs = 1
+      AND t.disburse_time IS NOT NULL
+    UNION ALL
+    SELECT
+         15                                                          AS window_days
+        ,DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.disburse_time)), 'yyyy-MM-dd') AS week_start
+        ,t.user_type                                                 AS user_type
+        ,t.y_fpd15_ovd                                               AS label
+        ,cm.credit_score                                             AS score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    JOIN credit_map cm
+      ON CAST(t.loan_no AS STRING) = CAST(cm.flow_id AS STRING)
+    WHERE t.y_fpd15_obs = 1
+      AND t.disburse_time IS NOT NULL
+),
+scored AS (
+    SELECT window_days, week_start, user_type, label, score
+    FROM base
+    WHERE score IS NOT NULL
+      AND week_start IS NOT NULL
+    UNION ALL
+    SELECT window_days, week_start, 'ALL' AS user_type, label, score
+    FROM base
+    WHERE score IS NOT NULL
+      AND week_start IS NOT NULL
+),
+ranked AS (
+    SELECT
+         window_days
+        ,week_start
+        ,user_type
+        ,label
+        ,RANK() OVER (
+            PARTITION BY window_days, week_start, user_type ORDER BY score
+        )                                                                    AS r_min
+        ,COUNT(*) OVER (
+            PARTITION BY window_days, week_start, user_type, score
+        )                                                                    AS tie_cnt
+    FROM scored
+),
+rank_avg AS (
+    SELECT
+         window_days
+        ,week_start
+        ,user_type
+        ,label
+        ,r_min + (tie_cnt - 1) / 2.0                                         AS avg_rank
+    FROM ranked
+),
+auc AS (
+    SELECT
+         window_days
+        ,week_start
+        ,user_type
+        ,COUNT(*)                                                            AS obs_cnt
+        ,SUM(label)                                                          AS bad_cnt
+        ,SUM(CASE WHEN label = 1 THEN avg_rank ELSE 0 END)                   AS bad_rank_sum
+    FROM rank_avg
+    GROUP BY window_days, week_start, user_type
+),
+score_grp AS (
+    SELECT
+         window_days
+        ,week_start
+        ,user_type
+        ,score
+        ,COUNT(*)                                                            AS obs_cnt
+        ,SUM(label)                                                          AS bad_cnt
+    FROM scored
+    GROUP BY window_days, week_start, user_type, score
+),
+cum AS (
+    SELECT
+         window_days
+        ,week_start
+        ,user_type
+        ,score
+        ,SUM(bad_cnt) OVER (
+            PARTITION BY window_days, week_start, user_type ORDER BY score
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )                                                                    AS cum_bad
+        ,SUM(obs_cnt - bad_cnt) OVER (
+            PARTITION BY window_days, week_start, user_type ORDER BY score
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )                                                                    AS cum_good
+        ,SUM(bad_cnt) OVER (
+            PARTITION BY window_days, week_start, user_type
+        )                                                                    AS tot_bad
+        ,SUM(obs_cnt - bad_cnt) OVER (
+            PARTITION BY window_days, week_start, user_type
+        )                                                                    AS tot_good
+    FROM score_grp
+),
+ks AS (
+    SELECT
+         window_days
+        ,week_start
+        ,user_type
+        ,MAX(ABS(CAST(cum_bad AS DOUBLE) / NULLIF(tot_bad, 0)
+                 - CAST(cum_good AS DOUBLE) / NULLIF(tot_good, 0)))          AS ks
+    FROM cum
+    GROUP BY window_days, week_start, user_type
+)
+SELECT
+     a.window_days
+    ,a.week_start
+    ,a.user_type
+    ,a.obs_cnt
+    ,a.bad_cnt
+    ,ROUND(CAST(a.bad_cnt AS DOUBLE) / a.obs_cnt * 100, 2)                     AS bad_rate_pct
+    ,ROUND((a.bad_rank_sum - CAST(a.bad_cnt AS DOUBLE) * (a.bad_cnt + 1) / 2)
+           / NULLIF(CAST(a.bad_cnt AS DOUBLE) * (a.obs_cnt - a.bad_cnt), 0), 4) AS auc
+    ,ROUND(2 * (a.bad_rank_sum - CAST(a.bad_cnt AS DOUBLE) * (a.bad_cnt + 1) / 2)
+           / NULLIF(CAST(a.bad_cnt AS DOUBLE) * (a.obs_cnt - a.bad_cnt), 0) - 1, 4) AS gini
+    ,ROUND(k.ks, 4)                                                            AS ks
+FROM auc a
+LEFT JOIN ks k
+  ON a.window_days = k.window_days
+ AND a.week_start = k.week_start
+ AND a.user_type = k.user_type
+ORDER BY a.window_days, a.week_start, a.user_type
+;

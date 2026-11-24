@@ -34,6 +34,12 @@ CREDIT_SCORE_DECILE_UPPER = (
     0.128392, 0.154584, 0.188973, 0.240037, 0.615365,
 )
 CREDIT_WEEK_MIN_OBS = 50
+# 新戳额模型 new_wagego_credit_v1_0 固定 5 档上限（模型固定十分位切点的 20/40/60/80 分位）
+CREDIT_MODEL_BIN_UPPER = (0.048595, 0.073145, 0.103095, 0.153057)
+MODEL_META = (
+    ("online", "线上模型", "var(--ink-2)"),
+    ("credit", "新戳额模型", "var(--ink-2)"),
+)
 SEGMENT_META = (
     ("ALL", "整体", "var(--ink-2)"),
     ("New", "新客", "var(--c1)"),
@@ -54,6 +60,10 @@ OPTIONAL_FILES = (
     "vintage_11a_credit_score_coverage.csv",
     "vintage_11b_credit_score_dist.csv",
     "vintage_12_new_user_funnel.csv",
+    "vintage_13a_credit_model_coverage.csv",
+    "vintage_13b_credit_model_quintile.csv",
+    "vintage_13c_credit_model_quintile_week.csv",
+    "vintage_14_credit_model_weekly_auc.csv",
 )
 
 
@@ -566,6 +576,93 @@ def build_new_user_funnel(raw):
     }
 
 
+def build_credit_model(raw):
+    """解析新戳额模型块 13a/13b/13c/14；旧 zip 缺这些文件时返回 None。"""
+    dist_rows = raw.get("vintage_13b_credit_model_quintile.csv")
+    week_rows = raw.get("vintage_13c_credit_model_quintile_week.csv")
+    if not dist_rows or not week_rows:
+        return None
+
+    score = {"ALL": {}, "New": {}, "Old": {}}
+    for row in dist_rows:
+        segment = row.get("segment") or "ALL"
+        q = to_int(row.get("q"))
+        if segment not in score or q is None:
+            continue
+        score[segment][q] = {
+            "q": q,
+            "min": to_float(row.get("score_min")),
+            "max": to_float(row.get("score_max")),
+            "avg": to_float(row.get("score_avg")),
+            "obs": to_int(row.get("obs_cnt")),
+            "bad": to_int(row.get("bad_cnt")),
+            "rate": to_float(row.get("bad_rate_pct")),
+        }
+    if any(len(score[segment]) < 5 for segment in score):
+        return None
+
+    score_week_by_seg = {"ALL": {}, "New": {}, "Old": {}}
+    for row in week_rows:
+        segment = row.get("user_type") or "ALL"
+        week = row.get("week_start") or ""
+        q = to_int(row.get("q"))
+        if segment not in score_week_by_seg or not week or q is None:
+            continue
+        score_week_by_seg[segment].setdefault(week, {})[q] = {
+            "obs": to_int(row.get("obs_cnt")),
+            "bad": to_int(row.get("bad_cnt")),
+            "rate": to_float(row.get("bad_rate_pct")),
+        }
+    if not all(score_week_by_seg[segment] for segment in score_week_by_seg):
+        return None
+
+    weekly_auc_by_seg = {"ALL": {}, "New": {}, "Old": {}}
+    for row in raw.get("vintage_14_credit_model_weekly_auc.csv") or []:
+        segment = row.get("user_type") or "ALL"
+        window = to_int(row.get("window_days")) or 15
+        week = row.get("week_start") or ""
+        if segment not in weekly_auc_by_seg or not week:
+            continue
+        weekly_auc_by_seg[segment].setdefault(window, {})[week] = {
+            "week": week,
+            "obs": to_int(row.get("obs_cnt")),
+            "bad": to_int(row.get("bad_cnt")),
+            "rate": to_float(row.get("bad_rate_pct")),
+            "auc": to_float(row.get("auc")),
+            "gini": to_float(row.get("gini")),
+            "ks": to_float(row.get("ks")),
+        }
+
+    coverage = None
+    coverage_rows = raw.get("vintage_13a_credit_model_coverage.csv")
+    if coverage_rows:
+        coverage_row = coverage_rows[0]
+        coverage = {
+            "obs": to_int(coverage_row.get("obs_cnt")),
+            "scored": to_int(coverage_row.get("scored_cnt")),
+            "missing": to_int(coverage_row.get("missing_cnt")),
+            "pct": to_float(coverage_row.get("coverage_pct")),
+        }
+
+    lift = {}
+    monotonic = {}
+    for segment in score:
+        q1_rate = score[segment][1]["rate"]
+        q5_rate = score[segment][5]["rate"]
+        lift[segment] = q5_rate / q1_rate if q1_rate else float("inf")
+        values = [score[segment][q]["rate"] for q in range(1, 6)]
+        monotonic[segment] = all(b >= a for a, b in zip(values, values[1:]))
+
+    return {
+        "coverage": coverage,
+        "score": score,
+        "scoreWeekBySeg": score_week_by_seg,
+        "weeklyAucBySeg": weekly_auc_by_seg,
+        "lift": lift,
+        "monotonic": monotonic,
+    }
+
+
 def build_window_list(windows, keep_delta=False):
     items = []
     previous = None
@@ -714,6 +811,8 @@ def build_data(raw):
 
     psi_by_week = build_psi_by_week(score_week, score_week_weeks, weeks_by)
 
+    credit_model = build_credit_model(raw)
+
     auc_charts = {
         window: build_auc_chart(weekly_auc_by_seg["ALL"].get(window, {}), weeks_by, window)
         for window in auc_windows
@@ -852,6 +951,32 @@ def build_data(raw):
             for window in auc_windows
         }
 
+        credit_fields = {}
+        if credit_model:
+            credit_score = credit_model["score"][seg_key]
+            credit_score_week = credit_model["scoreWeekBySeg"][seg_key]
+            credit_score_week_weeks = score_week_week_list(
+                credit_score_week, seg_chart_weeks
+            )
+            credit_fields = {
+                "creditScore": credit_score,
+                "creditScoreWeek": credit_score_week,
+                "creditScoreWeekWeeks": credit_score_week_weeks,
+                "creditPsiByWeek": build_psi_by_week(
+                    credit_score_week, credit_score_week_weeks, seg_weeks_by
+                ),
+                "creditAucCharts": {
+                    window: build_auc_chart(
+                        credit_model["weeklyAucBySeg"].get(seg_key, {}).get(window, {}),
+                        seg_weeks_by,
+                        window,
+                    )
+                    for window in auc_windows
+                },
+                "creditLift": credit_model["lift"][seg_key],
+                "creditMonotonic": credit_model["monotonic"][seg_key],
+            }
+
         seg_score = score[seg_key]
         seg_usable = [item for item in seg_chart_weeks if item["fpd15Maturity"] >= 0.7]
         seg_latest = seg_usable[-1] if seg_usable else seg_chart_weeks[-1]
@@ -904,6 +1029,7 @@ def build_data(raw):
             "scoreWeekWeeks": seg_score_week_weeks,
             "psiByWeek": seg_psi,
             "aucCharts": seg_auc_charts,
+            **credit_fields,
             "lift": lift_value,
             "monotonic": seg_monotonic,
             "latest": seg_latest,
@@ -960,6 +1086,7 @@ def build_data(raw):
         "q1Sentinel": all_q1["min"] is not None and all_q1["min"] <= -1.0,
         "fpd30Maturity": fpd30_maturity,
         "segments": segments,
+        "creditModel": credit_model,
         "creditDist": build_credit_dist(raw),
         "funnel": build_new_user_funnel(raw),
     }
@@ -991,6 +1118,26 @@ def scope_bar_html(data):
   <span class="scope-label">客群</span>
   <div class="scope-btns" role="group" aria-label="切换整体、新客、老客">{''.join(buttons)}</div>
   <span class="scope-hint" id="scopeHint">{escape(data['segments']['ALL']['scopeHint'])}</span>
+</section>
+"""
+
+
+def model_bar_html(data):
+    if not data.get("creditModel"):
+        return ""
+    buttons = []
+    for model_key, model_name, model_color in MODEL_META:
+        active = " on" if model_key == "online" else ""
+        pressed = "true" if model_key == "online" else "false"
+        buttons.append(
+            f'<button type="button" class="scope-btn{active}" data-model="{model_key}" '
+            f'aria-pressed="{pressed}" style="--seg-color:{model_color}">{model_name}</button>'
+        )
+    return f"""
+<section class="scope-bar" aria-label="模型切换">
+  <span class="scope-label">模型</span>
+  <div class="scope-btns" role="group" aria-label="切换线上模型、新戳额模型">{''.join(buttons)}</div>
+  <span class="scope-hint">切换「模型分分档」与「周度排序力」两张卡片</span>
 </section>
 """
 
@@ -1269,7 +1416,7 @@ def week_card_html(data):
 """
 
 
-def score_table(score, seg_key="ALL"):
+def score_table(score, seg_key="ALL", bins=SCORE_BIN_UPPER):
     def rate_cell(segment, q):
         row = score[segment][q]
         return (
@@ -1281,7 +1428,7 @@ def score_table(score, seg_key="ALL"):
         rows = []
         for q in range(1, 6):
             rows.append(
-                f"<tr><td>{q}档</td><td class='range'>{score_range_text(q, SCORE_BIN_UPPER)}</td>"
+                f"<tr><td>{q}档</td><td class='range'>{score_range_text(q, bins)}</td>"
                 f"{rate_cell('ALL', q)}{rate_cell('New', q)}{rate_cell('Old', q)}</tr>"
             )
         return f"""
@@ -1299,7 +1446,7 @@ def score_table(score, seg_key="ALL"):
     for q in range(1, 6):
         diff = score[seg_key][q]["rate"] - score["ALL"][q]["rate"]
         rows.append(
-            f"<tr><td>{q}档</td><td class='range'>{score_range_text(q, SCORE_BIN_UPPER)}</td>"
+            f"<tr><td>{q}档</td><td class='range'>{score_range_text(q, bins)}</td>"
             f"{rate_cell(seg_key, q)}{rate_cell('ALL', q)}"
             f"<td class='num'>{fmt_delta(diff)}</td></tr>"
         )
@@ -1625,6 +1772,145 @@ def credit_dist_card_html(data):
 """
 
 
+def coverage_text_html(coverage):
+    if not coverage or coverage.get("pct") is None:
+        return "覆盖率未同步"
+    return (
+        f"覆盖 {coverage['pct']:.2f}%"
+        f"（{fmt_int(coverage['scored'])}/{fmt_int(coverage['obs'])}，整体口径）"
+    )
+
+
+def credit_score_panel_html(data):
+    credit_model = data.get("creditModel")
+    if not credit_model:
+        return ""
+    coverage = credit_model["coverage"]
+    all_heat = data["segments"]["ALL"]["creditScoreWeekWeeks"]
+    heat_range = f"{all_heat[0]} ~ {all_heat[-1]}" if all_heat else "—"
+    coverage_pct = (
+        f"（整体覆盖 {coverage['pct']:.2f}%）"
+        if coverage and coverage.get("pct") is not None
+        else ""
+    )
+    scope = scope_meta_html(
+        "发标成交样本：2026-08-01 ~ 2026-11-06 取离线历史分，2026-11-12 起取线上模型日志；"
+        f"分档汇总为全期，分档×周表为 {heat_range}。",
+        "借款申请 → 放款成功且 FPD15 成熟（due+15 &lt; obs_dt）→ 新戳额模型分非空"
+        f"{coverage_pct}→ 按固定阈值分 5 档，缺分不纳入。"
+        "2026-11-07 ~ 11-11 两侧均无分，该段周覆盖偏低。",
+    )
+    overall_lift = credit_model["lift"]
+    blocks = []
+    for seg_key, seg_name, seg_color in SEGMENT_META:
+        view = data["segments"][seg_key]
+        score = view["creditScore"]
+        lift = view["creditLift"]
+        monotonic = view["creditMonotonic"]
+        heat_weeks = view["creditScoreWeekWeeks"]
+        heat_first = heat_weeks[0] if heat_weeks else None
+        soft_heat = [
+            week
+            for week in heat_weeks
+            if 0.7 <= view["weeksBy"].get(week, {}).get("fpd15Maturity", 1) < 0.9
+        ]
+        low_heat = [
+            week
+            for week in heat_weeks
+            if view["weeksBy"].get(week, {}).get("fpd15Maturity", 1) < 0.7
+        ]
+        heat_bits = []
+        if heat_first:
+            heat_bits.append(f"分档×周表从 {heat_first[5:]} 起，更早周每档样本不足，未纳入")
+        if soft_heat:
+            heat_bits.append(f"{'、'.join(week[5:] for week in soft_heat)} 标 *（70–90% 成熟）")
+        if low_heat:
+            low_text = "、".join(
+                f"{week[5:]}（{fmt_pct0(view['weeksBy'].get(week, {}).get('fpd15Maturity', 0))} 成熟）"
+                for week in low_heat
+            )
+            heat_bits.append(f"{low_text} 灰显，仅参考")
+        heat_note = "；".join(heat_bits) + "。" if heat_bits else ""
+
+        total = sum(score[q]["obs"] for q in range(1, 6))
+        q1_share = score[1]["obs"] / total if total else 0
+        q5_share = score[5]["obs"] / total if total else 0
+        if seg_key == "ALL":
+            lift_text = (
+                f"整体 5档/1档 = {lift:.2f}x，"
+                f"新客 {overall_lift['New']:.2f}x，老客 {overall_lift['Old']:.2f}x。"
+            )
+            non_monotonic = [
+                seg_label
+                for seg_code, seg_label, _ in SEGMENT_META
+                if seg_code != "ALL" and not credit_model["monotonic"][seg_code]
+            ]
+            shape = (
+                "整体、新客、老客均基本单调。"
+                if not non_monotonic
+                else f"{'、'.join(non_monotonic)}分档出现非单调，排序弱于整体。"
+            )
+            legend = (
+                '<div class="legend">'
+                '<span><i style="background:var(--ink-2)"></i>整体</span>'
+                '<span><i style="background:var(--c1)"></i>新客</span>'
+                '<span><i style="background:var(--c2)"></i>老客</span>'
+                "</div>"
+            )
+        else:
+            lift_text = f"{seg_name} 5档/1档 = {lift:.2f}x（整体 {overall_lift['ALL']:.2f}x）。"
+            shape = (
+                f"{seg_name}分档基本单调。"
+                if monotonic
+                else f"{seg_name}分档出现非单调，排序弱于整体。"
+            )
+            legend = (
+                '<div class="legend">'
+                f'<span><i style="background:{seg_color}"></i>{seg_name}</span>'
+                '<span><i class="dash" style="border-top-color:var(--ink-2)"></i>整体（参考）</span>'
+                "</div>"
+            )
+        note = (
+            f"坏率均为 FPD15 笔数口径。1档最低分，5档最高分；按新戳额模型固定十分位切点的"
+            f"20/40/60/80 分位切 5 档，负分按缺分处理。"
+            f"固定阈值下各档样本占比不等（1档 {fmt_pct0(q1_share)}、5档 {fmt_pct0(q5_share)}）。"
+            f"{lift_text}{shape}"
+            f"{coverage_text_html(coverage)}，缺分 "
+            f"{fmt_int(coverage['missing']) if coverage else '—'}。"
+            "历史段 2026-08-01 ~ 11-06 取离线样本表，线上段 2026-11-12 起取模型日志"
+            "（model_code = new_wagego_credit_v1_0，发标时点 LN 流水取最新一条）；"
+            "2026-11-07 ~ 11-11 两侧均无分，该段周表覆盖偏低。"
+            f"{heat_note}"
+            "分档×周表末三行为周度 5档/1档 倍数、排序单调性和 5 档 PSI。"
+        )
+        credit_view = {
+            "scoreWeek": view["creditScoreWeek"],
+            "scoreWeekWeeks": view["creditScoreWeekWeeks"],
+            "weeksBy": view["weeksBy"],
+            "psiByWeek": view["creditPsiByWeek"],
+        }
+        blocks.append(
+            seg_panel(
+                seg_key,
+                legend
+                + f'<div class="split">{score_table(credit_model["score"], seg_key, CREDIT_MODEL_BIN_UPPER)}'
+                f'{score_week_table(credit_view)}</div>'
+                + f'<p class="note">{note}</p>',
+            )
+        )
+    return f"""
+<div data-model-panel="credit" hidden>
+  {scope}
+  <p class="desc">1档最低分 → 5档最高分（按新戳额模型固定十分位切点）；整体视图对比三客群，新客 / 老客视图为所选客群（实线）对比整体（虚线）。</p>
+  <div class="chart-wrap">
+    <svg id="creditScoreChart" viewBox="0 0 1040 300" role="img" aria-label="新戳额模型分分档的整体、新客、老客 FPD15 笔数坏率"></svg>
+    <div class="tip" id="creditScoreTip"></div>
+  </div>
+  {''.join(blocks)}
+</div>
+"""
+
+
 def score_card_html(data):
     overall_lift = data["lift"]
     sentinel = (
@@ -1730,6 +2016,7 @@ def score_card_html(data):
     return f"""
 <section class="card">
   <h2>模型分分档{SAMPLE_TAG_HTML}{TAG_COUNT}</h2>
+  <div data-model-panel="online">
   {scope}
   <p class="desc">1档最低分 → 5档最高分（按新客风险 1.0 固定阈值切分）；整体视图对比三客群，新客 / 老客视图为所选客群（实线）对比整体（虚线）。</p>
   <div class="chart-wrap">
@@ -1737,49 +2024,30 @@ def score_card_html(data):
     <div class="tip" id="scoreTip"></div>
   </div>
   {''.join(blocks)}
+  </div>
+  {credit_score_panel_html(data)}
 </section>
 """
 
 
-def stability_card_html(data):
+def stability_blocks_html(data, model="online"):
     def mark(text, marker):
         return sup(text, marker) if marker and text != "—" else text
 
     auc_windows = data["aucWindows"]
     default_window = data["aucWindowDefault"]
-    default_chart = data["aucCharts"].get(default_window) or {"points": []}
-    points_all = default_chart["points"]
-    point_range = (
-        f"{points_all[0]['week']} ~ {points_all[-1]['week']}" if points_all else "—"
-    )
-    window_names = " / ".join(WINDOW_LABELS[window] for window in auc_windows)
-    scope = scope_meta_html(
-        f"放款周（周一）{point_range}；可切换 {window_names} 观察窗口；按周计算排序力；"
-        "PSI 仅使用确认周（放款周完整且 FPD15 成熟度 ≥90%）。",
-        "各窗口成熟放款 + 模型分非空 → 按周内分数排名计算 AUC / Gini / KS"
-        "（并列取平均秩）→ 周成熟样本 &lt;200 剔除；客群按 user_type 过滤。",
-    )
-    toggle = ""
-    if len(auc_windows) > 1:
-        buttons = "".join(
-            f'<button type="button" class="{"on" if window == default_window else ""}" '
-            f'data-auc-window="{window}" '
-            f'aria-pressed="{"true" if window == default_window else "false"}">'
-            f"{WINDOW_LABELS[window]}</button>"
-            for window in auc_windows
-        )
-        toggle = f"""
-  <div class="chart-head">
-    <div class="seg" role="group" aria-label="AUC 观察窗口">{buttons}</div>
-  </div>"""
     blocks = []
     for seg_key, seg_name, seg_color in SEGMENT_META:
         view = data["segments"][seg_key]
+        charts = view["creditAucCharts"] if model == "credit" else view["aucCharts"]
+        psi_by_week = (
+            view["creditPsiByWeek"] if model == "credit" else view["psiByWeek"]
+        )
         panels = []
         for window in auc_windows:
             label = WINDOW_LABELS[window]
             hidden = "" if window == default_window else " hidden"
-            chart = view["aucCharts"].get(window) or {"points": []}
+            chart = charts.get(window) or {"points": []}
             points = chart["points"]
             if not points:
                 panels.append(
@@ -1828,11 +2096,10 @@ def stability_card_html(data):
                     f"（前 {len(prior)} 周均值 {mean_auc:.3f}）"
                     f"，Gini {latest['gini']:.3f}，KS {latest['ks']:.3f}。"
                 )
-            psi = view["psiByWeek"]
             psi_text = ""
-            if psi:
-                last_week = sorted(psi)[-1]
-                psi_text = f"最近一周 PSI {psi[last_week]:.2f}（{last_week}）。"
+            if psi_by_week:
+                last_week = sorted(psi_by_week)[-1]
+                psi_text = f"最近一周 PSI {psi_by_week[last_week]:.2f}（{last_week}）。"
             scope_text = (
                 f"AUC / Gini / KS 基于 {label} 成熟样本，按周内分数排名计算"
                 if seg_key == "ALL"
@@ -1858,18 +2125,86 @@ def stability_card_html(data):
 """
             )
         blocks.append(seg_panel(seg_key, "".join(panels)))
+    return "".join(blocks)
+
+
+def stability_card_html(data):
+    auc_windows = data["aucWindows"]
+    default_window = data["aucWindowDefault"]
+    default_chart = data["aucCharts"].get(default_window) or {"points": []}
+    points_all = default_chart["points"]
+    point_range = (
+        f"{points_all[0]['week']} ~ {points_all[-1]['week']}" if points_all else "—"
+    )
+    window_names = " / ".join(WINDOW_LABELS[window] for window in auc_windows)
+    scope = scope_meta_html(
+        f"放款周（周一）{point_range}；可切换 {window_names} 观察窗口；按周计算排序力；"
+        "PSI 仅使用确认周（放款周完整且 FPD15 成熟度 ≥90%）。",
+        "各窗口成熟放款 + 模型分非空 → 按周内分数排名计算 AUC / Gini / KS"
+        "（并列取平均秩）→ 周成熟样本 &lt;200 剔除；客群按 user_type 过滤。",
+    )
+    toggle = ""
+    if len(auc_windows) > 1:
+        buttons = "".join(
+            f'<button type="button" class="{"on" if window == default_window else ""}" '
+            f'data-auc-window="{window}" '
+            f'aria-pressed="{"true" if window == default_window else "false"}">'
+            f"{WINDOW_LABELS[window]}</button>"
+            for window in auc_windows
+        )
+        toggle = f"""
+  <div class="chart-head">
+    <div class="seg" role="group" aria-label="AUC 观察窗口">{buttons}</div>
+  </div>"""
+
+    credit_model = data.get("creditModel")
+    credit_section = ""
+    if credit_model:
+        credit_chart = (
+            data["segments"]["ALL"]["creditAucCharts"].get(default_window)
+            or {"points": []}
+        )
+        credit_points = credit_chart["points"]
+        credit_range = (
+            f"{credit_points[0]['week']} ~ {credit_points[-1]['week']}"
+            if credit_points
+            else "2026-08-01 ~ 2026-11-06、2026-11-12 起"
+        )
+        credit_scope = scope_meta_html(
+            f"放款周（周一）{credit_range}；可切换 {window_names} 观察窗口；按周计算排序力；"
+            "分数为历史离线样本（2026-08-01 ~ 11-06）与线上日志（2026-11-12 起）拼接，"
+            "2026-11-07 ~ 11-11 无分；PSI 仅使用确认周。",
+            "各窗口成熟放款 + 新戳额模型分非空 → 按周内分数排名计算 AUC / Gini / KS"
+            "（并列取平均秩）→ 周成熟样本 &lt;200 剔除；客群按 user_type 过滤。",
+        )
+        credit_section = f"""
+<div data-model-panel="credit" hidden>
+  {credit_scope}
+  <p class="desc">新戳额模型（new_wagego_credit_v1_0）分对各 FPD 窗口的周度排序能力。分数由离线历史段与线上日志拼接，2026-11-07 ~ 11-11 无分；AUC 和 KS 越高越好。灰柱为当周该窗口成熟样本量。</p>
+  <div class="chart-wrap">
+    <svg id="creditAucChart" viewBox="0 0 1040 280" role="img" aria-label="新戳额模型周度 AUC 与 KS"></svg>
+    <div class="tip" id="creditAucTip"></div>
+  </div>
+  <div class="legend" id="creditAucLegend"></div>
+  {stability_blocks_html(data, "credit")}
+</div>
+"""
+
     return f"""
 <section class="card">
   <h2>周度排序力{SAMPLE_TAG_HTML}<span class="tag" title="AUC = P(坏样本分数高于好样本) + 0.5 × P(并列)；Gini = 2 × AUC − 1">模型监控</span></h2>
+  {toggle}
+  <div data-model-panel="online">
   {scope}
   <p class="desc">按放款周看模型分对各 FPD 窗口的排序能力，可切换 {window_names}；AUC 和 KS 越高越好。灰柱为当周该窗口成熟样本量。图表与表格随顶部客群切换，窗口对三个客群同时生效。</p>
-  {toggle}
   <div class="chart-wrap">
     <svg id="aucChart" viewBox="0 0 1040 280" role="img" aria-label="周度 AUC 与 KS"></svg>
     <div class="tip" id="aucTip"></div>
   </div>
   <div class="legend" id="aucLegend"></div>
-  {''.join(blocks)}
+  {stability_blocks_html(data)}
+  </div>
+  {credit_section}
 </section>
 """
 
@@ -1938,6 +2273,19 @@ def footer_html(data, generated_at, input_name):
             "Gini = 2×AUC−1；KS 按分数分组累计好坏分布计算；周样本少于 200 的周不纳入。"
             "PSI 固定按 FPD15 的 5 档份额计算，基线为前最多 4 个确认周；&lt;0.10 稳定，"
             "0.10–0.25 关注，≥0.25 预警（5 档粒度为近似）。</li>"
+        )
+    if data.get("creditModel"):
+        credit_bins = " / ".join(f"≤{value:.6f}" for value in CREDIT_MODEL_BIN_UPPER)
+        credit_bins += f" / &gt;{CREDIT_MODEL_BIN_UPPER[-1]:.6f}"
+        extras.append(
+            "<li>新戳额模型监控（new_wagego_credit_v1_0）：分数由两段拼接——"
+            "2026-08-01 ~ 2026-11-06 取离线样本表 "
+            "model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106，"
+            "2026-11-12 起取线上模型日志（model_code = new_wagego_credit_v1_0，"
+            "发标时点 scene_id = LN 流水，取最新一条）；2026-11-07 ~ 11-11 两侧均无分，"
+            "负分按缺分处理。5 档按该模型固定十分位切点的 20/40/60/80 分位（"
+            f"{credit_bins}），1档最低分、5档最高分。"
+            "顶部“线上模型 / 新戳额模型”按钮仅联动“模型分分档”和“周度排序力”两张卡片。</li>"
         )
     if data.get("creditDist"):
         extras.append(
@@ -2025,6 +2373,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     display: flex; align-items: center; flex-wrap: wrap;
     gap: 10px 14px; margin: 18px 0 0;
   }
+  .scope-bar + .scope-bar { margin-top: 8px; }
   .scope-label { color: var(--muted); font-size: 11.5px; }
   .scope-btns {
     display: inline-flex; border: 1px solid var(--ring);
@@ -2206,6 +2555,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <main>
 __HEADER__
 __SCOPE_BAR__
+__MODEL_BAR__
 __FPD_CARD__
 __WEEK_CARD__
 __SCORE_CARD__
@@ -2221,7 +2571,7 @@ const NS = 'http://www.w3.org/2000/svg';
 const fmtRate = v => (v == null ? '—' : v.toFixed(2) + '%');
 const fmtInt = n => (n == null ? '—' : n.toLocaleString('en-US'));
 
-const state = { segment: 'ALL', weekMode: 'count', aucWindow: String(DATA.aucWindowDefault) };
+const state = { segment: 'ALL', model: 'online', weekMode: 'count', aucWindow: String(DATA.aucWindowDefault) };
 const sampleTagBySegment = {
   ALL: '样本：整体发标成交样本',
   New: '样本：新客发标成交样本',
@@ -2621,10 +2971,12 @@ creditBinButtons.forEach(button => {
   });
 });
 
-function renderScoreChart() {
+function renderScoreChartFor(credit) {
+  const curves = credit ? DATA.creditScoreCurves : DATA.scoreCurves;
+  if (!curves || !curves.ALL) return;
   const keys = isAllSeg() ? ['ALL', 'New', 'Old'] : [state.segment, 'ALL'];
   const scoreSeries = keys.map(key => {
-    const curve = DATA.scoreCurves[key];
+    const curve = curves[key];
     const reference = !isAllSeg() && key === 'ALL';
     return {
       name: reference ? '整体（参考）' : curve.name,
@@ -2641,7 +2993,7 @@ function renderScoreChart() {
   const yTicks = [];
   for (let value = 0; value <= yMax; value += tickStep) yTicks.push(value);
   const selectedAbove = !isAllSeg() && scoreSeries[0].points[4].rate >= scoreSeries[1].points[4].rate;
-  makeLineChart('scoreChart', 'scoreTip', {
+  makeLineChart(credit ? 'creditScoreChart' : 'scoreChart', credit ? 'creditScoreTip' : 'scoreTip', {
     width: 1040, height: 300, margin: { t: 30, r: 135, b: 46, l: 56 },
     labels: ['1档', '2档', '3档', '4档', '5档'],
     series: scoreSeries,
@@ -2654,7 +3006,7 @@ function renderScoreChart() {
       anchor: 'start'
     })),
     tooltip: index => {
-      const base = DATA.scoreCurves.ALL.points[index];
+      const base = curves.ALL.points[index];
       const rows = scoreSeries.map(series => {
         const point = series.points[index];
         return `<span><i style="background:${series.color}"></i>${series.name} <b>${fmtRate(point.rate)}</b> · n=${fmtInt(point.obs)}</span>`;
@@ -2664,15 +3016,25 @@ function renderScoreChart() {
   });
 }
 
-function renderAucChart() {
+function renderScoreChart() {
+  renderScoreChartFor(false);
+  if (DATA.hasCreditModel) renderScoreChartFor(true);
+}
+
+function renderAucChartFor(credit) {
   const view = segData();
   const windowKey = state.aucWindow;
   const windowLabel = DATA.windowLabels[windowKey] || ('FPD' + windowKey);
-  const chart = (view.aucCharts && view.aucCharts[windowKey]) || { points: [], weeks: [], labels: [] };
+  const charts = (credit ? view.creditAucCharts : view.aucCharts) || {};
+  const overallCharts = (credit ? DATA.creditAucCharts : DATA.aucCharts) || {};
+  const chart = charts[windowKey] || { points: [], weeks: [], labels: [] };
   const aucPoints = chart.points || [];
-  const legend = document.getElementById('aucLegend');
+  const svgId = credit ? 'creditAucChart' : 'aucChart';
+  const tipId = credit ? 'creditAucTip' : 'aucTip';
+  const legendId = credit ? 'creditAucLegend' : 'aucLegend';
+  const legend = document.getElementById(legendId);
   if (aucPoints.length < 2) {
-    const svg = document.getElementById('aucChart');
+    const svg = document.getElementById(svgId);
     if (svg) clearSvg(svg);
     if (legend) legend.innerHTML = `<span>${windowLabel} 暂无可展示的周度排序力样本</span>`;
     return;
@@ -2696,8 +3058,8 @@ function renderAucChart() {
   ];
   let overallSeries = null;
   let overallByWeek = null;
-  if (!isAllSeg() && DATA.aucCharts && DATA.aucCharts[windowKey] && DATA.aucCharts[windowKey].points.length > 1) {
-    overallByWeek = new Map(DATA.aucCharts[windowKey].points.map(point => [point.week, point]));
+  if (!isAllSeg() && overallCharts[windowKey] && overallCharts[windowKey].points.length > 1) {
+    overallByWeek = new Map(overallCharts[windowKey].points.map(point => [point.week, point]));
     overallSeries = {
       name: '整体 AUC（参考）', key: 'overallAuc', color: 'var(--ink-2)', width: 1.8, dash: '5 4',
       points: chart.weeks.map(week => {
@@ -2738,7 +3100,7 @@ function renderAucChart() {
       });
     }
   }
-  makeLineChart('aucChart', 'aucTip', {
+  makeLineChart(svgId, tipId, {
     width: 1040, height: 280, margin: { t: 30, r: 110, b: 46, l: 56 },
     labels: chart.labels,
     series: aucSeries,
@@ -2770,6 +3132,11 @@ function renderAucChart() {
       `<span><i class="bar" style="background:var(--grid)"></i>${windowLabel} 成熟样本</span>`
     ].join('');
   }
+}
+
+function renderAucChart() {
+  renderAucChartFor(false);
+  if (DATA.hasCreditModel) renderAucChartFor(true);
 }
 
 function applyAucWindow(windowKey) {
@@ -2810,11 +3177,28 @@ document.querySelectorAll('[data-segment]').forEach(button => {
   button.addEventListener('click', () => applySegment(button.dataset.segment));
 });
 
+function applyModel(model) {
+  state.model = model;
+  document.querySelectorAll('[data-model]').forEach(button => {
+    const active = button.dataset.model === model;
+    button.classList.toggle('on', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-model-panel]').forEach(panel => {
+    panel.hidden = panel.dataset.modelPanel !== model;
+  });
+}
+
+document.querySelectorAll('[data-model]').forEach(button => {
+  button.addEventListener('click', () => applyModel(button.dataset.model));
+});
+
 document.querySelectorAll('[data-auc-window]').forEach(button => {
   button.addEventListener('click', () => applyAucWindow(button.dataset.aucWindow));
 });
 
 applyAucWindow(state.aucWindow);
+applyModel(state.model);
 applySegment('ALL');
 </script>
 </body>
@@ -2825,7 +3209,9 @@ applySegment('ALL');
 def render_html(data, generated_at, input_name, generated_iso):
     fpd_curves = {}
     score_curves = {}
+    credit_score_curves = {}
     segments = {}
+    has_credit_model = bool(data.get("creditModel"))
     for seg_key, seg_name, seg_color in SEGMENT_META:
         view = data["segments"][seg_key]
         windows = view["windows"]
@@ -2850,12 +3236,20 @@ def render_html(data, generated_at, input_name, generated_iso):
             "color": seg_color,
             "points": [view["score"][q] for q in range(1, 6)],
         }
+        if has_credit_model:
+            credit_score_curves[seg_key] = {
+                "name": seg_name,
+                "key": seg_key,
+                "color": seg_color,
+                "points": [view["creditScore"][q] for q in range(1, 6)],
+            }
         segments[seg_key] = {
             "name": seg_name,
             "color": seg_color,
             "scopeHint": view["scopeHint"],
             "weekChart": view["weekChart"],
             "aucCharts": view["aucCharts"],
+            "creditAucCharts": view.get("creditAucCharts") or {},
             "psiByWeek": view["psiByWeek"],
             "latestWeek": view["latestWeek"]["week"],
         }
@@ -2864,8 +3258,11 @@ def render_html(data, generated_at, input_name, generated_iso):
         "fpdLabels": [WINDOW_LABELS[window] for window in data["windows"]],
         "fpdCurves": fpd_curves,
         "scoreCurves": score_curves,
+        "creditScoreCurves": credit_score_curves,
+        "hasCreditModel": has_credit_model,
         "segments": segments,
         "aucCharts": data["aucCharts"],
+        "creditAucCharts": segments["ALL"]["creditAucCharts"],
         "aucWindows": data["aucWindows"],
         "aucWindowDefault": data["aucWindowDefault"],
         "windowLabels": {
@@ -2877,6 +3274,7 @@ def render_html(data, generated_at, input_name, generated_iso):
     replacements = {
         "__HEADER__": header_html(),
         "__SCOPE_BAR__": scope_bar_html(data),
+        "__MODEL_BAR__": model_bar_html(data),
         "__FPD_CARD__": fpd_card_html(data),
         "__WEEK_CARD__": week_card_html(data),
         "__FUNNEL_CARD__": funnel_card_html(data),
