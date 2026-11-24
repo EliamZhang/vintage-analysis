@@ -6,8 +6,8 @@
 FT 分组：按 last_limit_flow_id = 决策策略类型文件的 flow_id 关联 strategy_type，样本口径不变。
 
 用法：
-    python 分析/新客戳额/build.py
-    python 分析/新客戳额/build.py --score-csv xxx.csv --output 新客戳额_模型分分析.html
+    python build_new_user_credit_analysis.py
+    python build_new_user_credit_analysis.py --score-csv xxx.csv --output 新客戳额_模型分分析.html
 """
 
 from __future__ import annotations
@@ -28,18 +28,17 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
-ANALYSIS_DIR = Path(__file__).resolve().parent
-RAW_DIR = PROJECT_DIR / "数据" / "新客戳额"
+PROJECT_DIR = Path(__file__).resolve().parent
+RAW_DIR = PROJECT_DIR / "同步数据"
 
 
 def _input_path(name: str) -> Path:
-    """优先用同步脚本输出到 数据/新客戳额/ 的文件，其次用本目录的手工导出。"""
-    for folder in (RAW_DIR, ANALYSIS_DIR):
+    """优先用同步脚本输出到 同步数据/ 的文件，其次用项目根目录的手工导出。"""
+    for folder in (RAW_DIR, PROJECT_DIR):
         path = folder / name
         if path.exists():
             return path
-    return ANALYSIS_DIR / name
+    return PROJECT_DIR / name
 
 
 DEFAULT_LABEL = RAW_DIR / "table_tmp_eliam_wagego_dwd_loan_apply_label.csv"
@@ -48,7 +47,7 @@ DEFAULT_LIMIT_SCORE = _input_path("wagego_new_user_credit_20260801_20261023_scor
 DEFAULT_LIMIT_OLD_SCORE = _input_path("wagego_new_user_credit_20260801_20261023_old_score.csv")
 DEFAULT_STRATEGY = _input_path("wagego_new_user_credit_deal_strategy_type.csv")
 DEFAULT_BID = _input_path("table_tmp_eliam_wagego_all_user_bid_score_20260801_20261106.csv")
-DEFAULT_OUTPUT = ANALYSIS_DIR / "新客戳额_模型分分析.html"
+DEFAULT_OUTPUT = PROJECT_DIR / "新客戳额_模型分分析.html"
 
 OLD_SCORE = "aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626"
 NEW_SCORE = "aus_new_wagego_credit_20261028_v1_0_txn_lgb_score"
@@ -3119,7 +3118,7 @@ def footer_html(data, generated_at, label_name, score_name, limit=None, limit_na
         <li><b>使用提示</b>：样本为首笔成交客户（不含未成交申请），结论用于排序能力与相对优劣判断；
             若要据此定准入规则，需在全申请口径（含被拒）上复核通过率与坏率。上线前建议核对新戳额模型特征时点，
             确认仅使用戳额及之前的交易数据，无跨期信息泄漏。</li>
-        <li><b>数据源</b>：{escape(label_name)}、{escape(score_name)}{strategy_note}{bid_source}；生成脚本 分析/新客戳额/build.py；生成时间 {escape(generated_at)}。</li>
+        <li><b>数据源</b>：{escape(label_name)}、{escape(score_name)}{strategy_note}{bid_source}；生成脚本 build_new_user_credit_analysis.py；生成时间 {escape(generated_at)}。</li>
       </ul>
     </footer>
     """
@@ -4873,7 +4872,6 @@ def main(argv=None):
     )
 
     output = Path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(html, encoding="utf-8")
 
     print(f"样本 {len(sample):,} 人 · 输出 {output}")

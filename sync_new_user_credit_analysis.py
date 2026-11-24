@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""同步 <slug> 分析输入：执行 <slug>.sql 的查询块。
+"""同步新客戳额模型分分析输入：执行 wagego_05_新客戳额_模型分分析.sql 的查询块。
 
-产出：数据/<slug>/ 下的 CSV 与数据/<slug>/analysis_data.zip。
-只服务 <slug> 分析；共用层仅根目录 sync_common.py。
+产出：同步数据/ 下的主表、戳额成交样本新模型分、戳额生产打分全量新旧模型分、
+戳额成交样本决策策略类型、发标全量样本新模型分，以及 model_analysis_data.zip。
+只服务新客戳额模型分分析；监控看板见 sync_vintage.py。
 """
 
 from __future__ import annotations
@@ -11,11 +12,9 @@ import argparse
 import sys
 from pathlib import Path
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
-if str(PROJECT_DIR) not in sys.path:
-    sys.path.insert(0, str(PROJECT_DIR))
-
-from sync_common import (  # noqa: E402
+from sync_common import (
+    RAW_DIR,
+    RAW_DIR_NAME,
     export_sql_blocks,
     load_query_fn,
     split_statements,
@@ -29,17 +28,32 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 
-ANALYSIS_DIR = Path(__file__).resolve().parent
-SQL_FILE = ANALYSIS_DIR / "<slug>.sql"
-RAW_DIR = PROJECT_DIR / "数据" / "<slug>"
-RAW_DIR_NAME = "数据/<slug>"
-ZIP_FILE = RAW_DIR / "analysis_data.zip"
-FAILED_FILE = RAW_DIR / "sync_failed.csv"
+PROJECT_DIR = Path(__file__).resolve().parent
+SQL_FILE = PROJECT_DIR / "wagego_05_新客戳额_模型分分析.sql"
+ZIP_FILE = PROJECT_DIR / "model_analysis_data.zip"
+FAILED_FILE = PROJECT_DIR / "model_analysis_sync_failed.csv"
 
 # 块号 → 输出文件。顺序必须与 SQL 中的 SELECT 一一对应。
-# 文件名是本目录 build.py 的默认输入名，导出时保持同名。
+# 文件名是 build_new_user_credit_analysis.py 的默认输入名，导出时保持同名。
 QUERY_SPECS = (
-    {"id": "1", "file": "sample.csv", "title": "样本 + 模型分 + Y 标签"},
+    {"id": "1", "file": "table_tmp_eliam_wagego_dwd_loan_apply_label.csv", "title": "Y 标签主表"},
+    {"id": "2", "file": "aus_new_wagego_credit_20261028_v1_0_txn_lgb_score.csv", "title": "戳额成交样本新模型分"},
+    {"id": "3", "file": "wagego_new_user_credit_20260801_20261023_score.csv", "title": "戳额生产打分全量新模型分"},
+    {
+        "id": "4",
+        "file": "wagego_new_user_credit_20260801_20261023_old_score.csv",
+        "title": "戳额生产打分全量线上旧模型分",
+    },
+    {
+        "id": "5",
+        "file": "wagego_new_user_credit_deal_strategy_type.csv",
+        "title": "戳额成交样本决策策略类型",
+    },
+    {
+        "id": "6",
+        "file": "table_tmp_eliam_wagego_all_user_bid_score_20260801_20261106.csv",
+        "title": "发标全量样本 + 新模型分",
+    },
 )
 
 
@@ -48,7 +62,7 @@ def build_queries():
     if len(statements) != len(QUERY_SPECS):
         raise ValueError(
             f"SQL 查询数 {len(statements)} 与 QUERY_SPECS 的 {len(QUERY_SPECS)} 条不一致；"
-            "请同步更新 分析/<slug>/sync.py 的块号/文件名"
+            "请同步更新 sync_new_user_credit_analysis.py 的块号/文件名"
         )
     return [
         {**spec, "sql": statement, "table": table_name_from_sql(statement)}
@@ -70,7 +84,7 @@ def select_queries(queries, raw):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="同步 <slug> 分析输入表。")
+    parser = argparse.ArgumentParser(description="同步模型分分析输入表。")
     parser.add_argument("--tables", help="只同步指定表，逗号分隔（按 SQL 中 FROM 的表名匹配）")
     parser.add_argument("--dry-run", action="store_true", help="只检查块号和输出文件名，不连接数据库")
     args = parser.parse_args(argv)
@@ -94,12 +108,7 @@ def main(argv=None):
         return 2
 
     succeeded, failed = export_sql_blocks(
-        queries,
-        query_fn,
-        raw_dir=RAW_DIR,
-        raw_dir_name=RAW_DIR_NAME,
-        zip_path=ZIP_FILE,
-        failed_path=FAILED_FILE,
+        queries, query_fn, zip_path=ZIP_FILE, failed_path=FAILED_FILE
     )
 
     print(f"\n成功：{len(succeeded)} / 本次失败：{len(failed)}")

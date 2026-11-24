@@ -3,5 +3,9 @@
 vintage_user_case_*.xlsx
 results/
 results.zip
-数据/*/
+vintage_data.zip
+vintage_data.zip.tmp
+model_analysis_data.zip
+model_analysis_data.zip.tmp
 __pycache__/
+同步数据/

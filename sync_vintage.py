@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """同步 WageGo 风险监控看板数据：执行 wagego_04_vintage分析.sql 的 14 个查询块。
 
-产出：数据/vintage看板/vintage_01~12.csv、数据/vintage看板/vintage_data.zip。
-只服务监控看板；新客戳额模型分分析的表同步见 分析/新客戳额/sync.py。
+产出：同步数据/vintage_01~11.csv、vintage_data.zip。
+只服务监控看板；新客戳额模型分分析的表同步见 sync_new_user_credit_analysis.py。
 """
 
 from __future__ import annotations
@@ -11,11 +11,9 @@ import argparse
 import sys
 from pathlib import Path
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
-if str(PROJECT_DIR) not in sys.path:
-    sys.path.insert(0, str(PROJECT_DIR))
-
-from sync_common import (  # noqa: E402
+from sync_common import (
+    RAW_DIR,
+    RAW_DIR_NAME,
     load_query_fn,
     run_query_to_csv,
     split_statements,
@@ -30,12 +28,10 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 
-ANALYSIS_DIR = Path(__file__).resolve().parent
-SQL_FILE = ANALYSIS_DIR / "wagego_04_vintage分析.sql"
-RAW_DIR = PROJECT_DIR / "数据" / "vintage看板"
-RAW_DIR_NAME = "数据/vintage看板"
-ZIP_FILE = RAW_DIR / "vintage_data.zip"
-FAILED_FILE = RAW_DIR / "vintage_sync_failed.csv"
+PROJECT_DIR = Path(__file__).resolve().parent
+SQL_FILE = PROJECT_DIR / "wagego_04_vintage分析.sql"
+ZIP_FILE = PROJECT_DIR / "vintage_data.zip"
+FAILED_FILE = PROJECT_DIR / "vintage_sync_failed.csv"
 
 # 块号 → 输出文件。顺序必须与 SQL 中 SET 之后的 SELECT 一一对应。
 QUERY_SPECS = (
@@ -64,7 +60,7 @@ def build_queries():
     if len(statements) != len(QUERY_SPECS):
         raise ValueError(
             f"SQL 查询数 {len(statements)} 与 QUERY_SPECS 的 {len(QUERY_SPECS)} 条不一致；"
-            "请同步更新 分析/vintage看板/sync.py 的块号/文件名"
+            "请同步更新 sync_vintage.py 的块号/文件名"
         )
     queries = [
         {**spec, "sql": statement}
@@ -121,7 +117,7 @@ def run(setup_statements, queries, query_fn):
             print(f"失败 | {exc}")
 
     write_failures(failed, FAILED_FILE)
-    zip_outputs(succeeded, ZIP_FILE, RAW_DIR_NAME)
+    zip_outputs(succeeded, ZIP_FILE)
 
     print(f"\n成功：{len(succeeded)} / 本次失败：{len(failed)}")
     print(f"输出目录：{RAW_DIR.resolve()}")
