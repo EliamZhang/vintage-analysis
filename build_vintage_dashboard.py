@@ -624,7 +624,13 @@ def build_apply_score(raw):
                 if week != "ALL" and sum(by_week[week].values()) > 0
             )
             all_weeks.update(weeks)
-            all_rows = bin_rows(by_week.get("ALL"))
+            all_source = by_week.get("ALL")
+            if not all_source:
+                all_source = {}
+                for week in weeks:
+                    for q, obs in by_week[week].items():
+                        all_source[q] = all_source.get(q, 0) + obs
+            all_rows = bin_rows(all_source)
             weekly = {week: bin_rows(by_week[week]) for week in weeks}
             versions[version] = {
                 "weeks": weeks,
