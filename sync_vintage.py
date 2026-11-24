@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""同步 WageGo 风险监控看板数据：执行 wagego_04_vintage分析.sql 的 18 个查询块。
+"""同步 WageGo 风险监控看板数据：执行 wagego_04_vintage分析.sql 的 22 个查询块。
 
 产出：同步数据/vintage_01~14.csv、vintage_data.zip。
 只服务监控看板；新客戳额模型分分析的表同步见 sync_new_user_credit_analysis.py。
@@ -48,11 +48,15 @@ QUERY_SPECS = (
     {"id": "10", "file": "vintage_10_auc_month_user_type", "title": "月度排序力（AUC/Gini/KS）× 新老客（FPD1/3/7/15）"},
     {"id": "11a", "file": "vintage_11a_credit_score_coverage", "title": "新客戳额全量样本模型分覆盖（全历史）"},
     {"id": "11b", "file": "vintage_11b_credit_score_dist", "title": "新客戳额全量样本模型分固定 10 档分布 × 戳额周"},
+    {"id": "11c", "file": "vintage_11c_credit_sample_new_model_coverage", "title": "新客戳额全量样本新戳额模型分覆盖 × 戳额周"},
+    {"id": "11d", "file": "vintage_11d_credit_sample_new_model_dist", "title": "新客戳额全量样本新戳额模型分固定 5 档分布 × 戳额周"},
     {"id": "12", "file": "vintage_12_new_user_funnel", "title": "新客出额样本转化漏斗（出额审批通过率/借款审核通过率/成交率）× 戳额周"},
     {"id": "13a", "file": "vintage_13a_credit_model_coverage", "title": "新戳额模型分覆盖（FPD15 成熟样本）"},
     {"id": "13b", "file": "vintage_13b_credit_model_quintile", "title": "新戳额模型分固定 5 箱 × 新老客"},
     {"id": "13c", "file": "vintage_13c_credit_model_quintile_week", "title": "新戳额模型分固定 5 箱 × 放款周 × 新老客"},
     {"id": "14", "file": "vintage_14_credit_model_weekly_auc", "title": "新戳额模型周度排序力（AUC/Gini/KS，FPD1/3/7/15）× 新老客"},
+    {"id": "15", "file": "vintage_15_apply_score_coverage", "title": "支用（发标申请）样本两套模型分覆盖 × 申请周"},
+    {"id": "16", "file": "vintage_16_apply_score_quintile_week", "title": "支用（发标申请）样本两套模型分固定 5 箱 × 申请周 × 新老客"},
 )
 
 

@@ -17,8 +17,14 @@ SET spark.sql.session.timeZone = Australia/Sydney;
 --  10) 块 11 新客戳额全量样本的线上模型分分布（全历史、不设时间窗）
 --      样本口径同 wagego_02 的新客戳额样本：每个用户全历史第一次戳额申请
 --      分数取戳额时点线上模型日志；11a 覆盖、11b 固定 10 档 × 戳额周（周一开始）
+--     11c/11d 同一样本叠加新戳额模型分（离线打分覆盖 2026-08-01 ~ 2026-10-23）：
+--      11c 覆盖、11d 固定 5 档 × 戳额周
 --  11) 块 12 新客出额样本转化漏斗（按戳额周）：出额审批通过率、借款申请审核通过率、成交率
 --      出额样本 = 戳额生产打分全量用户；标签取 Y 标签主表，出额结果取出额转化明细表
+--  12) 块 15-16 支用（发标申请）样本的模型分监控，按申请周（周一开始）
+--      同时监控现行分 aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626 与
+--      待替换的新戳额分 aus_new_wagego_credit_20261028_v1_0_txn_lgb_score
+--      样本 = 主表全部借款申请（不要求成交、不要求成熟）：15 覆盖、16 固定 5 箱 × 申请周
 
 
 -- ============================================================
@@ -1083,6 +1089,104 @@ ORDER BY week_start, q
 
 
 -- ============================================================
+-- 块 11c：新戳额模型分在新客戳额全量样本上的覆盖（按戳额周）
+--   样本：model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score
+--        （戳额生产打分全量样本，每个用户全历史第一次戳额；离线打分覆盖 2026-08-01 ~ 2026-10-23）
+--   分数：aus_new_wagego_credit_20261028_v1_0_txn_lgb_score；<= 0 按缺分处理
+-- ============================================================
+WITH base AS (
+    SELECT
+         DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(s.sample_datetime)), 'yyyy-MM-dd') AS week_start
+        ,CASE WHEN s.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score > 0
+              THEN s.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score END AS score
+    FROM model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score s
+    WHERE s.sample_datetime IS NOT NULL
+)
+SELECT
+     week_start
+    ,COUNT(*)                                                 AS sample_cnt
+    ,COUNT(score)                                             AS scored_cnt
+    ,SUM(CASE WHEN score IS NULL THEN 1 ELSE 0 END)           AS missing_cnt
+    ,ROUND(CAST(COUNT(score) AS DOUBLE) / COUNT(*) * 100, 2)  AS coverage_pct
+FROM base
+GROUP BY week_start
+UNION ALL
+SELECT
+     'ALL'                                                    AS week_start
+    ,COUNT(*)
+    ,COUNT(score)
+    ,SUM(CASE WHEN score IS NULL THEN 1 ELSE 0 END)
+    ,ROUND(CAST(COUNT(score) AS DOUBLE) / COUNT(*) * 100, 2)
+FROM base
+ORDER BY CASE WHEN week_start = 'ALL' THEN 0 ELSE 1 END, week_start
+;
+
+
+-- ============================================================
+-- 块 11d：新戳额模型分固定 5 档分布（新客戳额全量样本 × 戳额周）
+--   切点与新戳额模型 5 箱一致：0.048595 / 0.073145 / 0.103095 / 0.153057
+-- ============================================================
+WITH base AS (
+    SELECT
+         DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(s.sample_datetime)), 'yyyy-MM-dd') AS week_start
+        ,s.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score                        AS score
+    FROM model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score s
+    WHERE s.sample_datetime IS NOT NULL
+),
+scored AS (
+    SELECT
+         week_start
+        ,score
+        ,CASE
+             WHEN score <= 0.048595 THEN 1
+             WHEN score <= 0.073145 THEN 2
+             WHEN score <= 0.103095 THEN 3
+             WHEN score <= 0.153057 THEN 4
+             ELSE 5
+         END                                                      AS q
+    FROM base
+    WHERE score > 0
+),
+week_agg AS (
+    SELECT week_start, q, COUNT(*) AS obs_cnt
+    FROM scored
+    GROUP BY week_start, q
+),
+week_tot AS (
+    SELECT week_start, SUM(obs_cnt) AS total_cnt
+    FROM week_agg
+    GROUP BY week_start
+),
+all_agg AS (
+    SELECT q, COUNT(*) AS obs_cnt
+    FROM scored
+    GROUP BY q
+),
+all_tot AS (
+    SELECT SUM(obs_cnt) AS total_cnt
+    FROM all_agg
+)
+SELECT
+     m.week_start
+    ,m.q
+    ,m.obs_cnt
+    ,ROUND(CAST(m.obs_cnt AS DOUBLE) / t.total_cnt * 100, 2)  AS share_pct
+FROM week_agg m
+JOIN week_tot t
+  ON m.week_start = t.week_start
+UNION ALL
+SELECT
+     'ALL'                                                    AS week_start
+    ,a.q
+    ,a.obs_cnt
+    ,ROUND(CAST(a.obs_cnt AS DOUBLE) / t.total_cnt * 100, 2)  AS share_pct
+FROM all_agg a
+CROSS JOIN all_tot t
+ORDER BY week_start, q
+;
+
+
+-- ============================================================
 -- 块 12：新客出额样本转化漏斗（按戳额周）
 --   出额样本：model.tmp_eliam_wagego_new_user_credit_full_samples（全历史、不设时间窗）
 --           每个用户一行，sample_datetime = 戳额申请时间；
@@ -1648,4 +1752,218 @@ LEFT JOIN ks k
  AND a.week_start = k.week_start
  AND a.user_type = k.user_type
 ORDER BY a.window_days, a.week_start, a.user_type
+;
+
+
+-- ============================================================
+-- 块 15：支用（发标申请）样本的模型分覆盖（按申请周）
+--   样本：主表全部借款申请，不要求成交/成熟（apply_time 非空）
+--   现行分：主表 aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626
+--   新戳额分：与块 13 同源的 credit_map（线上日志 scene_id = LN% 优先，离线发标打分兜底）
+-- ============================================================
+WITH credit_log AS (
+    SELECT
+         r.scene_id
+        ,CAST(GET_JSON_OBJECT(r.model_output,
+              '$.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score') AS DOUBLE) AS credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY r.scene_id
+            ORDER BY CAST(r.start_time AS TIMESTAMP) DESC, CAST(r.inserttime AS TIMESTAMP) DESC
+        ) AS rn
+    FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log r
+    WHERE r.model_code = 'new_wagego_credit_v1_0'
+      AND r.scene_id LIKE 'LN%'
+),
+credit_raw AS (
+    SELECT
+         u.flow_id
+        ,u.credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY u.flow_id ORDER BY u.source_priority
+        ) AS rn
+    FROM (
+        SELECT r.scene_id AS flow_id, r.credit_score, 1 AS source_priority
+        FROM credit_log r
+        WHERE r.rn = 1
+        UNION ALL
+        SELECT
+             b.flow_id
+            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,2 AS source_priority
+        FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
+        WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
+    ) u
+),
+credit_map AS (
+    SELECT flow_id, credit_score
+    FROM credit_raw
+    WHERE rn = 1
+      AND credit_score > 0
+),
+base AS (
+    SELECT
+         DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.apply_time)), 'yyyy-MM-dd') AS week_start
+        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626 AS bid_score
+        ,cm.credit_score                                   AS new_score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    LEFT JOIN credit_map cm
+      ON CAST(t.loan_no AS STRING) = CAST(cm.flow_id AS STRING)
+    WHERE t.apply_time IS NOT NULL
+)
+SELECT
+     week_start
+    ,COUNT(*)                                                         AS apply_cnt
+    ,COUNT(bid_score)                                                 AS bid_scored_cnt
+    ,ROUND(CAST(COUNT(bid_score) AS DOUBLE) / COUNT(*) * 100, 2)      AS bid_coverage_pct
+    ,COUNT(new_score)                                                 AS new_scored_cnt
+    ,ROUND(CAST(COUNT(new_score) AS DOUBLE) / COUNT(*) * 100, 2)      AS new_coverage_pct
+FROM base
+GROUP BY week_start
+UNION ALL
+SELECT
+     'ALL'
+    ,COUNT(*)
+    ,COUNT(bid_score)
+    ,ROUND(CAST(COUNT(bid_score) AS DOUBLE) / COUNT(*) * 100, 2)
+    ,COUNT(new_score)
+    ,ROUND(CAST(COUNT(new_score) AS DOUBLE) / COUNT(*) * 100, 2)
+FROM base
+ORDER BY CASE WHEN week_start = 'ALL' THEN 0 ELSE 1 END, week_start
+;
+
+
+-- ============================================================
+-- 块 16：支用（发标申请）样本的模型分固定 5 箱 × 申请周 × 新老客
+--   两套分数同时输出：bid_3rd_v1_0（现行）/ credit_20261028_v1_0（新戳额）
+--   bid 切点同块 5：0.062086 / 0.091284 / 0.128392 / 0.188973
+--   new 切点同块 13：0.048595 / 0.073145 / 0.103095 / 0.153057
+--   第1箱=最低分，第5箱=最高分
+-- ============================================================
+WITH credit_log AS (
+    SELECT
+         r.scene_id
+        ,CAST(GET_JSON_OBJECT(r.model_output,
+              '$.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score') AS DOUBLE) AS credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY r.scene_id
+            ORDER BY CAST(r.start_time AS TIMESTAMP) DESC, CAST(r.inserttime AS TIMESTAMP) DESC
+        ) AS rn
+    FROM ods_ewa.aus_cbd_gidp_core_ewa_gidp_model_run_log r
+    WHERE r.model_code = 'new_wagego_credit_v1_0'
+      AND r.scene_id LIKE 'LN%'
+),
+credit_raw AS (
+    SELECT
+         u.flow_id
+        ,u.credit_score
+        ,ROW_NUMBER() OVER (
+            PARTITION BY u.flow_id ORDER BY u.source_priority
+        ) AS rn
+    FROM (
+        SELECT r.scene_id AS flow_id, r.credit_score, 1 AS source_priority
+        FROM credit_log r
+        WHERE r.rn = 1
+        UNION ALL
+        SELECT
+             b.flow_id
+            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,2 AS source_priority
+        FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
+        WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
+    ) u
+),
+credit_map AS (
+    SELECT flow_id, credit_score
+    FROM credit_raw
+    WHERE rn = 1
+      AND credit_score > 0
+),
+base AS (
+    SELECT
+         DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.apply_time)), 'yyyy-MM-dd') AS week_start
+        ,t.user_type
+        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626 AS bid_score
+        ,cm.credit_score                                   AS new_score
+    FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
+    LEFT JOIN credit_map cm
+      ON CAST(t.loan_no AS STRING) = CAST(cm.flow_id AS STRING)
+    WHERE t.apply_time IS NOT NULL
+),
+long AS (
+    SELECT 'bid_3rd_v1_0' AS score_version, week_start, user_type, bid_score AS score
+    FROM base
+    WHERE bid_score IS NOT NULL
+      AND week_start IS NOT NULL
+    UNION ALL
+    SELECT 'credit_20261028_v1_0', week_start, user_type, new_score
+    FROM base
+    WHERE new_score IS NOT NULL
+      AND week_start IS NOT NULL
+),
+scored AS (
+    SELECT
+         score_version
+        ,week_start
+        ,user_type
+        ,CASE WHEN score_version = 'bid_3rd_v1_0' THEN
+                   CASE
+                       WHEN score <= 0.062086 THEN 1
+                       WHEN score <= 0.091284 THEN 2
+                       WHEN score <= 0.128392 THEN 3
+                       WHEN score <= 0.188973 THEN 4
+                       ELSE 5
+                   END
+              ELSE
+                   CASE
+                       WHEN score <= 0.048595 THEN 1
+                       WHEN score <= 0.073145 THEN 2
+                       WHEN score <= 0.103095 THEN 3
+                       WHEN score <= 0.153057 THEN 4
+                       ELSE 5
+                   END
+         END                                                          AS q
+    FROM long
+),
+seg_agg AS (
+    SELECT
+         score_version
+        ,week_start
+        ,'ALL'                                                       AS segment
+        ,q
+        ,COUNT(*)                                                    AS obs_cnt
+    FROM scored
+    GROUP BY score_version, week_start, q
+    UNION ALL
+    SELECT
+         score_version
+        ,week_start
+        ,user_type                                                   AS segment
+        ,q
+        ,COUNT(*)                                                    AS obs_cnt
+    FROM scored
+    GROUP BY score_version, week_start, user_type, q
+),
+tot AS (
+    SELECT
+         score_version
+        ,week_start
+        ,segment
+        ,SUM(obs_cnt)                                                AS total_cnt
+    FROM seg_agg
+    GROUP BY score_version, week_start, segment
+)
+SELECT
+     a.score_version
+    ,a.week_start
+    ,a.segment
+    ,a.q
+    ,a.obs_cnt
+    ,ROUND(CAST(a.obs_cnt AS DOUBLE) / NULLIF(t.total_cnt, 0) * 100, 2) AS share_pct
+FROM seg_agg a
+JOIN tot t
+  ON a.score_version = t.score_version
+ AND a.week_start = t.week_start
+ AND COALESCE(a.segment, '') = COALESCE(t.segment, '')
+ORDER BY a.score_version, a.week_start,
+         CASE a.segment WHEN 'ALL' THEN 0 WHEN 'New' THEN 1 ELSE 2 END, a.q
 ;
