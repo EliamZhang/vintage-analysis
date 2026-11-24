@@ -1097,8 +1097,8 @@ ORDER BY week_start, q
 WITH base AS (
     SELECT
          DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(s.sample_datetime)), 'yyyy-MM-dd') AS week_start
-        ,CASE WHEN s.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score > 0
-              THEN s.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score END AS score
+        ,CASE WHEN CAST(s.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS DOUBLE) > 0
+              THEN CAST(s.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS DOUBLE) END AS score
     FROM model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score s
     WHERE s.sample_datetime IS NOT NULL
 )
@@ -1129,7 +1129,7 @@ ORDER BY CASE WHEN week_start = 'ALL' THEN 0 ELSE 1 END, week_start
 WITH base AS (
     SELECT
          DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(s.sample_datetime)), 'yyyy-MM-dd') AS week_start
-        ,s.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score                        AS score
+        ,CAST(s.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS DOUBLE)        AS score
     FROM model.tmp_eliam_aus_wagego_new_user_credit_20260801_20261023_score s
     WHERE s.sample_datetime IS NOT NULL
 ),
@@ -1323,7 +1323,7 @@ credit_raw AS (
         UNION ALL
         SELECT
              b.flow_id
-            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,CAST(b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS DOUBLE) AS credit_score
             ,2 AS source_priority
         FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
         WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
@@ -1384,7 +1384,7 @@ credit_raw AS (
         UNION ALL
         SELECT
              b.flow_id
-            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,CAST(b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS DOUBLE) AS credit_score
             ,2 AS source_priority
         FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
         WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
@@ -1480,7 +1480,7 @@ credit_raw AS (
         UNION ALL
         SELECT
              b.flow_id
-            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,CAST(b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS DOUBLE) AS credit_score
             ,2 AS source_priority
         FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
         WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
@@ -1585,7 +1585,7 @@ credit_raw AS (
         UNION ALL
         SELECT
              b.flow_id
-            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,CAST(b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS DOUBLE) AS credit_score
             ,2 AS source_priority
         FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
         WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
@@ -1788,7 +1788,7 @@ credit_raw AS (
         UNION ALL
         SELECT
              b.flow_id
-            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,CAST(b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS DOUBLE) AS credit_score
             ,2 AS source_priority
         FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
         WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
@@ -1803,7 +1803,7 @@ credit_map AS (
 base AS (
     SELECT
          DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.apply_time)), 'yyyy-MM-dd') AS week_start
-        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626 AS bid_score
+        ,CAST(t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626 AS DOUBLE) AS bid_score
         ,cm.credit_score                                   AS new_score
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     LEFT JOIN credit_map cm
@@ -1866,7 +1866,7 @@ credit_raw AS (
         UNION ALL
         SELECT
              b.flow_id
-            ,b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS credit_score
+            ,CAST(b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score AS DOUBLE) AS credit_score
             ,2 AS source_priority
         FROM model.tmp_eliam_wagego_all_user_bid_score_20260801_20261106 b
         WHERE b.aus_new_wagego_credit_20261028_v1_0_txn_lgb_score IS NOT NULL
@@ -1882,7 +1882,7 @@ base AS (
     SELECT
          DATE_FORMAT(DATE_TRUNC('WEEK', TO_DATE(t.apply_time)), 'yyyy-MM-dd') AS week_start
         ,t.user_type
-        ,t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626 AS bid_score
+        ,CAST(t.aus_wagego_new_risk_bid_3rdmodel_v1_0_20260626 AS DOUBLE) AS bid_score
         ,cm.credit_score                                   AS new_score
     FROM model.tmp_eliam_wagego_dwd_loan_apply_label t
     LEFT JOIN credit_map cm
